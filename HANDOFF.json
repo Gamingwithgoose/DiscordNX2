@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.7-foreground-voice-milestone",
+  "version": "0.8-extended-foreground-voice-milestone",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -36,18 +36,20 @@
       "System, SystemExt and FullKey readers stale/inactive in handheld mode",
       "normal A/B detected after C trial",
       "resident plugin generation remained 1"
+    ],
+    "v07": [
+      "User confirmed audible recording playback, though almost had to yell to hear themselves",
+      "Build succeeded after including <switch/services/bsd.h>"
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
-    "v0.7 NRO captures 12 x 16KiB microphone PCM chunks to static memory and logs peak, mean absolute amplitude, nonzero and clipping stats",
-    "then plays delayed half-volume recording once; input stops before playback",
-    "then attempts localhost UDP datagram loopback marker on port 39272, no microphone transmission",
-    "then service-session and plugin continuity checks",
-    "writes checkpointed report to /kaihen/discordnx2-hardware.txt and legacy /kaihen/discordnx2-probe.txt",
-    "no C-button override, no GameChat modification, no login"
+    "v0.8 foreground NRO captures 36 x 16 KiB microphone buffers (about 3.07 seconds if all frames succeed)",
+    "applies net 1.5x amplitude gain, limits to +/-24000, then plays the delayed recording once with a 7.5s playback wait",
+    "logs audio statistics and tests localhost UDP marker loopback, retains plugin persistence checks",
+    "no game/voice mixing implemented; no Discord login or C-button support; background NSO untouched"
   ],
-  "build_validation": "Source committed but NOT compiled in user's toolchain or tested on actual Switch 2 yet. If compiler fails, collect full GCC/ld error. If NRO runs, report whether recorded speech is audible and comprehensible.",
+  "build_validation": "v0.7 playback was heard by user on hardware. v0.8 code committed for longer capture and higher playback gain; v0.8 has NOT been built or tested on hardware yet.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -68,12 +70,11 @@
     ]
   },
   "next_user_workflow": [
-    "GitHub Desktop Pull latest",
-    "double-click Build-NRO.bat",
-    "if compiler success FTP ONLY dist/DiscordNX2.nro to existing NRO location",
-    "launch from hbmenu and speak briefly during first second of capture, use modest output volume/headphones",
-    "retrieve /kaihen/discordnx2-hardware.txt, report if voice sounded understandable",
-    "do not reboot or touch plugin unless absolutely required"
+    "GitHub Desktop pull latest",
+    "run Build-NRO.bat (forces clean NRO-only build)",
+    "transfer only dist/DiscordNX2.nro; do not replace NSO or reboot",
+    "launch NRO and speak naturally for ~3 seconds, then listen to delayed playback at modest system volume",
+    "send /kaihen/discordnx2-hardware.txt and whether speech is clear and appropriately loud"
   ],
   "next_developer_work": [
     "fix real compile or audio failures from user report first",

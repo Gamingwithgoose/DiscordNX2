@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.8 longer microphone test and safer gain
+
+The first actual local playback was audible on Switch 2 hardware, but only when speaking loudly. Extended the foreground PCM recording from 12 to 36 aligned 16-KiB chunks (approximately 3.07 seconds at stereo 48 kHz, 16-bit), changed combined digital gain from 0.5x to 1.5x, and clamped resulting samples to +/-24000 before playback to reduce clipping and loud spikes. Extended the playback wait to 7.5 seconds so the longer voice clip is allowed to finish. This is software gain, not an undocumented hardware microphone sensitivity setting. No Nintendo audio mix is modified, and separate voice/game volume controls remain a future background feature. Audio is neither saved nor network-transmitted. The resident NSO remains unchanged. The code still needs local build and hardware validation.
+
 ## November 17, 2026 — v0.7 BSD compile fix
 
 The first local v0.7 build failed because the new UDP loopback test called low-level `bsd*` APIs without including their declarations. I added the explicit libounce `switch/services/bsd.h` header. The previous unused-function warnings are not build errors. This is a source correction only; it does not touch the installed NSO and still requires a local rebuild and hardware validation.

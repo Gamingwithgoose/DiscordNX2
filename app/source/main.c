@@ -311,7 +311,7 @@ static void service_trials(void) {
 #include <errno.h>
 
 #define VOICE_CHUNK_BYTES 0x4000u
-#define VOICE_CHUNKS 12u
+#define VOICE_CHUNKS 36u
 #define VOICE_MAX_BYTES (VOICE_CHUNK_BYTES * VOICE_CHUNKS)
 #define VOICE_NETWORK_PORT 39272u
 static unsigned char voice_input[VOICE_CHUNK_BYTES] __attribute__((aligned(0x1000)));
@@ -336,8 +336,9 @@ static void voice_stats(const int16_t *pcm,size_t count,unsigned frame) {
         frame,(unsigned)count,peak,avg,active,nonzero,clips);
 }
 
-/* Capture multiple buffers and compute simple speech/noise diagnostics.
- * Samples are scaled to 50% on local playback as a speaker-safety measure.
+/* Capture a longer spoken phrase and compute basic signal diagnostics.
+ * Apply modest software microphone gain and clamp before playback.
+ * Captured audio never leaves this NRO's memory.
  */
 static void voice_capture_test(void) {
     voice_used=0;
@@ -392,9 +393,17 @@ static void voice_capture_test(void) {
         }
         if(peak<100)quiet++;
         if(voice_used+valid<=sizeof(voice_output)) {
-            for(size_t i=0;i<valid/2;i++)
-                ((int16_t*)(voice_output+voice_used))[i]=
-                  (int16_t)(((const int16_t*)voice_input)[i]/2);
+            for(size_t i=0;i<valid/2;i++) {
+                /* Digital mic gain 2.0x and playback scaling 0.75x
+                 * yield 1.5x total, versus v0.7's 0.5x. Limit peaks
+                 * to +/-24000 to reduce clipping and surprise volume.
+                 */
+                int sample=(int)((const int16_t*)voice_input)[i];
+                int amplified=(sample*3)/2;
+                if(amplified>24000)amplified=24000;
+                if(amplified< -24000)amplified= -24000;
+                ((int16_t*)(voice_output+voice_used))[i]=(int16_t)amplified;
+            }
             voice_used+=valid;
         }
         passed++;
@@ -405,7 +414,7 @@ static void voice_capture_test(void) {
     Result stop=audinStopAudioIn();
     diagf("voice audinStopAudioIn=%08x\n",stop);
     audinExit();
-    diagf("voice captured_frames=%u errors=%u quiet_frames=%u pcm_bytes=%u playback_gain=0.5\n",
+    diagf("voice captured_frames=%u errors=%u quiet_frames=%u pcm_bytes=%u combined_playback_gain=1.5 limiter=24000\n",
           passed,failed,quiet,(unsigned)voice_used);
     diagf("voice capture checkpoint=%08x\n",write_diagnostics());
 }
@@ -439,7 +448,7 @@ static void voice_playback_test(void) {
         if(R_SUCCEEDED(rc)) {
             AudioOutBuffer *released=NULL;
             u32 count=0;
-            Result wr=audoutWaitPlayFinish(&released,&count,3500000000ULL);
+            Result wr=audoutWaitPlayFinish(&released,&count,7500000000ULL);
             diagf("voice audoutWaitPlayFinish=%08x released=%u matches=%u\n",
                   wr,count,released==&buffer);
         }
@@ -493,8 +502,8 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 voice milestone diagnostic v0.7\n");
-    diagf("Foreground-only, capture then delayed playback. No audio sent over network.\n");
+    diagf("DiscordNX2 voice gain and extended loopback diagnostic v0.8\n");
+    diagf("Foreground-only, ~3 seconds capture, 1.5x combined gain with limiting, then delayed playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
@@ -505,7 +514,7 @@ static void hardware_report(void) {
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.7. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.8. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }
