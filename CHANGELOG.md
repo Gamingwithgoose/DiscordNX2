@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.18 native graphical client shell
+
+Added a real software-rendered RGBA framebuffer interface on Switch 2 with a dark graphical theme, sidebar navigation, highlighted menu items, Dashboard/Servers/Voice/Diagnostics views, controller inputs, and retained diagnostic triggers. The code uses libounce's Switch 2 framebufferMakeLinear requirement and never pretends disconnected account/servers are real data. A console fallback is preserved for graphics init errors. All audio and Discord Gateway checks remain unchanged. No authentication, guild listing or voice call yet because no supported DiscordNX2 developer-owned authorization/voice flow is configured. No changes to resident NSO.
+
 ## November 17, 2026 — v0.17 SSL resource fix
 
 Keep the SSL socket wrapper's returned descriptor open throughout the TLS handshake and Gateway upgrade; close it during teardown. Request a bounded SSL I/O timeout. No NSO changes.

@@ -8,6 +8,7 @@
 #include <kaihen.h>
 #include "voice_packet.h"
 #include "discord_gateway_probe.h"
+#include "graphical_ui.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -937,7 +938,28 @@ static void show_main_menu(const char *status) {
     printf("---------------------------------------\n");
     consoleUpdate(NULL);
 }
+static void run_console_ui(void);
+static void run_gui_action(int action) {
+    if(action==1)hardware_report();
+    else if(action==2)run_discord_only();
+    else if(action==3)run_voice_only();
+    else if(action==4)run_stress_only();
+}
 static void run_ui(void) {
+    /* The framebuffer is released before an audio/network action begins, so
+     * the native overlay never races AudioIn/AudioOut service ownership. */
+    int action=dnx2GraphicalMenu();
+    if(action>=0) {
+        while(action>0) {
+            run_gui_action(action);
+            action=dnx2GraphicalMenu();
+        }
+        if(action==0)return;
+    }
+    /* Fallback for systems where the Switch 2 framebuffer service fails. */
+    run_console_ui();
+}
+static void run_console_ui(void) {
     Result rc=hidInitialize();
     if(R_FAILED(rc)) {
         diagf("v0.17 UI HID failed=%08x; running entire diagnostic headless\n",rc);
