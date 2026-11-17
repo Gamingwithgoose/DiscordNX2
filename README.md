@@ -107,3 +107,7 @@ The v0.14 three-buffer capture fixed audible popping on real Switch 2 hardware; 
 ### Extended v0.15 capture stability run
 
 After the normal tone, recorded voice and packet checks, v0.15 also runs a separate **~15-second microphone-only stress test** with the same prequeued three-buffer approach. It discards the PCM rather than playing it back or sending it anywhere, and logs buffer counts/errors only after the capture stops. This is intended to expose long-duration microphone dropouts without requiring you to remain on the short three-second test. The background NSO remains unchanged. The console will stay in the NRO longer by design.
+
+## Official Discord OAuth sign-in companion
+
+Use `Discord-Login.bat` on your PC for a real Discord browser login with PKCE and `identify guilds` permissions. See [tools/DISCORD_LOGIN.md](tools/DISCORD_LOGIN.md). No client secret, password or token is entered or saved. This does **not** connect the Switch 2 to a Discord voice channel. No NRO/NSO changes or jailbreak restart are needed for this test.

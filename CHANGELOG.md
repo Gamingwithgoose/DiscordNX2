@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — Discord browser OAuth2 sign-in companion
+
+Added a Windows one-click launcher and Python standard-library OAuth2 Authorization Code + PKCE companion with random state, callback issuer validation, localhost-only redirect, token exchange, `identify guilds` user/server account lookup, and offline tests. Credentials/tokens stay in memory and are not persisted. This is genuine Discord account authorization, not Discord user voice access. No NRO/NSO modifications.
+
 ## November 17, 2026 — v0.15 sustained microphone stress capture
 
 Added an approximately 15-second bounded, three-buffer microphone stress test after the familiar record/replay and packet validation. It follows the successful v0.14 prequeue/requeue pattern, performs no SD writes during capture and retains no PCM afterward. Reports buffer counts, failed waits/requeues, approximate total PCM duration, and peak sample. This validates more sustained microphone operation before a background Discord client is attempted, without requiring an NSO update. It is not a continuous voice call and has not been tested on hardware yet.
