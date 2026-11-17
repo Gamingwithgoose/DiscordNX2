@@ -340,6 +340,8 @@ static void voice_stats(const int16_t *pcm,size_t count,unsigned frame) {
  * Apply modest software microphone gain and clamp before playback.
  * Captured audio never leaves this NRO's memory.
  */
+static void voice_prepare_playback(void);
+
 static void voice_capture_test(void) {
     voice_used=0;
     diagf("\n[VOICE: MULTI-BUFFER MIC CAPTURE / NO NETWORK TRANSMISSION]\n");

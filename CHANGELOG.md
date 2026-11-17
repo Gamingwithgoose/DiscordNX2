@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.9 forward declaration build fix
+
+The local NRO-only build caught a missing forward declaration for `voice_prepare_playback` after v0.9 reorganized playback processing. Added its `static` prototype before `voice_capture_test` so the compiler knows its signature. The unused historical diagnostic-function warnings are unrelated. No background NSO or runtime changes; requires a local rebuild.
+
 ## November 17, 2026 — v0.9 reduced popping and diagnostic audio processing
 
 Real-hardware testing confirmed v0.8 playback is substantially louder, but audible cracking/pops remain. Removed per-buffer hard sample clipping in favor of retaining captured PCM and applying one whole-recording gain factor (up to 1.5x, reduced when needed to stay near a 24000 peak). Added 10ms fade-in/fade-out and extra peak/discontinuity diagnostics. This should reduce clipping and clicks at recording boundaries without losing the v0.8 level on quiet speech. It is not proof that all popping was caused by the prior limiter; capture continuity or device behavior may still matter. The code only changes foreground NRO playback, preserves the NSO, and must be verified in a local build and another hardware test.
