@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.21 remote-auth handshake correction
+
+Real hardware v0.20 proved remote-auth DNS/TCP/TLS passed but remote-auth HTTP upgrade returned 403. v0.21 adds the explicit Discord web Origin header present in TriCord's request and bounded allowlisted response metadata (server, content-type, Cloudflare trace, request ID, Retry-After) with no response bodies, cookies, credentials or tokens logged. Does not fake a QR login and does not send any user authentication. Existing microphone, general Gateway, GUI and resident NSO untouched.
+
 ## November 17, 2026 — v0.20 standalone native auth foundation
 
 Removed v0.19 Windows PC pairing workflow from the NRO startup and Servers screen; preserved the previous implementation only for reference. Added a direct Switch 2 remote-auth WebSocket TLS+HELLO probe to Discord's remote-auth Gateway with no credentials or token handling, wired it into the graphical Servers/Diagnostics views, imported Project Nayuki MIT QR library and linked an on-device QR renderer for future legitimate session-bound URLs. No QR is presented as a working login before a verified remote-auth session exists. The actual secure RSA exchange, fingerprint validation, session authentication, server navigation and voice support remain unimplemented. Existing audio stack and installed resident NSO untouched.

@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.20-native-remote-auth-foundation",
+  "version": "0.21-remote-auth-http-diagnostics",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -65,6 +65,10 @@
     ],
     "v14": [
       "User reports no audible popping with prequeued three-buffer microphone capture (breakthrough)"
+    ],
+    "v20": [
+      "remote-auth gateway DNS successful, TCP port443 and SSL handshake succeeded",
+      "remote-auth WebSocket HTTP 403; no HELLO; user/account not involved"
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
@@ -85,9 +89,10 @@
     "v0.18 UI navigation corrected to two-column focus: sidebar Up/Down, Right/A enters content, content Up/Down selects, Left/B returns; left analog stick edge thresholds",
     "v0.19 opt-in local PC OAuth PKCE pairing: Windows Discord-Pair.bat authenticates and advertises discovery over UDP 39274; NRO requests metadata with six-digit on-screen code and explicit PC approval over TCP 39275",
     "Graphical Servers panel shows verified profile display name and actual Discord OAuth guild names/IDs, can select a server; actual Discord voice and channel lists remain disconnected. No Discord token sent to Switch.",
-    "v0.20 removes v0.19 Windows pairing from active build/UI, adds direct Discord remote-auth TLS/WebSocket HELLO network probe and Project Nayuki MIT QR encoder + graphical renderer"
+    "v0.20 removes v0.19 Windows pairing from active build/UI, adds direct Discord remote-auth TLS/WebSocket HELLO network probe and Project Nayuki MIT QR encoder + graphical renderer",
+    "v0.21 adds Origin https://discord.com to remote-auth WebSocket request matching TriCord handshake; logs only allowlisted safe HTTP response headers on failure"
   ],
-  "build_validation": "v0.17 remote public Discord Gateway and v0.18 graphical UI validated on actual Switch2. v0.20 source integration checked, not cross-compiled or hardware tested. Direct remote-auth only checks WebSocket HELLO, not actual QR login.",
+  "build_validation": "v0.20 real hardware: 403 after valid TLS on remote-auth gateway; v0.21 adds origin and rejection classification, source only, not compiled/tested on user's devkitPro.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -108,10 +113,10 @@
     ]
   },
   "next_user_workflow": [
-    "Pull main, Build-NRO.bat, FTP ONLY dist/DiscordNX2.nro",
-    "Open Servers -> TEST REMOTE AUTH CONNECTION (A) or Diagnostics -> REMOTE AUTH GATEWAY",
-    "Retrieve /kaihen/discordnx2-hardware.txt and inspect tcp/tls/websocket/hello; share logs without tokens",
-    "Sign-in QR, account data, voice channels and voice chatting are still not implemented; no Windows app necessary for this test"
+    "Pull latest main and build with Build-NRO.bat; FTP only dist/DiscordNX2.nro",
+    "Run Servers -> TEST REMOTE AUTH CONNECTION once",
+    "Upload /kaihen/discordnx2-hardware.txt; inspect response status/allowlisted headers or 101/HELLO",
+    "No auth QR or voice in this build; do not create new account until real login exists"
   ],
   "next_developer_work": [
     "Implement secure RSA-2048 crypto dependencies, fingerprint binding and WebSocket heartbeat/nonce proof for Discord's unofficial remote-auth protocol",

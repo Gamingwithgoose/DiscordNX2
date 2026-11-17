@@ -20,7 +20,7 @@
 #define DNX2_IO_LIMIT 8192u
 
 static unsigned char rxbuf[DNX2_IO_LIMIT];
-static char httpheader[2048];
+static char httpheader[4096];
 
 static int ci_has(const char *haystack, const char *needle) {
     size_t n=strlen(needle);
@@ -34,6 +34,41 @@ static int ci_has(const char *haystack, const char *needle) {
 static int http_status(const char *head) {
     const char *sp=strchr(head,' ');
     return sp?atoi(sp+1):0;
+}
+
+static void report_http_rejection(const char *headers,Dnx2LogFn log) {
+    /* A fixed allowlist avoids writing HTTP cookies, challenges, auth or
+     * unpredictable payloads into the report. Never log response bodies. */
+    const char *fields[]={"content-type:","server:","cf-ray:","x-request-id:","retry-after:"};
+    for(unsigned i=0;i<sizeof(fields)/sizeof(fields[0]);i++) {
+        const char *p=headers;
+        size_t k=strlen(fields[i]);
+        while(*p) {
+            const char *end=strstr(p,"\r\n");
+            if(!end)end=p+strlen(p);
+            if((size_t)(end-p)>=k) {
+                size_t j=0;
+                while(j<k && tolower((unsigned char)p[j])==fields[i][j])j++;
+                if(j==k) {
+                    char value[100]={0};
+                    const char *v=p+k;
+                    while(v<end&&(*v==' '||*v=='\t'))v++;
+                    size_t n=0;
+                    for(;v<end&&n+1<sizeof(value);v++) {
+                        unsigned char ch=(unsigned char)*v;
+                        if(ch<32||ch>126)break;
+                        value[n++]=(char)ch;
+                    }
+                    log("remote-auth response %s %s\n",fields[i],value);
+                    break;
+                }
+            }
+            if(!*end)break;
+            p=end+2;
+        }
+    }
+    log("remote-auth 403 classification: server rejected WebSocket upgrade; "
+        "not evidence of account ban or bad credentials\n");
 }
 static unsigned interval_from_hello(const unsigned char *p, size_t n) {
     const char marker[]="\"heartbeat_interval\"";
@@ -180,7 +215,8 @@ Dnx2DiscordProbe dnx2DiscordRemoteAuthProbe(Dnx2LogFn log) {
       "Connection: Upgrade\r\n"
       "Sec-WebSocket-Key: %s\r\n"
       "Sec-WebSocket-Version: 13\r\n"
-      "User-Agent: DiscordNX2-native-remote-probe/0.20\r\n"
+      "Origin: https://discord.com\r\n"
+      "User-Agent: DiscordNX2-native-remote-probe/0.21\r\n"
       "\r\n",key);
     if(!send_all_ssl(&conn,request)) {
         log("discord WSS upgrade request write failed\n");goto cleanup_conn;
@@ -209,7 +245,7 @@ Dnx2DiscordProbe dnx2DiscordRemoteAuthProbe(Dnx2LogFn log) {
                 state.websocket_ok=state.http_ok&&ci_has(httpheader,"upgrade: websocket");
                 log("discord gateway upgrade HTTP=%u websocket=%u\n",
                     state.http_status,state.websocket_ok);
-                if(!state.websocket_ok)break;
+                if(!state.websocket_ok) {report_http_rejection(httpheader,log);break;}
             }
         }
         if(header_end && state.websocket_ok) {
