@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.10 controlled audio-output comparison
+
+In the v0.9 real hardware report, all 36 PCM capture buffers succeeded and audio output released its buffer, but the user still heard popping. The source PCM showed four large same-channel sample jumps, although no input clipping; the localhost UDP test also failed during `bsdInitialize` with `00001759`. To distinguish speaker/output-path artifacts from microphone processing artifacts, this release adds a short, quiet synthetic 400 Hz triangle-wave reference tone using the same audio-output service, with a fade at both ends, before recorded speech playback. The source and NSO are not changed beyond this foreground diagnostic. It does not claim the pop is fixed. Local compile/hardware testing still required.
+
 ## November 17, 2026 — v0.9 forward declaration build fix
 
 The local NRO-only build caught a missing forward declaration for `voice_prepare_playback` after v0.9 reorganized playback processing. Added its `static` prototype before `voice_capture_test` so the compiler knows its signature. The unused historical diagnostic-function warnings are unrelated. No background NSO or runtime changes; requires a local rebuild.

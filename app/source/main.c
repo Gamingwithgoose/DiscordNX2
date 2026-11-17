@@ -469,6 +469,57 @@ static void voice_prepare_playback(void) {
     diagf("signal original_peak=%d gain_x100=%u limiting_target=24000 channel_jump_gt10000=%d chunk_boundary_flags=%d fade_ms=10\n",
           peak,(unsigned)(gain*100.0f),discontinuities,boundary_jumps);
 }
+
+/* Controlled playback reference: no microphone or gain processing involved.
+ * Quiet 400 Hz triangle tone with a 10 ms fade at both ends.
+ * A clean tone followed by crackling speech points toward the speech path.
+ */
+static unsigned char reference_tone[0x18000] __attribute__((aligned(0x1000)));
+static void voice_reference_tone_test(void) {
+    diagf("\n[AUDIO OUTPUT REFERENCE: SYNTHETIC TONE]\n");
+    const unsigned sample_frames=24000; /* 0.5 seconds, 48 kHz stereo */
+    int16_t *pcm=(int16_t*)reference_tone;
+    memset(reference_tone,0,sizeof(reference_tone));
+    for(unsigned i=0;i<sample_frames;i++) {
+        unsigned phase=i%120;  /* 400 Hz */
+        int value=(phase<60)?((int)phase*100-3000):(9000-(int)phase*100);
+        unsigned ramp=i;
+        if(sample_frames-1-i<ramp)ramp=sample_frames-1-i;
+        if(ramp<480)value=(value*(int)ramp)/480;
+        pcm[2*i]=(int16_t)value;
+        pcm[2*i+1]=(int16_t)value;
+    }
+    Result rc=audoutInitialize();
+    diagf("reference audoutInitialize=%08x\n",rc);
+    if(R_FAILED(rc))return;
+    if(audoutGetSampleRate()!=48000 || audoutGetChannelCount()!=2 ||
+       audoutGetPcmFormat()!=PcmFormat_Int16) {
+        diagf("reference skipped: output format unsupported\n");
+        audoutExit();
+        return;
+    }
+    rc=audoutStartAudioOut();
+    diagf("reference start=%08x\n",rc);
+    if(R_SUCCEEDED(rc)) {
+        AudioOutBuffer b={0};
+        b.buffer=reference_tone;
+        b.buffer_size=sizeof(reference_tone);
+        b.data_size=sample_frames*2*sizeof(int16_t);
+        rc=audoutAppendAudioOutBuffer(&b);
+        diagf("reference append=%08x\n",rc);
+        if(R_SUCCEEDED(rc)) {
+            AudioOutBuffer *released=NULL;
+            u32 released_count=0;
+            Result wr=audoutWaitPlayFinish(&released,&released_count,2000000000ULL);
+            diagf("reference completed=%08x count=%u same=%u\n",
+                  wr,released_count,released==&b);
+        }
+        diagf("reference stop=%08x\n",audoutStopAudioOut());
+    }
+    audoutExit();
+    diagf("Listen: did this short quiet tone also pop? Compare to speech playback next.\n");
+}
+
 static void voice_playback_test(void) {
     diagf("\n[VOICE: AUDIBLE DELAYED PLAYBACK]\n");
     if(!voice_used) {
@@ -552,19 +603,21 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 smoother voice loopback diagnostic v0.9\n");
+    diagf("DiscordNX2 tone vs microphone playback diagnostic v0.10\n");
     diagf("Foreground-only, ~3 seconds PCM capture, adaptive global gain and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
     diagf("plugin checkpoint=%08x\n",write_diagnostics());
     voice_capture_test();
+    voice_reference_tone_test();
+    diagf("reference checkpoint=%08x\n",write_diagnostics());
     voice_playback_test();
     diagf("audio checkpoint=%08x\n",write_diagnostics());
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.9. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.10. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }

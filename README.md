@@ -79,3 +79,7 @@ Voice playback has now been heard on real Switch 2 hardware, though it required 
 ## v0.9 — smoother speech playback
 
 User confirmed v0.8 was louder but had audible popping/crackling. v0.9 keeps the ~3-second capture and uses a whole-recording peak-aware gain (up to 1.5x) instead of hard clipping individual samples. It adds 10ms fade-in/out and logs raw peak and likely discontinuities. Pull, run `Build-NRO.bat`, transfer ONLY `dist/DiscordNX2.nro` and do not touch NSO. After speaking normally, send `/kaihen/discordnx2-hardware.txt` and say whether pops occur during words or only at playback start/end. It still doesn't make live Discord calls or mix game volume.
+
+## v0.10 — Reference tone versus microphone playback
+
+A 0.5-second quiet synthetic tone now plays before the familiar recorded voice. Listen for any clicks during the tone and compare with the speech playback. If the tone is clean but voice cracks, microphone capture/processing is a more likely cause; if the tone also pops, output buffering/device behavior is suspect. Pull, run `Build-NRO.bat` and copy ONLY the NRO. Retrieve `/kaihen/discordnx2-hardware.txt`; do not replace NSO or reboot. UDP test initialization returned `00001759` in the last report and remains an open networking issue.

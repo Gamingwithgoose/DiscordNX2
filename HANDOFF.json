@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.9-audio-pop-reduction",
+  "version": "0.10-playback-reference-tone",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -44,13 +44,18 @@
     "v08": [
       "User confirms louder audible playback than v0.7",
       "Audible cracking/popping reported; root cause unknown"
+    ],
+    "v09": [
+      "36/36 audio buffers captured, no errors; output played and released",
+      "PCM peak 19394, adaptive gain 1.23x, four raw large sample jumps; user hears pops during playback",
+      "UDP bsdInitialize failed result 00001759 despite bsd:u opening via smGetService"
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
-    "v0.9 retains approx 3s capture, collects raw PCM then applies whole-buffer gain <=1.5x with peak constraint 24000",
-    "adds 10ms playback fades and additional sample-change diagnostics",
-    "local UDP loopback and existing plugin checks remain; no NSO changes or Discord integration"
+    "v0.10 adds a low-volume 0.5-second generated triangle reference tone through audout; audible pops in tone versus speech differentiate output path from recorded speech processing",
+    "then runs existing 3-second voice playback with adaptive gain",
+    "retains local UDP and NSO continuity diagnostics; existing NSO unaffected"
   ],
   "build_validation": "v0.8 louder but audible crackling on real hardware. v0.9 source pushed but not yet compiled or hardware tested.",
   "key_risks": [
@@ -73,10 +78,10 @@
     ]
   },
   "next_user_workflow": [
-    "Pull GitHub Desktop, Build-NRO.bat, FTP ONLY NRO",
-    "test spoken playback with normal voice and modest Switch volume",
-    "send hardware report; specify whether pops only at start/end or throughout speech",
-    "leave NSO and kaiHEN session unchanged"
+    "GitHub Desktop pull and run Build-NRO.bat",
+    "FTP only dist/DiscordNX2.nro; no NSO replacement or kaiHEN restart",
+    "launch and compare synthetic short tone versus recorded speech: which pops?",
+    "send /kaihen/discordnx2-hardware.txt"
   ],
   "next_developer_work": [
     "fix real compile or audio failures from user report first",
