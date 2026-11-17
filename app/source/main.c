@@ -342,76 +342,130 @@ static void voice_stats(const int16_t *pcm,size_t count,unsigned frame) {
  */
 static void voice_prepare_playback(void);
 
+/* Pre-queue three microphone buffers before starting the capture.
+ * Each released buffer is replaced as soon as possible; the logging,
+ * PCM scanning and SD checkpoints run AFTER capture is stopped.
+ */
+#define CAPTURE_SLOTS 3
+static unsigned char capture_pcm[CAPTURE_SLOTS][VOICE_CHUNK_BYTES] __attribute__((aligned(0x1000)));
+static AudioInBuffer capture_desc[CAPTURE_SLOTS];
+static unsigned capture_lengths[VOICE_CHUNKS];
 static void voice_capture_test(void) {
     voice_used=0;
-    diagf("\n[VOICE: MULTI-BUFFER MIC CAPTURE / NO NETWORK TRANSMISSION]\n");
-    diagf("Speak during capture. Do not use speakers and microphone together for live feedback.\n");
+    memset(capture_lengths,0,sizeof(capture_lengths));
+    diagf("\n[VOICE: PREQUEUED 3-BUFFER CAPTURE]\n");
     Result rc=audinInitialize();
-    diagf("voice audinInitialize=%08x\n",rc);
+    diagf("capture initialize=%08x\n",rc);
     if(R_FAILED(rc))return;
     const u32 rate=audinGetSampleRate(),ch=audinGetChannelCount();
     const unsigned fmt=(unsigned)audinGetPcmFormat();
-    diagf("voice input rate=%u channels=%u format=%u\n",rate,ch,fmt);
+    diagf("capture rate=%u channels=%u format=%u\n",rate,ch,fmt);
     if(rate!=48000||ch!=2||fmt!=(unsigned)PcmFormat_Int16) {
-        diagf("SKIP voice buffer test: expected 48000Hz, stereo, signed 16-bit PCM.\n");
+        diagf("SKIP capture: format mismatch\n");
+        audinExit();
+        return;
+    }
+    memset(capture_desc,0,sizeof(capture_desc));
+    for(unsigned i=0;i<CAPTURE_SLOTS;i++) {
+        memset(capture_pcm[i],0,VOICE_CHUNK_BYTES);
+        capture_desc[i].buffer=capture_pcm[i];
+        capture_desc[i].buffer_size=VOICE_CHUNK_BYTES;
+        capture_desc[i].data_size=VOICE_CHUNK_BYTES;
+    }
+    unsigned queued_count=0;
+    for(unsigned i=0;i<CAPTURE_SLOTS;i++) {
+        Result qr=audinAppendAudioInBuffer(&capture_desc[i]);
+        if(R_FAILED(qr)) {
+            diagf("capture initial queue error slot=%u result=%08x\n",i,qr);
+            break;
+        }
+        queued_count++;
+    }
+    if(queued_count!=CAPTURE_SLOTS) {
+        /* Do not free or reuse buffer memory until device has stopped. */
         audinExit();
         return;
     }
     rc=audinStartAudioIn();
-    diagf("voice audinStartAudioIn=%08x\n",rc);
+    diagf("capture start=%08x queued=%u\n",rc,queued_count);
     if(R_FAILED(rc)){audinExit();return;}
-    unsigned passed=0,failed=0,quiet=0;
-    for(unsigned frame=0;frame<VOICE_CHUNKS;frame++) {
-        memset(voice_input,0,sizeof(voice_input));
-        AudioInBuffer buffer={0};
-        buffer.buffer=voice_input;
-        buffer.buffer_size=sizeof(voice_input);
-        buffer.data_size=sizeof(voice_input);
-        Result ar=audinAppendAudioInBuffer(&buffer);
-        if(R_FAILED(ar)){
-            diagf("frame=%u append_failed=%08x\n",frame,ar);
-            failed++;
-            break;
-        }
+    unsigned recorded=0,submitted=queued_count,failed=0,bad_release=0;
+    while(recorded<VOICE_CHUNKS) {
         AudioInBuffer *released=NULL;
         u32 count=0;
         Result wr=audinWaitCaptureFinish(&released,&count,1200000000ULL);
-        if(R_FAILED(wr) || count!=1 || released!=&buffer) {
-            diagf("frame=%u capture_failed=%08x count=%u matches=%u\n",
-                  frame,wr,count,released==&buffer);
+        if(R_FAILED(wr)||!count||!released) {
+            diagf("capture wait failed at=%u rc=%08x count=%u\n",recorded,wr,count);
             failed++;
-            /* Stop capturing and do not reuse the still-owned memory. */
             break;
         }
-        const size_t length=(buffer.data_size<=sizeof(voice_input))?
-                              (size_t)buffer.data_size:sizeof(voice_input);
-        const size_t valid=length & ~(size_t)1;
-        voice_stats((const int16_t*)voice_input,valid/2,frame);
-        int peak=0;
-        for(size_t i=0;i<valid/2;i++) {
-            int sample=((const int16_t*)voice_input)[i];
-            int magnitude=sample<0?-sample:sample;
-            if(magnitude>peak)peak=magnitude;
+        int slot=-1;
+        for(unsigned i=0;i<CAPTURE_SLOTS;i++)if(released==&capture_desc[i]){slot=(int)i;break;}
+        if(slot<0) {
+            diagf("capture unexpected release count=%u\n",count);
+            bad_release++;
+            break;
         }
-        if(peak<100)quiet++;
-        if(voice_used+valid<=sizeof(voice_output)) {
-            /* Preserve unchanged PCM until all chunks are captured.
-             * One consistent gain avoids hard clipping at loud syllables.
-             */
-            memcpy(voice_output+voice_used,voice_input,valid);
-            voice_used+=valid;
+        size_t length=released->data_size;
+        if(length>VOICE_CHUNK_BYTES)length=VOICE_CHUNK_BYTES;
+        length &= ~(size_t)3; /* stereo 16-bit frame alignment */
+        if(!length || voice_used+length>sizeof(voice_output)) {
+            diagf("capture invalid length=%u slot=%d\n",(unsigned)length,slot);
+            failed++;
+            break;
         }
-        passed++;
-        if(frame%3==2) {
-            diagf("voice checkpoint=%08x\n",write_diagnostics());
+        memcpy(voice_output+voice_used,capture_pcm[slot],length);
+        voice_used+=length;
+        capture_lengths[recorded]=(unsigned)length;
+        recorded++;
+        if(submitted<VOICE_CHUNKS) {
+            /* Queue the released descriptor immediately, before stats/logging. */
+            memset(&capture_desc[slot],0,sizeof(capture_desc[slot]));
+            capture_desc[slot].buffer=capture_pcm[slot];
+            capture_desc[slot].buffer_size=VOICE_CHUNK_BYTES;
+            capture_desc[slot].data_size=VOICE_CHUNK_BYTES;
+            Result qr=audinAppendAudioInBuffer(&capture_desc[slot]);
+            if(R_FAILED(qr)) {
+                diagf("capture requeue error frame=%u rc=%08x\n",recorded,qr);
+                failed++;
+                break;
+            }
+            submitted++;
         }
     }
     Result stop=audinStopAudioIn();
-    diagf("voice audinStopAudioIn=%08x\n",stop);
+    diagf("capture stop=%08x recorded=%u submitted=%u failures=%u unexpected=%u bytes=%u\n",
+          stop,recorded,submitted,failed,bad_release,(unsigned)voice_used);
     audinExit();
+    /* Post-capture analysis must not hold up the hardware queue. */
+    size_t offset=0;
+    unsigned quiet=0,large_boundary=0,max_boundary=0;
+    for(unsigned i=0;i<recorded;i++) {
+        const unsigned length=capture_lengths[i];
+        const int16_t *samples=(const int16_t*)(voice_output+offset);
+        int peak=0;
+        for(unsigned k=0;k<length/2;k++) {
+            int x=samples[k],a=x<0?-x:x;
+            if(a>peak)peak=a;
+        }
+        if(peak<100)quiet++;
+        if(i>0 && length>=4 && offset>=4) {
+            const int16_t *prev=(const int16_t*)(voice_output+offset-4);
+            for(unsigned channel=0;channel<2;channel++) {
+                int delta=(int)samples[channel]-(int)prev[channel];
+                if(delta<0)delta=-delta;
+                if(delta>max_boundary)max_boundary=delta;
+                if(delta>10000)large_boundary++;
+            }
+        }
+        voice_stats(samples,length/2,i);
+        offset+=length;
+    }
+    diagf("capture boundaries_jump_gt10000=%u max_boundary_jump=%u quiet_frames=%u\n",
+          large_boundary,max_boundary,quiet);
     voice_prepare_playback();
-    diagf("voice captured_frames=%u errors=%u quiet_frames=%u pcm_bytes=%u adaptive_peak_gain=1.5max fade_ms=10\n",
-          passed,failed,quiet,(unsigned)voice_used);
+    diagf("voice captured_frames=%u errors=%u pcm_bytes=%u unity_gain=1.0 fade_ms=10\n",
+          recorded,failed,(unsigned)voice_used);
     diagf("voice capture checkpoint=%08x\n",write_diagnostics());
 }
 
@@ -641,7 +695,7 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 streaming-buffer playback diagnostic v0.13\n");
+    diagf("DiscordNX2 prequeued microphone capture diagnostic v0.14\n");
     diagf("Foreground-only, ~3 seconds PCM capture, unity gain 1.0x and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
@@ -655,7 +709,7 @@ static void hardware_report(void) {
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.13. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.14. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }

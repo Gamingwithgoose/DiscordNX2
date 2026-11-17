@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.14 prequeued microphone capture
+
+v0.13 rotating audio-output buffers did not improve slight popping on physical Switch 2 hardware. A more plausible issue in the source was that the microphone had only one submitted buffer at a time and ran per-buffer statistics and SD-card checkpoint writes before re-submitting the next one, potentially creating capture gaps. Changed the foreground NRO capture path to prequeue three aligned 16 KiB microphone buffers, reclaim and requeue promptly, and postpone statistics and disk writes until capture stops. Logs real between-buffer sample discontinuities after recording. Keeps v0.13 three-buffer playback, unity gain and reference tone. Does not touch the installed NSO. The change still requires local build and hardware verification; dropouts are a hypothesis, not a proven root cause.
+
 ## November 17, 2026 — v0.13 streaming output queue based on KaiPlayer
 
 The reference tone also clicked slightly near its ending and recorded speech still popped after a silence-tail experiment. Inspected KaiPlayer (MIT) and switch2iptv; KaiPlayer uses three 8-KiB AudioOutBuffer slots, a persistent output service, and a queue/reclaim loop, whereas switch2iptv delegates its audio path to mpv. Replaced the one-large-buffer output in the foreground NRO with three rotating aligned buffers for both reference tone and microphone playback, retaining an end-of-stream silence tail and bounded diagnostics. Added flush on stop. This targets output scheduling/queue reuse rather than changing microphone gain. The implementation is adapted to our short buffered test, not a full copy of KaiPlayer's thread architecture. Nothing alters the resident NSO. Requires local compilation and physical console testing.
