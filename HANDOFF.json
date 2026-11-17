@@ -81,7 +81,8 @@
     "Public unauthenticated Discord Gateway DNS/TCP/TLS/WebSocket upgrade and HELLO probe; no tokens or Discord audio sent",
     "SSL socket ownership hardening: descriptor remains open during handshake and SSL I/O timeout requested",
     "Graphical native 1280x720 RGBA8 framebuffer with Dashboard / Servers / Voice Chat / Diagnostics, D-pad navigation and A/B/+/X/Y/L controls; fallback to console if unavailable",
-    "Authentication and voice tabs explicitly display disconnected/unavailable; no faked guild data or calls, no account passwords or tokens"
+    "Authentication and voice tabs explicitly display disconnected/unavailable; no faked guild data or calls, no account passwords or tokens",
+    "v0.18 UI navigation corrected to two-column focus: sidebar Up/Down, Right/A enters content, content Up/Down selects, Left/B returns; left analog stick edge thresholds"
   ],
   "build_validation": "v0.17 tested on Switch 2: microphone captures and voice packets pass, public Discord Gateway DNS TCP TLS WebSocket 101 HELLO passed heartbeat 41250ms. v0.18 graphical UI source added and not yet compiled with user's toolchain or tested on real Switch 2.",
   "key_risks": [
@@ -104,11 +105,11 @@
     ]
   },
   "next_user_workflow": [
-    "Pull main with GitHub Desktop and run Build-NRO.bat",
-    "FTP ONLY dist/DiscordNX2.nro and launch it",
-    "Navigate Dashboard/Servers/Voice/Diagnostics with D-pad, A/B; verify graphical renderer, panels and selection",
-    "Run full integration test optionally from Diagnostics; report v0.18 build errors or display problems",
-    "Do not transfer NSO, restart kaiHEN, or enter Discord credentials; sign-in and calling aren't active"
+    "Pull main via GitHub Desktop, run Build-NRO.bat and FTP only dist/DiscordNX2.nro",
+    "Verify graphical UI opens; use Up/Down to move Dashboard/Servers/Voice Chat/Diagnostics on left",
+    "Select Diagnostics, press Right or A, use Up/Down among actions, Left/B returns to sidebar",
+    "Verify left analog stick and D-pad controls do not rapidly switch tabs on horizontal input",
+    "No need to re-run hardware suite unless desired; account sign-in and voice still not implemented"
   ],
   "next_developer_work": [
     "Cross-compile and fix graphical UI issues on the actual libounce release",
