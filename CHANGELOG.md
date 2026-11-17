@@ -1,5 +1,11 @@
 # Changelog
 
+## November 17, 2026 — v0.7 voice capture, delayed playback and local transport
+
+Moved the next milestone away from C-button probing and toward the voice path. The foreground NRO now collects twelve bounded stereo PCM microphone buffers, reports per-buffer signal statistics, and attempts to play those captured samples back at half amplitude **after** input recording stops. It tests a UDP packet sent only to a local loopback socket, preserving the existing plugin continuity and service-session probes. No audio is transmitted to any network endpoint; no credentials are read. The program closes all services before exiting. The installable background NSO is not changed, and this is not a continuous open-mic Discord client yet. The local toolchain must compile this and the console must verify audible playback.
+
+Discord's current voice calls require DAVE end-to-end encryption. An independently interoperable voice client will need a supported authentication and DAVE-capable transport implementation; a simple Opus/UDP send is not a complete Discord voice implementation.
+
 ## November 17, 2026 — v0.6 multi-stream HID C-button investigation
 
 Instead of repeating the same pad polling, the foreground NRO now reads four published libounce HID histories (handheld, full-key, system-extended, and system) separately for the handheld and Player 1 controller IDs. It compares six timed conditions, capturing changed button bits, sampling-number freshness, and state availability for every channel. It also calls read-only controller interface/style/last-active APIs. The test checkpoints the SD report after each stage and retains microphone capture, audio output, service probes, and background NSO continuity checks. No GameChat override or raw Bluetooth/USB interception was added; compatibility with console firmware still needs a local build and hardware test. The resident NSO was not changed.

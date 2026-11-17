@@ -299,21 +299,212 @@ static void service_trials(void) {
         if(R_SUCCEEDED(rc)) serviceClose(&svc);
     }
 }
+
+/* v0.7: bounded 48kHz stereo PCM capture and delayed playback.
+ * Audio is kept in static memory and never written to the SD card.
+ * No unattended/open mic after exiting the diagnostic NRO.
+ */
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <errno.h>
+
+#define VOICE_CHUNK_BYTES 0x4000u
+#define VOICE_CHUNKS 12u
+#define VOICE_MAX_BYTES (VOICE_CHUNK_BYTES * VOICE_CHUNKS)
+#define VOICE_NETWORK_PORT 39272u
+static unsigned char voice_input[VOICE_CHUNK_BYTES] __attribute__((aligned(0x1000)));
+static unsigned char voice_output[VOICE_MAX_BYTES] __attribute__((aligned(0x1000)));
+static size_t voice_used;
+
+static void voice_stats(const int16_t *pcm,size_t count,unsigned frame) {
+    unsigned nonzero=0,active=0,clips=0;
+    unsigned long long sumabs=0;
+    int peak=0;
+    for(size_t i=0;i<count;i++) {
+        int value=(int)pcm[i];
+        int absval=value<0?-value:value;
+        if(absval>peak)peak=absval;
+        sumabs+=(unsigned)absval;
+        if(value!=0)nonzero++;
+        if(absval>=400)active++;
+        if(absval>=32000)clips++;
+    }
+    const unsigned avg=count?(unsigned)(sumabs/count):0;
+    diagf(" frame=%u samples=%u peak=%d avg_abs=%u active_ge400=%u nonzero=%u clips=%u\n",
+        frame,(unsigned)count,peak,avg,active,nonzero,clips);
+}
+
+/* Capture multiple buffers and compute simple speech/noise diagnostics.
+ * Samples are scaled to 50% on local playback as a speaker-safety measure.
+ */
+static void voice_capture_test(void) {
+    voice_used=0;
+    diagf("\n[VOICE: MULTI-BUFFER MIC CAPTURE / NO NETWORK TRANSMISSION]\n");
+    diagf("Speak during capture. Do not use speakers and microphone together for live feedback.\n");
+    Result rc=audinInitialize();
+    diagf("voice audinInitialize=%08x\n",rc);
+    if(R_FAILED(rc))return;
+    const u32 rate=audinGetSampleRate(),ch=audinGetChannelCount();
+    const unsigned fmt=(unsigned)audinGetPcmFormat();
+    diagf("voice input rate=%u channels=%u format=%u\n",rate,ch,fmt);
+    if(rate!=48000||ch!=2||fmt!=(unsigned)PcmFormat_Int16) {
+        diagf("SKIP voice buffer test: expected 48000Hz, stereo, signed 16-bit PCM.\n");
+        audinExit();
+        return;
+    }
+    rc=audinStartAudioIn();
+    diagf("voice audinStartAudioIn=%08x\n",rc);
+    if(R_FAILED(rc)){audinExit();return;}
+    unsigned passed=0,failed=0,quiet=0;
+    for(unsigned frame=0;frame<VOICE_CHUNKS;frame++) {
+        memset(voice_input,0,sizeof(voice_input));
+        AudioInBuffer buffer={0};
+        buffer.buffer=voice_input;
+        buffer.buffer_size=sizeof(voice_input);
+        buffer.data_size=sizeof(voice_input);
+        Result ar=audinAppendAudioInBuffer(&buffer);
+        if(R_FAILED(ar)){
+            diagf("frame=%u append_failed=%08x\n",frame,ar);
+            failed++;
+            break;
+        }
+        AudioInBuffer *released=NULL;
+        u32 count=0;
+        Result wr=audinWaitCaptureFinish(&released,&count,1200000000ULL);
+        if(R_FAILED(wr) || count!=1 || released!=&buffer) {
+            diagf("frame=%u capture_failed=%08x count=%u matches=%u\n",
+                  frame,wr,count,released==&buffer);
+            failed++;
+            /* Stop capturing and do not reuse the still-owned memory. */
+            break;
+        }
+        const size_t length=(buffer.data_size<=sizeof(voice_input))?
+                              (size_t)buffer.data_size:sizeof(voice_input);
+        const size_t valid=length & ~(size_t)1;
+        voice_stats((const int16_t*)voice_input,valid/2,frame);
+        int peak=0;
+        for(size_t i=0;i<valid/2;i++) {
+            int sample=((const int16_t*)voice_input)[i];
+            int magnitude=sample<0?-sample:sample;
+            if(magnitude>peak)peak=magnitude;
+        }
+        if(peak<100)quiet++;
+        if(voice_used+valid<=sizeof(voice_output)) {
+            for(size_t i=0;i<valid/2;i++)
+                ((int16_t*)(voice_output+voice_used))[i]=
+                  (int16_t)(((const int16_t*)voice_input)[i]/2);
+            voice_used+=valid;
+        }
+        passed++;
+        if(frame%3==2) {
+            diagf("voice checkpoint=%08x\n",write_diagnostics());
+        }
+    }
+    Result stop=audinStopAudioIn();
+    diagf("voice audinStopAudioIn=%08x\n",stop);
+    audinExit();
+    diagf("voice captured_frames=%u errors=%u quiet_frames=%u pcm_bytes=%u playback_gain=0.5\n",
+          passed,failed,quiet,(unsigned)voice_used);
+    diagf("voice capture checkpoint=%08x\n",write_diagnostics());
+}
+
+static void voice_playback_test(void) {
+    diagf("\n[VOICE: AUDIBLE DELAYED PLAYBACK]\n");
+    if(!voice_used) {
+        diagf("SKIP: no successful captured audio buffers.\n");
+        return;
+    }
+    Result rc=audoutInitialize();
+    diagf("voice audoutInitialize=%08x\n",rc);
+    if(R_FAILED(rc))return;
+    diagf("voice output rate=%u channels=%u format=%u\n",
+          audoutGetSampleRate(),audoutGetChannelCount(),(unsigned)audoutGetPcmFormat());
+    if(audoutGetSampleRate()!=48000 || audoutGetChannelCount()!=2 ||
+       audoutGetPcmFormat()!=PcmFormat_Int16) {
+        diagf("SKIP: output format mismatch.\n");
+        audoutExit();
+        return;
+    }
+    rc=audoutStartAudioOut();
+    diagf("voice audoutStartAudioOut=%08x\n",rc);
+    if(R_SUCCEEDED(rc)) {
+        AudioOutBuffer buffer={0};
+        buffer.buffer=voice_output;
+        buffer.buffer_size=sizeof(voice_output);
+        buffer.data_size=voice_used;
+        rc=audoutAppendAudioOutBuffer(&buffer);
+        diagf("voice audoutAppendAudioOutBuffer=%08x data_bytes=%u\n",rc,(unsigned)voice_used);
+        if(R_SUCCEEDED(rc)) {
+            AudioOutBuffer *released=NULL;
+            u32 count=0;
+            Result wr=audoutWaitPlayFinish(&released,&count,3500000000ULL);
+            diagf("voice audoutWaitPlayFinish=%08x released=%u matches=%u\n",
+                  wr,count,released==&buffer);
+        }
+        Result stop=audoutStopAudioOut();
+        diagf("voice audoutStopAudioOut=%08x\n",stop);
+    }
+    audoutExit();
+    diagf("If you did not hear your voice, report that; a successful API call is not audible playback proof.\n");
+}
+
+/* A network transport smoke test that sends only a fixed marker to itself.
+ * Never sends microphone data or Discord credentials.
+ */
+static void voice_network_test(void) {
+    diagf("\n[NETWORK: LOCAL UDP LOOPBACK, NO AUDIO SENT]\n");
+    Result rc=bsdInitialize(bsdGetDefaultInitConfig(),1,0);
+    diagf("bsdInitialize=%08x\n",rc);
+    if(R_FAILED(rc))return;
+    int server=bsdSocket(AF_INET,SOCK_DGRAM,0);
+    int client=bsdSocket(AF_INET,SOCK_DGRAM,0);
+    diagf("bsdSocket server=%d client=%d\n",server,client);
+    if(server>=0&&client>=0) {
+        struct sockaddr_in addr={0};
+        addr.sin_family=AF_INET;
+        addr.sin_port=htons(VOICE_NETWORK_PORT);
+        addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+        int br=bsdBind(server,(const struct sockaddr *)&addr,sizeof(addr));
+        diagf("bsdBind localhost:%u result=%d errno=%d\n",VOICE_NETWORK_PORT,br,errno);
+        if(br==0) {
+            static const char msg[]="DNX2_LOCAL_UDP_V07";
+            ssize_t sent=bsdSendTo(client,msg,sizeof(msg),0,(const struct sockaddr *)&addr,sizeof(addr));
+            diagf("bsdSendTo bytes=%d errno=%d\n",(int)sent,errno);
+            fd_set fds;
+            FD_ZERO(&fds);FD_SET(server,&fds);
+            struct timeval wait={0,400000};
+            int ready=bsdSelect(server+1,&fds,NULL,NULL,&wait);
+            diagf("bsdSelect ready=%d errno=%d\n",ready,errno);
+            if(ready>0&&FD_ISSET(server,&fds)) {
+                char received[64]={0};
+                ssize_t n=bsdRecv(server,received,sizeof(received),0);
+                diagf("bsdRecv bytes=%d marker_match=%u errno=%d\n",
+                    (int)n,n==(ssize_t)sizeof(msg)&&memcmp(received,msg,sizeof(msg))==0,errno);
+            }
+        }
+    }
+    if(client>=0)bsdClose(client);
+    if(server>=0)bsdClose(server);
+    bsdExit();
+    diagf("Network test is LOCAL ONLY; not a Discord voice connection.\n");
+}
+
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 four-stream C-button diagnostic v0.6\n");
-    diagf("47s C hold/tap trials in four HID histories x two IDs + audio + IPC.\n");
-    diagf("No GameChat suppression; no Discord connection; no PCM file written.\n");
-    diagf("initial write=%08x\n",write_diagnostics());
+    diagf("DiscordNX2 voice milestone diagnostic v0.7\n");
+    diagf("Foreground-only, capture then delayed playback. No audio sent over network.\n");
+    diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
+    diagf("initial report write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
-    diagf("checkpoint write=%08x\n",write_diagnostics());
-    controller_trials();
-    diagf("checkpoint write=%08x\n",write_diagnostics());
-    audio_trials();
-    diagf("checkpoint write=%08x\n",write_diagnostics());
+    diagf("plugin checkpoint=%08x\n",write_diagnostics());
+    voice_capture_test();
+    voice_playback_test();
+    diagf("audio checkpoint=%08x\n",write_diagnostics());
+    voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("\nCompleted test sequence; no actual PTT or audio playback performed.\n");
+    diagf("DONE v0.7. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }
