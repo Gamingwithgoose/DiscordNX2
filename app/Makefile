@@ -15,7 +15,9 @@ $(BUILD):
 	mkdir -p $@
 $(BUILD)/main.o: source/main.c | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/main.o
+$(BUILD)/voice_packet.o: source/voice_packet.c source/voice_packet.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@

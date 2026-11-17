@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.15 portable voice packet pipeline and socket fix
+
+Real-hardware report: v0.14 eliminated audible popping. Built around that proven three-buffer mic capture rather than changing its timing. Implemented a standalone, bounded 10ms stereo PCM16 → mono PCM16 versioned packet format with sequence/timestamp, RMS/peak telemetry, VAD hangover, checksumming and a verified decode path. Added NRO packet roundtrip/negative corruption tests over every full captured frame. Replaced the failed raw `bsdInitialize` call, which used an invalid zero-version default configuration, with libounce's `socketInitialize` wrapper and standard socket APIs. The transport test runs exclusively on localhost and sends at most one diagnostic voice frame plus a marker. This is local transport preparation, not Discord integration or an actual call; there is no Opus encoder, authentication, remote network transmission or DAVE. The background NSO is untouched. Requires local compilation and console validation.
+
 ## November 17, 2026 — v0.14 prequeued microphone capture
 
 v0.13 rotating audio-output buffers did not improve slight popping on physical Switch 2 hardware. A more plausible issue in the source was that the microphone had only one submitted buffer at a time and ran per-buffer statistics and SD-card checkpoint writes before re-submitting the next one, potentially creating capture gaps. Changed the foreground NRO capture path to prequeue three aligned 16 KiB microphone buffers, reclaim and requeue promptly, and postpone statistics and disk writes until capture stops. Logs real between-buffer sample discontinuities after recording. Keeps v0.13 three-buffer playback, unity gain and reference tone. Does not touch the installed NSO. The change still requires local build and hardware verification; dropouts are a hypothesis, not a proven root cause.

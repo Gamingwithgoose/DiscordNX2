@@ -2,7 +2,7 @@
 
 I want Discord voice chat on my Switch 2 while playing games, with the C button as push-to-talk. This is the first hardware test, **not a working Discord voice client**.
 
-**CURRENT TESTING INSTRUCTIONS (v0.14): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
+**CURRENT TESTING INSTRUCTIONS (v0.15): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
 
 Right now the project builds a homebrew NRO plus a kaiHEN background NSO. The NRO asks the background plugin for a handshake, its status and counters, and permission to open basic HID, audio-input, audio-output and network service sessions. It saves the results to the SD card. Before attempting Discord, I need to prove that a plugin can stay running while a game is open, that C can be read during gameplay, and that microphone and audio playback work at the same time as a game.
 
@@ -99,3 +99,7 @@ Based on the MIT-licensed [KaiPlayer](https://github.com/mizuiroame/kaiplayer) o
 ## v0.14 — Prequeued microphone input buffers
 
 v0.13 output buffering did not improve popping. The microphone capture path previously submitted one buffer, waited, computed statistics, wrote diagnostics to SD, then submitted another. v0.14 prequeues three input buffers and requeues completed slots before performing costly analysis, deferring sample statistics and SD writes until capture finishes. The generated tone and voice still use the v0.13 streaming output, with unity gain. Pull and run `Build-NRO.bat`, FTP **ONLY** `dist/DiscordNX2.nro`; do not touch the installed NSO. Compare crackling and send `/kaihen/discordnx2-hardware.txt`. No Discord connection or background microphone yet.
+
+## v0.15 — Voice-packet pipeline and socket-driver milestone
+
+The v0.14 three-buffer capture fixed audible popping on real Switch 2 hardware; this release **preserves that capture design**. Added portable `app/source/voice_packet.c/.h`: 10ms 48kHz stereo-to-mono PCM16 frames (480 samples), 984-byte versioned packet framing, monotonically increasing sequence/timestamps, RMS/peak meters, threshold + 120ms voice-activity hangover, and payload corruption detection. The NRO checks PCM pack/unpack bit-exactly against its captured samples, reports frame counts and VAD results, and tests two UDP messages **only on 127.0.0.1**: a marker and one diagnostic voice packet. Network initialization now calls libounce's documented `socketInitialize` wrapper (which negotiates the BSD version) instead of the prior invalid zero-version raw BSD call; it tries a single-session configuration if the default fails and records both results. This is not Opus, Discord RTP, DAVE, authenticated voice chat, or a microphone transmission to a remote host. No Nintendo services are unblocked. Build locally with `Build-NRO.bat`; transfer only `dist/DiscordNX2.nro` and keep the resident NSO unchanged. Examine `/kaihen/discordnx2-hardware.txt` for packets, corruption check, and UDP result.

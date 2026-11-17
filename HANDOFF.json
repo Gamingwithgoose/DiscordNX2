@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.14-prequeued-mic-capture",
+  "version": "0.15-portable-packet-and-socket",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -62,16 +62,20 @@
     ],
     "v13": [
       "User reports no improvement in popping after three-buffer audio playback conversion"
+    ],
+    "v14": [
+      "User reports no audible popping with prequeued three-buffer microphone capture (breakthrough)"
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
-    "v0.14 prequeues three mic input buffers, requeues promptly, and defers per-buffer logging/statistics and file checkpoints until capture stops",
-    "diagnoses discontinuities at actual adjacent input buffer boundaries",
-    "keeps three-buffer output reference tone and voice playback and unity gain",
-    "NSO unchanged, no Discord voice implementation"
+    "Preserves v0.14 3-buffer microphone capture and v0.13 3-buffer playback",
+    "Added portable voice_packet.h/.c: 10ms mono 48kHz PCM frame, sequence, timestamp, RMS/peak/VAD hangover, noncryptographic checksum and decode roundtrip",
+    "NRO processes captured frames offline, validates against originals and rejects deliberate packet corruption",
+    "Switched network test to socketInitialize for proper BSD version, tries default and one-session config; localhost UDP marker and 1 diagnostic PCM frame only",
+    "NSO and kaiHEN preserved; no remote audio sending, no Discord authentication, Opus or DAVE"
   ],
-  "build_validation": "v0.13 ran but still pops. v0.14 source pushed without independent local compile or hardware testing.",
+  "build_validation": "v0.14 audio clean on real Switch 2. v0.15 not independently compiled with the user's console toolchain or hardware tested.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -92,10 +96,10 @@
     ]
   },
   "next_user_workflow": [
-    "GitHub Desktop pull and Build-NRO.bat",
-    "FTP only dist/DiscordNX2.nro, no NSO replacement or kaiHEN restart",
-    "compare popping to v0.13 and send /kaihen/discordnx2-hardware.txt",
-    "if compile failure provide full build log"
+    "GitHub Desktop pull latest and run Build-NRO.bat",
+    "FTP ONLY dist/DiscordNX2.nro; preserve NSO and current jailbreak",
+    "Confirm voice still clean, attach /kaihen/discordnx2-hardware.txt",
+    "Check packet roundtrip invalid=0, corruption rejected=1, socket UDP marker/audio loopback results"
   ],
   "next_developer_work": [
     "fix real compile or audio failures from user report first",

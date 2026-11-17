@@ -6,6 +6,7 @@
 #include <switch.h>
 #include <switch/services/bsd.h>
 #include <kaihen.h>
+#include "voice_packet.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -314,7 +315,6 @@ static void service_trials(void) {
 #define VOICE_CHUNKS 36u
 #define VOICE_MAX_BYTES (VOICE_CHUNK_BYTES * VOICE_CHUNKS)
 #define VOICE_NETWORK_PORT 39272u
-static unsigned char voice_input[VOICE_CHUNK_BYTES] __attribute__((aligned(0x1000)));
 static unsigned char voice_output[VOICE_MAX_BYTES] __attribute__((aligned(0x1000)));
 static size_t voice_used;
 
@@ -655,47 +655,120 @@ static void voice_playback_test(void) {
 /* A network transport smoke test that sends only a fixed marker to itself.
  * Never sends microphone data or Discord credentials.
  */
+static uint8_t voice_packet_data[DNX2_PACKET_BYTES];
+static int16_t voice_decoded[DNX2_FRAME_FRAMES];
+static uint8_t latest_packet[DNX2_PACKET_BYTES];
+static int latest_packet_available;
+static void voice_packet_test(void) {
+    diagf("\n[VOICE CORE: 10ms MONO FRAMES / GATE / PACKET VALIDATION]\n");
+    if(voice_used<DNX2_FRAME_FRAMES*4u) {
+        diagf("packet test skipped: no PCM\n");return;
+    }
+    Dnx2VoiceGate gate={.hangover=0,.threshold_rms=220};
+    unsigned frames=(unsigned)(voice_used/(DNX2_FRAME_FRAMES*4u));
+    unsigned valid=0,invalid=0,active=0;
+    unsigned peak=0,max_rms=0;
+    latest_packet_available=0;
+    for(unsigned i=0;i<frames;i++) {
+        const int16_t *stereo=(const int16_t*)(voice_output+(size_t)i*DNX2_FRAME_FRAMES*4u);
+        Dnx2PacketInfo encoded={0},decoded={0};
+        size_t len=dnx2PacketEncode(stereo,i,&gate,voice_packet_data,
+                                   sizeof(voice_packet_data),&encoded);
+        int ok=len==DNX2_PACKET_BYTES &&
+               dnx2PacketDecode(voice_packet_data,len,voice_decoded,
+                                DNX2_FRAME_FRAMES,&decoded);
+        if(ok) {
+            for(unsigned j=0;j<DNX2_FRAME_FRAMES;j++) {
+                int mixed=((int)stereo[2*j]+(int)stereo[2*j+1])/2;
+                if(voice_decoded[j]!=mixed){ok=0;break;}
+            }
+        }
+        if(ok && encoded.sequence==decoded.sequence &&
+           decoded.timestamp==i*DNX2_FRAME_FRAMES) {
+            valid++;if(decoded.active)active++;
+            if(decoded.peak>peak)peak=decoded.peak;
+            if(decoded.rms>max_rms)max_rms=decoded.rms;
+            if(i==frames/2u) {
+                memcpy(latest_packet,voice_packet_data,sizeof(latest_packet));
+                latest_packet_available=1;
+            }
+        } else invalid++;
+    }
+    /* Verify corruption detection without modifying the saved test packet. */
+    unsigned rejected_corrupt=0;
+    if(latest_packet_available) {
+        latest_packet[DNX2_PACKET_HEADER+4]^=0x40;
+        rejected_corrupt=!dnx2PacketDecode(latest_packet,sizeof(latest_packet),
+                                           voice_decoded,DNX2_FRAME_FRAMES,NULL);
+        latest_packet[DNX2_PACKET_HEADER+4]^=0x40;
+    }
+    diagf("PCM frames_10ms=%u valid=%u invalid=%u active=%u peak=%u max_rms=%u corruption_rejected=%u\n",
+          frames,valid,invalid,active,peak,max_rms,rejected_corrupt);
+    diagf("packet size=%u mono_rate=48000 frame_ms=10 checksum=FNV1a (NOT encryption)\n",
+          (unsigned)DNX2_PACKET_BYTES);
+}
+
 static void voice_network_test(void) {
-    diagf("\n[NETWORK: LOCAL UDP LOOPBACK, NO AUDIO SENT]\n");
-    Result rc=bsdInitialize(bsdGetDefaultInitConfig(),1,0);
-    diagf("bsdInitialize=%08x\n",rc);
-    if(R_FAILED(rc))return;
-    int server=bsdSocket(AF_INET,SOCK_DGRAM,0);
-    int client=bsdSocket(AF_INET,SOCK_DGRAM,0);
-    diagf("bsdSocket server=%d client=%d\n",server,client);
+    diagf("\n[NETWORK: SWITCH SOCKET DRIVER / LOCAL UDP / NEVER SEND MIC DATA]\n");
+    Result rc=socketInitialize(NULL); /* proper BSD protocol version selection */
+    diagf("socketInitialize(default)=%08x\n",rc);
+    if(R_FAILED(rc)) {
+        SocketInitConfig cfg=*socketGetDefaultInitConfig();
+        cfg.num_bsd_sessions=1;
+        cfg.bsd_service_type=BsdServiceType_User;
+        rc=socketInitialize(&cfg);
+        diagf("socketInitialize(single-session)=%08x\n",rc);
+    }
+    if(R_FAILED(rc)) {
+        diagf("socket setup unavailable; no remote traffic attempted\n");
+        return;
+    }
+    int server=socket(AF_INET,SOCK_DGRAM,0);
+    int client=socket(AF_INET,SOCK_DGRAM,0);
+    diagf("UDP sockets server=%d client=%d errno=%d\n",server,client,errno);
     if(server>=0&&client>=0) {
         struct sockaddr_in addr={0};
         addr.sin_family=AF_INET;
         addr.sin_port=htons(VOICE_NETWORK_PORT);
         addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
-        int br=bsdBind(server,(const struct sockaddr *)&addr,sizeof(addr));
-        diagf("bsdBind localhost:%u result=%d errno=%d\n",VOICE_NETWORK_PORT,br,errno);
+        int br=bind(server,(const struct sockaddr *)&addr,sizeof(addr));
+        diagf("bind localhost:%u result=%d errno=%d\n",VOICE_NETWORK_PORT,br,errno);
         if(br==0) {
-            static const char msg[]="DNX2_LOCAL_UDP_V07";
-            ssize_t sent=bsdSendTo(client,msg,sizeof(msg),0,(const struct sockaddr *)&addr,sizeof(addr));
-            diagf("bsdSendTo bytes=%d errno=%d\n",(int)sent,errno);
-            fd_set fds;
-            FD_ZERO(&fds);FD_SET(server,&fds);
-            struct timeval wait={0,400000};
-            int ready=bsdSelect(server+1,&fds,NULL,NULL,&wait);
-            diagf("bsdSelect ready=%d errno=%d\n",ready,errno);
-            if(ready>0&&FD_ISSET(server,&fds)) {
-                char received[64]={0};
-                ssize_t n=bsdRecv(server,received,sizeof(received),0);
-                diagf("bsdRecv bytes=%d marker_match=%u errno=%d\n",
-                    (int)n,n==(ssize_t)sizeof(msg)&&memcmp(received,msg,sizeof(msg))==0,errno);
+            static const char marker[]="DNX2_V15_UDP_LOCAL";
+            ssize_t sent=sendto(client,marker,sizeof(marker),0,
+                                (const struct sockaddr *)&addr,sizeof(addr));
+            fd_set fds;FD_ZERO(&fds);FD_SET(server,&fds);
+            struct timeval wait={0,500000};
+            int ready=select(server+1,&fds,NULL,NULL,&wait);
+            char recvbuf[64]={0};
+            ssize_t received=ready>0?recv(server,recvbuf,sizeof(recvbuf),0):-1;
+            diagf("UDP marker sent=%d ready=%d received=%d match=%u errno=%d\n",
+                  (int)sent,ready,(int)received,
+                  received==(ssize_t)sizeof(marker)&&
+                  memcmp(marker,recvbuf,sizeof(marker))==0,errno);
+            if(latest_packet_available) {
+                sent=sendto(client,latest_packet,sizeof(latest_packet),0,
+                            (const struct sockaddr *)&addr,sizeof(addr));
+                FD_ZERO(&fds);FD_SET(server,&fds);wait.tv_sec=0;wait.tv_usec=500000;
+                ready=select(server+1,&fds,NULL,NULL,&wait);
+                unsigned char packet[DNX2_PACKET_BYTES]={0};
+                received=ready>0?recv(server,packet,sizeof(packet),0):-1;
+                int ok=received==(ssize_t)sizeof(packet)&&
+                  dnx2PacketDecode(packet,sizeof(packet),voice_decoded,DNX2_FRAME_FRAMES,NULL);
+                diagf("UDP diagnostic PCM frame sent=%d received=%d validated=%u local_only=1\n",
+                      (int)sent,(int)received,ok);
             }
         }
     }
-    if(client>=0)bsdClose(client);
-    if(server>=0)bsdClose(server);
-    bsdExit();
-    diagf("Network test is LOCAL ONLY; not a Discord voice connection.\n");
+    if(client>=0)close(client);
+    if(server>=0)close(server);
+    socketExit();
+    diagf("No remote host contacted, no Discord authentication attempted.\n");
 }
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 prequeued microphone capture diagnostic v0.14\n");
+    diagf("DiscordNX2 voice transport milestone v0.15\n");
     diagf("Foreground-only, ~3 seconds PCM capture, unity gain 1.0x and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
@@ -706,10 +779,12 @@ static void hardware_report(void) {
     diagf("reference checkpoint=%08x\n",write_diagnostics());
     voice_playback_test();
     diagf("audio checkpoint=%08x\n",write_diagnostics());
+    voice_packet_test();
+    diagf("packet checkpoint=%08x\n",write_diagnostics());
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.14. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.15. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }
