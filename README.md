@@ -6,14 +6,15 @@ Right now the project builds a homebrew NRO plus a kaiHEN background NSO. The NR
 
 ## Build on your own PC
 
-There are no GitHub Actions or hosted builds in this repository. You'll need Git for Windows and Docker Desktop (running Linux containers).
+There are no GitHub Actions, cloud builds, or Docker requirements here. This project uses devkitPro and ounce-devkit installed locally. Regular MSYS2 by itself is not the Switch 2 cross-compiler.
 
-1. Clone this repository or pull it in GitHub Desktop.
-2. Start Docker Desktop.
-3. Double-click `Build.bat` in the repo folder.
-4. If everything succeeds, both files will be in `dist`: `DiscordNX2.nro` and `discordnx2.nso`.
+1. Install devkitPro for Windows using https://devkitpro.org/wiki/Getting_Started.
+2. In devkitPro's MSYS2 environment, install the Switch 2 toolchain using the instructions at https://github.com/ouncebrew/ounce-devkit. Its install script adds the ounce package source and installs libounce, libkaihen, and the needed compiler tools. Only this initial toolchain setup needs to be done once.
+3. Clone this repo or pull it in GitHub Desktop.
+4. Double-click `Build.bat`. The batch file looks for devkitPro's MSYS2 shell and builds locally.
+5. Find both files in `dist`: `DiscordNX2.nro` and `discordnx2.nso`.
 
-The batch file uses Git to fetch ounce-devkit into the ignored `.local` directory and builds the toolchain image locally. The first run needs internet and may take longer. If you prefer a manual build, install ounce-devkit through devkitPro, set DEVKITPRO and run `make` in a compatible shell. See https://github.com/ouncebrew/ounce-devkit.
+If your devkitPro installation uses a nonstandard path, edit the `BASH` location near the top of Build.bat. You can also build from devkitPro MSYS2 by running `./build-local.sh` in this folder.
 
 ## Testing on the Switch 2
 
