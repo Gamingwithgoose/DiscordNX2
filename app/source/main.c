@@ -52,6 +52,63 @@ static void save_report(Result connect_rc, Result ping_rc, Result status_rc,
     }
     fsFsClose(&sd);
 }
+
+static void hardware_report(void) {
+    char report[4096];
+    size_t used = 0;
+#define PUT(...) do { if (used < sizeof(report)) { int n=snprintf(report+used,sizeof(report)-used,__VA_ARGS__); if(n>0) { size_t avail=sizeof(report)-used; used+=(size_t)n<avail?(size_t)n:avail; } } } while(0)
+    PUT("DiscordNX2 NRO hardware survey v0.3\n");
+    PUT("Foreground sampling for 12 seconds; press normal buttons and C.\n");
+    Result hid_rc = hidInitialize();
+    PUT("hidInitialize: %08x\n",hid_rc);
+    if (R_SUCCEEDED(hid_rc)) {
+        padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+        PadState pad = {};
+        padInitializeDefault(&pad);
+        u64 seen=0, previous=0;
+        u32 connected=0, transitions=0;
+        for (u32 i=0;i<600;i++) {
+            padUpdate(&pad);
+            u64 held=padGetButtons(&pad);
+            seen|=held;
+            if (padIsConnected(&pad)) connected++;
+            if (held != previous) {
+                if (transitions < 20) PUT("change %u sample=%u held=%016llx down=%016llx up=%016llx\n",
+                    transitions,i,(unsigned long long)held,
+                    (unsigned long long)padGetButtonsDown(&pad),
+                    (unsigned long long)padGetButtonsUp(&pad));
+                transitions++;
+                previous=held;
+            }
+            svcSleepThread(20000000LL);
+        }
+        PUT("samples=600 connected=%u transitions=%u seen=%016llx\n",
+            connected,transitions,(unsigned long long)seen);
+        hidExit();
+    }
+    Result audio_rc=audinInitialize();
+    PUT("audinInitialize: %08x\n",audio_rc);
+    if (R_SUCCEEDED(audio_rc)) {
+        PUT("audio sample_rate=%u channels=%u format=%u\n",
+            audinGetSampleRate(),audinGetChannelCount(),(unsigned)audinGetPcmFormat());
+        audinExit();
+    }
+    PUT("No microphone recording or transmission. C bit not mapped in current headers.\n");
+#undef PUT
+    FsFileSystem sd;
+    if (R_FAILED(fsOpenSdCardFileSystem(&sd))) return;
+    const char *path="/kaihen/discordnx2-hardware.txt";
+    fsFsDeleteFile(&sd,path);
+    if (used>0 && used<sizeof(report) && R_SUCCEEDED(fsFsCreateFile(&sd,path,(s64)used,0))) {
+        FsFile file;
+        if (R_SUCCEEDED(fsFsOpenFile(&sd,path,FsOpenMode_Write,&file))) {
+            fsFileWrite(&file,0,report,(u64)used,FsWriteOption_Flush);
+            fsFileClose(&file);
+        }
+    }
+    fsFsClose(&sd);
+}
+
 int main(void) {
     Service ro = {}, hen = {}, plugin = {};
     Dnx2Status status = {};
@@ -82,5 +139,6 @@ int main(void) {
                 reply, &status, &probe, &last);
     if (serviceIsActive(&hen)) serviceClose(&hen);
     if (serviceIsActive(&ro)) serviceClose(&ro);
+    hardware_report();
     return rc;
 }

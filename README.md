@@ -43,3 +43,9 @@ The app overwrites its previous report at `/kaihen/discordnx2-probe.txt` each ru
 For this version, copy **both the new NRO and new NSO** before your next kaiHEN startup. You can keep replacing the NRO afterward without restarting, but changes to the NSO itself still need another plugin startup. That's why this release adds several read-only diagnostic commands in one go.
 
 The persistent service includes an ABI/version check so a newer NRO can recognize an older plugin rather than issuing unknown test commands. This does not magically hot-reload compiled code. I'm keeping that distinction clear while investigating safer ways to reduce restarts.
+
+## NRO-only hardware survey (no new jailbreak)
+
+Keep your working v0.2 NSO installed and running. Pull this commit, double-click **Build-NRO.bat**, FTP only `dist/DiscordNX2.nro`, then launch the NRO in hbmenu. During its roughly 12-second sampling window, press/release normal controller buttons and the C button. Read `/kaihen/discordnx2-hardware.txt` afterward, and send the report for analysis. The previous `/kaihen/discordnx2-probe.txt` diagnostic is also generated.
+
+This only checks foreground HID raw masks and `audinInitialize`. Current libounce HID enums do not identify the Switch 2 C button, so the test cannot claim C detection or background input access. No microphone samples are recorded or transmitted. The survey has no interactive display; it simply exits after sampling. The new build has not yet been compiled or tested on hardware.
