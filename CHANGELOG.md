@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.7 BSD compile fix
+
+The first local v0.7 build failed because the new UDP loopback test called low-level `bsd*` APIs without including their declarations. I added the explicit libounce `switch/services/bsd.h` header. The previous unused-function warnings are not build errors. This is a source correction only; it does not touch the installed NSO and still requires a local rebuild and hardware validation.
+
 ## November 17, 2026 — v0.7 handoff and NRO safety instructions
 
 Added a structured `HANDOFF.json` recording real hardware results, local build workflow, plugin preservation requirements, test behavior, and DAVE-aware next steps. Updated the beginning of the README to highlight that current tests are NRO-only; historical initial installation steps must not be followed when an NSO is already running. No code or background plugin changes in this follow-up commit.

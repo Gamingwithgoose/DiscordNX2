@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <switch.h>
+#include <switch/services/bsd.h>
 #include <kaihen.h>
 
 #define DNX2_MAGIC 0x444e5832u
