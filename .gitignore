@@ -1,0 +1,7 @@
+dist/
+.local/
+app/build/
+plugin/build/
+app/*.nro
+plugin/*.nso
+*.log
