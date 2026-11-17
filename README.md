@@ -4,21 +4,25 @@ I want Discord voice chat on my Switch 2 while playing games, with the C button 
 
 Right now the project builds a homebrew NRO plus a kaiHEN background NSO. The NRO asks the background plugin for a known test response and saves the result to the SD card. Before attempting Discord, I need to prove that a plugin can stay running while a game is open, that C can be read during gameplay, and that microphone and audio playback work at the same time as a game.
 
-## Build on your own PC
+## Building on your own PC
 
 There are no GitHub Actions, cloud builds, or Docker requirements here. This project uses devkitPro and ounce-devkit installed locally. Regular MSYS2 by itself is not the Switch 2 cross-compiler.
 
-1. Install devkitPro for Windows using https://devkitpro.org/wiki/Getting_Started.
-2. In devkitPro's MSYS2 environment, install the Switch 2 toolchain using the instructions at https://github.com/ouncebrew/ounce-devkit. Its install script adds the ounce package source and installs libounce, libkaihen, and the needed compiler tools. Only this initial toolchain setup needs to be done once.
-3. Clone this repo or pull it in GitHub Desktop.
-4. Double-click `Build.bat`. The batch file looks for devkitPro's MSYS2 shell and builds locally.
-5. Find both files in `dist`: `DiscordNX2.nro` and `discordnx2.nso`.
+If you already have devkitPro installed but `Build.bat` complains that the Switch 2 toolchain is missing, double-click **Setup-Toolchain.bat** first. It asks for your permission and then runs ounce-devkit's official installer. That installer adds its package signing key/repository to devkitPro and installs the packages. It needs internet access for setup, but all actual compilation stays on your PC.
 
-If your devkitPro installation uses a nonstandard path, edit the `BASH` location near the top of Build.bat. You can also build from devkitPro MSYS2 by running `./build-local.sh` in this folder.
+If you don't have devkitPro, install it first using https://devkitpro.org/wiki/Getting_Started. You can also install ounce-devkit manually using https://github.com/ouncebrew/ounce-devkit.
+
+Once the tools are installed:
+
+1. Clone this repo or pull the latest changes in GitHub Desktop.
+2. Double-click `Build.bat`.
+3. Find `DiscordNX2.nro` and `discordnx2.nso` in the `dist` folder.
+
+If devkitPro lives somewhere other than `C:\devkitPro`, edit the `BASH` path near the top of the batch files. You can also build from devkitPro MSYS2 with `./build-local.sh`.
 
 ## Testing on the Switch 2
 
-Copy `dist/DiscordNX2.nro` to your normal homebrew directory. **Also copy** `dist/discordnx2.nso` to `/kaihen/plugins/discordnx2.nso`. Restart kaiHEN so it can start the plugin, then launch the NRO from the homebrew menu.
+Copy `dist/DiscordNX2.nro` to your usual homebrew directory. **Also copy** `dist/discordnx2.nso` to `/kaihen/plugins/discordnx2.nso`. Restart kaiHEN so it can start the plugin, then launch the NRO from the homebrew menu.
 
 Read `/kaihen/discordnx2-probe.txt` on the SD card. A successful exchange should say `IPC result: 00000000` and `Service reply: 444e5832`. If it fails, check `/kaihen/plugin-status.txt`. The NRO has no graphical interface yet; it simply writes its diagnostic report and exits.
 
