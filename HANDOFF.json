@@ -1,0 +1,85 @@
+{
+  "project": "DiscordNX2",
+  "date": "2026-11-17",
+  "repo": "Gamingwithgoose/DiscordNX2",
+  "branch": "main",
+  "version": "0.7-foreground-voice-milestone",
+  "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
+  "critical_constraints": [
+    "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
+    "GitHub Desktop pull, double-click Build-NRO.bat, transfer only dist/DiscordNX2.nro via FTP",
+    "DO NOT replace /kaihen/plugins/discordnx2.nso or restart kaiHEN during NRO testing",
+    "Never use GitHub Actions, Docker or cloud builds",
+    "Append changelog, do not erase history",
+    "Provide actionable hardware tests, not documentation-only pushes"
+  ],
+  "tested_real_hardware": {
+    "v02": [
+      "background plugin IPC handshake succeeded, ABI2 magic 444e5832",
+      "service session open for hid, audin, audout, bsd"
+    ],
+    "v03": [
+      "handheld standard HID A/B visible",
+      "audinInitialize success 48000hz 2 channels format2"
+    ],
+    "v04": [
+      "mic input buffer 16384 bytes returned, nonzero PCM and peak 16716",
+      "audoutInitialize/start/stop success",
+      "persistent plugin after tests"
+    ],
+    "v05": [
+      "hold/tap C not present in normal PadState",
+      "handheld button events detected during other input"
+    ],
+    "v06": [
+      "HandheldState fresh during 15-second C hold but no button transition",
+      "System, SystemExt and FullKey readers stale/inactive in handheld mode",
+      "normal A/B detected after C trial",
+      "resident plugin generation remained 1"
+    ]
+  },
+  "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
+  "latest_source_behavior": [
+    "v0.7 NRO captures 12 x 16KiB microphone PCM chunks to static memory and logs peak, mean absolute amplitude, nonzero and clipping stats",
+    "then plays delayed half-volume recording once; input stops before playback",
+    "then attempts localhost UDP datagram loopback marker on port 39272, no microphone transmission",
+    "then service-session and plugin continuity checks",
+    "writes checkpointed report to /kaihen/discordnx2-hardware.txt and legacy /kaihen/discordnx2-probe.txt",
+    "no C-button override, no GameChat modification, no login"
+  ],
+  "build_validation": "Source committed but NOT compiled in user's toolchain or tested on actual Switch 2 yet. If compiler fails, collect full GCC/ld error. If NRO runs, report whether recorded speech is audible and comprehensible.",
+  "key_risks": [
+    "audout playback may fail despite successful init; bounded wait logs failure and stops output",
+    "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
+    "audio capture buffer waits are bounded; no raw PCM saved",
+    "loopback bsd:u may reject socket creation, binding, or localhost delivery",
+    "existing README has historical initial setup steps; current v0.7 is NRO-only",
+    "no real continuous open mic in background until NSO code extended"
+  ],
+  "discord_integration": {
+    "constraint": "As of March 2026 Discord voice calls require DAVE E2EE; unsupported to claim Opus+simple UDP alone works.",
+    "stages": [
+      "verify spoken-audio playback and continuous capture reliability",
+      "build Opus encoding/decoding with compatible local libraries",
+      "build secure, supported Discord authentication and gateway flow",
+      "implement DAVE-capable voice handshake and RTP/E2EE with secure handling",
+      "move tested audio/network engine to resident NSO with safe activation and a mute control",
+      "test while game runs, then add C-button only when system input is understood"
+    ]
+  },
+  "next_user_workflow": [
+    "GitHub Desktop Pull latest",
+    "double-click Build-NRO.bat",
+    "if compiler success FTP ONLY dist/DiscordNX2.nro to existing NRO location",
+    "launch from hbmenu and speak briefly during first second of capture, use modest output volume/headphones",
+    "retrieve /kaihen/discordnx2-hardware.txt, report if voice sounded understandable",
+    "do not reboot or touch plugin unless absolutely required"
+  ],
+  "next_developer_work": [
+    "fix real compile or audio failures from user report first",
+    "add microphone selection and gain/VAD configuration after speech signal tested",
+    "consider configurable repeat audio capture and safe local LAN audio relay only with explicit opt-in",
+    "decide supported Discord authentication/DAVE implementation before claiming call interoperability",
+    "keep background NSO unchanged until a batched, high-confidence NSO release is ready"
+  ]
+}
