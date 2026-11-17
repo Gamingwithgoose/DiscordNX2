@@ -7,6 +7,7 @@
  */
 #include "graphical_ui.h"
 #include "vendor/qrcodegen.h"
+#include "vendor/font8x8_basic.h"
 #include <switch.h>
 #include <switch/display/framebuffer.h>
 #include <stdio.h>
@@ -29,42 +30,6 @@
 
 static uint32_t *pixels;
 static int stride_pixels;
-/* Tiny embedded 5x7 UI raster font. Each byte encodes five active pixels. */
-typedef struct {char symbol;uint8_t bits[7];} Glyph;
-static const Glyph glyphs[]={
-{'A',{14,17,17,31,17,17,17}},{'B',{30,17,17,30,17,17,30}},
-{'C',{14,17,16,16,16,17,14}},{'D',{30,17,17,17,17,17,30}},
-{'E',{31,16,16,30,16,16,31}},{'F',{31,16,16,30,16,16,16}},
-{'G',{14,17,16,23,17,17,15}},{'H',{17,17,17,31,17,17,17}},
-{'I',{31,4,4,4,4,4,31}},{'J',{7,2,2,2,18,18,12}},
-{'K',{17,18,20,24,20,18,17}},{'L',{16,16,16,16,16,16,31}},
-{'M',{17,27,21,21,17,17,17}},{'N',{17,25,21,19,17,17,17}},
-{'O',{14,17,17,17,17,17,14}},{'P',{30,17,17,30,16,16,16}},
-{'Q',{14,17,17,17,21,18,13}},{'R',{30,17,17,30,20,18,17}},
-{'S',{15,16,16,14,1,1,30}},{'T',{31,4,4,4,4,4,4}},
-{'U',{17,17,17,17,17,17,14}},{'V',{17,17,17,17,17,10,4}},
-{'W',{17,17,17,21,21,21,10}},{'X',{17,17,10,4,10,17,17}},
-{'Y',{17,17,10,4,4,4,4}},{'Z',{31,1,2,4,8,16,31}},
-{'0',{14,17,19,21,25,17,14}},{'1',{4,12,4,4,4,4,14}},
-{'2',{14,17,1,2,4,8,31}},{'3',{30,1,1,14,1,1,30}},
-{'4',{2,6,10,18,31,2,2}},{'5',{31,16,30,1,1,17,14}},
-{'6',{6,8,16,30,17,17,14}},{'7',{31,1,2,4,8,8,8}},
-{'8',{14,17,17,14,17,17,14}},{'9',{14,17,17,15,1,2,12}},
-{' ',{0,0,0,0,0,0,0}},{'.',{0,0,0,0,0,12,12}},
-{':',{0,12,12,0,12,12,0}},{'-',{0,0,0,31,0,0,0}},
-{'/',{1,2,2,4,8,8,16}},{'+',{0,4,4,31,4,4,0}},
-{'?',{14,17,1,2,4,0,4}},{'!',{4,4,4,4,4,0,4}},
-{'#',{10,31,10,10,31,10,0}},{'(',{2,4,8,8,8,4,2}},
-{')',{8,4,2,2,2,4,8}},{'=',{0,31,0,31,0,0,0}},
-{'_',{0,0,0,0,0,0,31}},{',',{0,0,0,0,12,4,8}},
-{'%',{17,2,4,8,17,0,0}},{'>',{16,8,4,2,4,8,16}}
-};
-static const uint8_t *glyph(char c) {
-    if(c>='a'&&c<='z')c=(char)(c-32);
-    for(unsigned i=0;i<sizeof(glyphs)/sizeof(glyphs[0]);i++)
-        if(glyphs[i].symbol==c)return glyphs[i].bits;
-    return glyphs[sizeof(glyphs)/sizeof(glyphs[0])-1].bits;
-}
 static void rect(int x,int y,int width,int height,uint32_t color) {
     if(!pixels||width<=0||height<=0)return;
     if(x<0){width+=x;x=0;}if(y<0){height+=y;y=0;}
@@ -77,15 +42,24 @@ static void rect(int x,int y,int width,int height,uint32_t color) {
         for(int px=0;px<width;px++)dst[px]=color;
     }
 }
+/* Public-domain 8x8 IBM VGA glyphs: cleaner shapes and visibly distinct
+ * punctuation/numerals than the original handmade 5x7 alphabet.
+ * Independent horizontal metrics preserve sidebar and card layout widths. */
 static void text_line(int x,int y,const char *s,uint32_t color,int scale,int maxchars) {
-    if(!s)return;
-    int step=6*scale;
+    if(!s||scale<1)return;
+    const int horizontal=scale>=3?2:1;
+    const int advance=6*scale;
     for(int i=0;s[i]&&i<maxchars;i++) {
-        const uint8_t *g=glyph(s[i]);
-        for(int row=0;row<7;row++)
-            for(int col=0;col<5;col++)
-                if(g[row]&(1u<<(4-col)))
-                    rect(x+i*step+col*scale,y+row*scale,scale,scale,color);
+        unsigned char ch=(unsigned char)s[i];
+        if(ch>=128)ch='?';
+        const unsigned char *g=(const unsigned char*)font8x8_basic[ch];
+        for(int row=0;row<8;row++) {
+            for(int col=0;col<8;col++) {
+                if(((unsigned char)g[row])&(1u<<col))
+                    rect(x+i*advance+col*horizontal,y+row*scale,
+                         horizontal,scale,color);
+            }
+        }
     }
 }
 static void line(int x,int y,int width,uint32_t color){rect(x,y,width,2,color);}
@@ -129,7 +103,7 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
     if(qr_preview)qr_render_url(800,160,340,"https://discord.com/activate");
     rect(0,0,268,H,C_SIDEBAR);
     rect(0,0,268,9,C_PRIMARY);
-    text_line(28,42,"DISCORDNX2",C_WHITE,4,18);
+    text_line(28,42,"DISCORDNX2",C_WHITE,3,18);
     text_line(29,88,"SWITCH 2 NATIVE",C_MUTED,2,22);
     line(23,135,218,C_LINE);
     const char *tabs[4]={"DASHBOARD","SERVERS","VOICE CHAT","DIAGNOSTICS"};
@@ -140,7 +114,7 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
         text_line(34,y+7,tabs[t],tab==t?C_WHITE:C_MUTED,3,18);
     }
     rect(19,635,231,54,C_CARD);
-    text_line(31,652,"LOCAL BUILD 0.20",C_MUTED,2,23);
+    text_line(31,652,"LOCAL BUILD 0.22",C_MUTED,2,23);
 
     pill(1080,36,160,"NO LOGIN",C_CARD_HI);
     text_line(308,40,tabs[tab],C_WHITE,4,26);
@@ -152,8 +126,8 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
         block(310,224,930,130,C_CARD);
         text_line(339,248,"NETWORK CONNECTIVITY",C_WHITE,3,38);
         text_line(339,291,"DISCORD TLS AND WEBSOCKET HELLO PASSED ON HARDWARE",C_MUTED,2,60);
-        item(310,376,930,107,"CONNECTIVITY CHECK","PUBLIC GATEWAY - NO ACCOUNT LOGIN",focus==1&&focus==1&&selection==0);
-        item(310,501,930,107,"FULL HARDWARE TEST","AUDIO, PACKETS, UDP AND DISCORD GATEWAY",focus==1&&focus==1&&selection==1);
+        item(310,376,930,107,"CONNECTIVITY CHECK","PUBLIC GATEWAY - NO ACCOUNT LOGIN",focus==1&&selection==0);
+        item(310,501,930,107,"FULL HARDWARE TEST","AUDIO, PACKETS, UDP AND DISCORD GATEWAY",focus==1&&selection==1);
     } else if(tab==1) {
         block(310,172,930,433,C_CARD);
         pill(343,201,305,"AUTH NOT READY",C_WARN);
