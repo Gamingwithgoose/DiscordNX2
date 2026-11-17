@@ -111,3 +111,7 @@ After the normal tone, recorded voice and packet checks, v0.15 also runs a separ
 ## Official Discord OAuth sign-in companion
 
 Use `Discord-Login.bat` on your PC for a real Discord browser login with PKCE and `identify guilds` permissions. See [tools/DISCORD_LOGIN.md](tools/DISCORD_LOGIN.md). No client secret, password or token is entered or saved. This does **not** connect the Switch 2 to a Discord voice channel. No NRO/NSO changes or jailbreak restart are needed for this test.
+
+## DiscordNX2 v0.17 — Native interactive mega-test
+
+v0.17 boots to a controller-operated Switch 2 text UI rather than immediately running diagnostics. Press **A** for the complete suite: audio, recorded speech playback, packet encode/decode and corruption, ~15s sustained microphone capture, localhost UDP and a **real public Discord Gateway TLS/WebSocket upgrade/HELLO handshake without signing in**. **X** runs only Discord Gateway; **Y** runs microphone audio and packets; **L** runs the long microphone stress test; **+** exits. All results write to `/kaihen/discordnx2-hardware.txt`. Discord credentials and account tokens are never requested or transmitted, and there is no Discord voice channel join yet. This build does not replace the resident NSO. GitHub Desktop pull → `Build-NRO.bat` → FTP **only** `dist/DiscordNX2.nro`. If compiler/toolchain errors occur, send their output; a new TLS path has not been verified on actual Switch 2 hardware.

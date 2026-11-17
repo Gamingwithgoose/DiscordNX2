@@ -17,7 +17,9 @@ $(BUILD)/main.o: source/main.c | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/voice_packet.o: source/voice_packet.c source/voice_packet.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o
+$(BUILD)/discord_gateway_probe.o: source/discord_gateway_probe.c source/discord_gateway_probe.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@

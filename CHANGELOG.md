@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.17 Native interactive Switch 2 mega-test
+
+Replaced unconditional startup diagnostics with a Joy-Con/controller menu (A full suite, X Discord public Gateway, Y microphone+packets, L bounded long microphone capture, + exit), explicit completion status, retained reporting to `/kaihen/discordnx2-hardware.txt`, and a new TLS/WebSocket Gateway public HELLO probe. This probes DNS, TCP 443, libounce SSL with host validation, WebSocket HTTP Upgrade and the Gateway heartbeat interval. Never uses Discord account credentials or sends audio to Discord. Keeps successful v0.14 capture logic and the existing background NSO unchanged. Not yet cross-compiled or tested on Switch 2.
+
 ## November 17, 2026 — Discord browser OAuth2 sign-in companion
 
 Added a Windows one-click launcher and Python standard-library OAuth2 Authorization Code + PKCE companion with random state, callback issuer validation, localhost-only redirect, token exchange, `identify guilds` user/server account lookup, and offline tests. Credentials/tokens stay in memory and are not persisted. This is genuine Discord account authorization, not Discord user voice access. No NRO/NSO modifications.

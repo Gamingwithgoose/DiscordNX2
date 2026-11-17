@@ -7,6 +7,7 @@
 #include <switch/services/bsd.h>
 #include <kaihen.h>
 #include "voice_packet.h"
+#include "discord_gateway_probe.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -851,7 +852,7 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 voice transport milestone v0.15\n");
+    diagf("DiscordNX2 native full integration v0.17\n");
     diagf("Foreground-only, ~3 seconds PCM capture, unity gain 1.0x and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
@@ -866,13 +867,120 @@ static void hardware_report(void) {
     voice_capture_stability_test();
     diagf("packet checkpoint=%08x\n",write_diagnostics());
     voice_network_test();
+    /* Network requests are unauthenticated public Discord Gateway only. */
+    Dnx2DiscordProbe gateway=dnx2DiscordGatewayProbe(diagf);
+    diagf("discord result tcp=%u tls=%u websocket=%u hello=%u interval=%u\n",
+          gateway.tcp_ok,gateway.tls_ok,gateway.websocket_ok,gateway.hello_ok,gateway.hello_interval_ms);
+    diagf("discord checkpoint=%08x\n",write_diagnostics());
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.15. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.17. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }
 
+/* Foreground Switch 2 native controls.
+ * The test suite is explicitly started by the user, never on startup.
+ * This UI does NOT ask for or persist Discord account credentials.
+ */
+static void run_discord_only(void) {
+    diag_len=0;
+    diagf("DiscordNX2 v0.17 Discord Public Gateway Test\n");
+    plugin_snapshot("before");
+    Dnx2DiscordProbe g=dnx2DiscordGatewayProbe(diagf);
+    diagf("Discord Gateway result TCP=%u TLS=%u WebSocket=%u HELLO=%u HEARTBEAT_MS=%u HTTP=%u\n",
+          g.tcp_ok,g.tls_ok,g.websocket_ok,g.hello_ok,g.hello_interval_ms,g.http_status);
+    plugin_snapshot("after");
+    diagf("Final report write=%08x\n",write_diagnostics());
+    (void)write_diagnostics();
+}
+static void run_voice_only(void) {
+    diag_len=0;
+    diagf("DiscordNX2 v0.17 audio capture+playback+packet test\n");
+    plugin_snapshot("before");
+    voice_capture_test();
+    voice_reference_tone_test();
+    voice_playback_test();
+    voice_packet_test();
+    plugin_snapshot("after");
+    diagf("Final report write=%08x\n",write_diagnostics());
+    (void)write_diagnostics();
+}
+static void run_stress_only(void) {
+    diag_len=0;
+    diagf("DiscordNX2 v0.17 extended microphone capture\n");
+    plugin_snapshot("before");
+    voice_capture_stability_test();
+    plugin_snapshot("after");
+    diagf("Final report write=%08x\n",write_diagnostics());
+    (void)write_diagnostics();
+}
+static void show_main_menu(const char *status) {
+    consoleClear();
+    printf("=======================================\n");
+    printf(" DiscordNX2 v0.17 - Switch 2 Native\n");
+    printf("=======================================\n\n");
+    printf(" A  MASSIVE FULL TEST\n");
+    printf("    Mic, playback, packet transport,\n");
+    printf("    ~15s sustained mic, local UDP,\n");
+    printf("    Discord TLS + WebSocket HELLO.\n\n");
+    printf(" X  Discord Gateway connectivity\n");
+    printf(" Y  Audio + voice packet pipeline\n");
+    printf(" L  Sustained microphone stability\n");
+    printf(" +  Exit\n\n");
+    printf("---------------------------------------\n");
+    printf(" Status: %s\n",status);
+    printf(" Discord login/voice NOT yet enabled.\n");
+    printf(" No user tokens, passwords or audio\n");
+    printf(" are transmitted to Discord.\n\n");
+    printf(" Report: /kaihen/discordnx2-hardware.txt\n");
+    printf("---------------------------------------\n");
+    consoleUpdate(NULL);
+}
+static void run_ui(void) {
+    Result rc=hidInitialize();
+    if(R_FAILED(rc)) {
+        diagf("v0.17 UI HID failed=%08x; running entire diagnostic headless\n",rc);
+        hardware_report();return;
+    }
+    padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+    PadState pad={0};
+    padInitializeDefault(&pad);
+    consoleInit(NULL);
+    const char *status="Ready - press A for everything";
+    show_main_menu(status);
+    unsigned close_requested=0;
+    while(!close_requested) {
+        padUpdate(&pad);
+        u64 down=padGetButtonsDown(&pad);
+        if(down & HidNpadButton_Plus){close_requested=1;break;}
+        int action=0;
+        if(down & HidNpadButton_A)action=1;
+        else if(down & HidNpadButton_X)action=2;
+        else if(down & HidNpadButton_Y)action=3;
+        else if(down & HidNpadButton_L)action=4;
+        if(action) {
+            consoleClear();
+            printf("DiscordNX2 v0.17 - Test running\n\n");
+            if(action==1)printf("Full hardware + Discord Gateway suite.\n");
+            if(action==2)printf("Public Discord Gateway WebSocket/TLS.\n");
+            if(action==3)printf("Microphone recording, tone, replay + packets.\n");
+            if(action==4)printf("Bounded ~15.36-second microphone capture.\n");
+            printf("\nDo not exit during audio capture.\n\n");
+            printf("Writing /kaihen/discordnx2-hardware.txt\n");
+            consoleUpdate(NULL);
+            if(action==1)hardware_report();
+            if(action==2)run_discord_only();
+            if(action==3)run_voice_only();
+            if(action==4)run_stress_only();
+            status="Finished - report saved. Press A to rerun";
+            show_main_menu(status);
+        }
+        svcSleepThread(16000000LL);
+    }
+    consoleExit(NULL);
+    hidExit();
+}
 int main(void) {
     Service ro = {}, hen = {}, plugin = {};
     Dnx2Status status = {};
@@ -903,6 +1011,6 @@ int main(void) {
                 reply, &status, &probe, &last);
     if (serviceIsActive(&hen)) serviceClose(&hen);
     if (serviceIsActive(&ro)) serviceClose(&ro);
-    hardware_report();
-    return rc;
+    run_ui();
+    return 0;
 }

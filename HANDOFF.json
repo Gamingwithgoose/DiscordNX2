@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.16-discord-oauth-signin",
+  "version": "0.17-native-interactive-gateway",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -76,9 +76,11 @@
     "NSO and kaiHEN preserved; no remote audio sending, no Discord authentication, Opus or DAVE",
     "Added optional native host unit tests for packet encoding/decoding and corruption, without changing Build-NRO.bat.",
     "Adds a bounded ~15 second three-buffer microphone stress test, discarding samples and logging throughput/error stats after stopping",
-    "Windows PC Discord-Login.bat launches official OAuth2 PKCE browser auth, fetches Discord identity and guilds; no tokens stored or sent to Switch"
+    "Windows PC Discord-Login.bat launches official OAuth2 PKCE browser auth, fetches Discord identity and guilds; no tokens stored or sent to Switch",
+    "Native controller menu with A full comprehensive test, X public Discord Gateway, Y voice loopback+packet tests, L 15s mic stress, + exit",
+    "Public unauthenticated Discord Gateway DNS/TCP/TLS/WebSocket upgrade and HELLO probe; no tokens or Discord audio sent"
   ],
-  "build_validation": "v0.15 audio/UDP hardware validated. OAuth companion written but needs user's Discord public client ID and browser verification; no external account test performed.",
+  "build_validation": "v0.15 working on real hardware. v0.17 native UI and TLS/WebSocket source pushed but not independently built in the user's local devkitPro toolchain or tested on Switch 2.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -99,16 +101,16 @@
     ]
   },
   "next_user_workflow": [
-    "Register a Discord application, enable Public Client in OAuth2 and add exact redirect http://127.0.0.1:8765/discordnx2/callback",
-    "Run Discord-Login.bat, enter public Application ID and approve identify/guilds in PC browser",
-    "See signed-in username and guild list; report errors without sharing callback URLs or tokens",
-    "NRO/NSO remain unchanged"
+    "Pull latest via GitHub Desktop, run Build-NRO.bat, FTP only dist/DiscordNX2.nro",
+    "Launch DiscordNX2, press A to run the complete mega-test once",
+    "Look for completed status then retrieve /kaihen/discordnx2-hardware.txt",
+    "No Discord account login, account token, NSO changes or kaiHEN restart required",
+    "If build fails, provide compiler error text; TLS/Gateway source has not yet been compiled on the user's toolchain"
   ],
   "next_developer_work": [
-    "fix real compile or audio failures from user report first",
-    "add microphone selection and gain/VAD configuration after speech signal tested",
-    "consider configurable repeat audio capture and safe local LAN audio relay only with explicit opt-in",
-    "decide supported Discord authentication/DAVE implementation before claiming call interoperability",
-    "keep background NSO unchanged until a batched, high-confidence NSO release is ready"
+    "Resolve user hardware/build issues for v0.17; distinguish TLS errors, HTTP upgrade and Gateway HELLO",
+    "Integrate an authorized Discord user voice path; identify/guilds OAuth does not grant direct personal-account voice",
+    "Add Opus and DAVE libraries with their license obligations and real-time audio scheduling",
+    "Only upgrade resident NSO after foreground voice is demonstrated, avoid risky patching of active plugin"
   ]
 }
