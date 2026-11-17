@@ -1,5 +1,11 @@
 # Changelog
 
+## November 17, 2026 — Comprehensive NRO diagnostic suite
+
+Expanded the NRO-only hardware test to run several tests in a single launch: four five-second controller input windows (A, B, C, other buttons), plugin IPC and persistent counters before and after, microphone start/capture/stop with a finite wait and in-memory signal-level summary, audio-output initialization/start/stop, and direct service-session checks. The test checkpoints one cumulative report to SD several times, so if GameChat interrupts the foreground app there should still be useful diagnostics. C remains unmapped; this does not intercept or disable GameChat. No raw recorded audio is retained and there is no Discord connection.
+
+Adjusted the app-only make target to clean just the NRO build artifacts first; the installed NSO and plugin sources are not touched. The build still happens on the user's PC and this commit has not been compiled or hardware-tested yet.
+
 ## November 17, 2026 — Foreground NRO-only hardware survey
 
 After the real Switch 2 tests confirmed plugin persistence, I added a foreground survey to the NRO without modifying the installed NSO. It samples controller raw button masks and transitions for about twelve seconds, and checks audio-input initialization. The libounce HID header has no named C-button bit, so this survey does not claim to detect C specifically. It does not capture microphone audio.

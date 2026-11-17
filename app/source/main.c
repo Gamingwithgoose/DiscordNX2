@@ -2,6 +2,7 @@
 // Read resident plugin state and test whether basic service sessions can open.
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <switch.h>
 #include <kaihen.h>
 
@@ -53,60 +54,208 @@ static void save_report(Result connect_rc, Result ping_rc, Result status_rc,
     fsFsClose(&sd);
 }
 
-static void hardware_report(void) {
-    char report[4096];
-    size_t used = 0;
-#define PUT(...) do { if (used < sizeof(report)) { int n=snprintf(report+used,sizeof(report)-used,__VA_ARGS__); if(n>0) { size_t avail=sizeof(report)-used; used+=(size_t)n<avail?(size_t)n:avail; } } } while(0)
-    PUT("DiscordNX2 NRO hardware survey v0.3\n");
-    PUT("Foreground sampling for 12 seconds; press normal buttons and C.\n");
-    Result hid_rc = hidInitialize();
-    PUT("hidInitialize: %08x\n",hid_rc);
-    if (R_SUCCEEDED(hid_rc)) {
-        padConfigureInput(1,HidNpadStyleSet_NpadStandard);
-        PadState pad = {};
-        padInitializeDefault(&pad);
-        u64 seen=0, previous=0;
-        u32 connected=0, transitions=0;
-        for (u32 i=0;i<600;i++) {
-            padUpdate(&pad);
-            u64 held=padGetButtons(&pad);
-            seen|=held;
-            if (padIsConnected(&pad)) connected++;
-            if (held != previous) {
-                if (transitions < 20) PUT("change %u sample=%u held=%016llx down=%016llx up=%016llx\n",
-                    transitions,i,(unsigned long long)held,
-                    (unsigned long long)padGetButtonsDown(&pad),
-                    (unsigned long long)padGetButtonsUp(&pad));
-                transitions++;
-                previous=held;
-            }
-            svcSleepThread(20000000LL);
-        }
-        PUT("samples=600 connected=%u transitions=%u seen=%016llx\n",
-            connected,transitions,(unsigned long long)seen);
-        hidExit();
+
+/* One NRO, many tests, with finite waits and a persistent single report.
+ * No service replacement, no raw audio file, no Discord credentials.
+ */
+#include <stdlib.h>
+#include <stdint.h>
+
+static char diagnostics[12288];
+static size_t diag_len;
+
+static void diagf(const char *fmt, ...) {
+    if (diag_len >= sizeof(diagnostics)-1) return;
+    va_list args;
+    va_start(args,fmt);
+    int n=vsnprintf(diagnostics+diag_len,sizeof(diagnostics)-diag_len,fmt,args);
+    va_end(args);
+    if (n > 0) {
+        size_t available=sizeof(diagnostics)-diag_len;
+        diag_len+=(size_t)n<available?(size_t)n:available-1;
     }
-    Result audio_rc=audinInitialize();
-    PUT("audinInitialize: %08x\n",audio_rc);
-    if (R_SUCCEEDED(audio_rc)) {
-        PUT("audio sample_rate=%u channels=%u format=%u\n",
-            audinGetSampleRate(),audinGetChannelCount(),(unsigned)audinGetPcmFormat());
-        audinExit();
-    }
-    PUT("No microphone recording or transmission. C bit not mapped in current headers.\n");
-#undef PUT
+}
+static Result write_diagnostics(void) {
     FsFileSystem sd;
-    if (R_FAILED(fsOpenSdCardFileSystem(&sd))) return;
+    Result rc=fsOpenSdCardFileSystem(&sd);
+    if (R_FAILED(rc)) return rc;
     const char *path="/kaihen/discordnx2-hardware.txt";
     fsFsDeleteFile(&sd,path);
-    if (used>0 && used<sizeof(report) && R_SUCCEEDED(fsFsCreateFile(&sd,path,(s64)used,0))) {
+    rc=fsFsCreateFile(&sd,path,(s64)diag_len,0);
+    if (R_SUCCEEDED(rc)) {
         FsFile file;
-        if (R_SUCCEEDED(fsFsOpenFile(&sd,path,FsOpenMode_Write,&file))) {
-            fsFileWrite(&file,0,report,(u64)used,FsWriteOption_Flush);
+        rc=fsFsOpenFile(&sd,path,FsOpenMode_Write,&file);
+        if (R_SUCCEEDED(rc)) {
+            rc=fsFileWrite(&file,0,diagnostics,(u64)diag_len,FsWriteOption_Flush);
             fsFileClose(&file);
         }
     }
     fsFsClose(&sd);
+    return rc;
+}
+static void plugin_snapshot(const char *phase) {
+    Service ro={},hen={},plugin={};
+    Result rc=kaihenGetRoSession(&ro);
+    if (R_SUCCEEDED(rc)) rc=kaihenOpenHomebrewSession(&ro,&hen);
+    u32 count=0;
+    if (R_SUCCEEDED(rc)) rc=henGetPluginCount(&hen,&count);
+    HenPluginName name={};
+    memcpy(name.name,"discordnx2",sizeof("discordnx2"));
+    if (R_SUCCEEDED(rc)) rc=henOpenPlugin(&hen,&name,&plugin);
+    diagf("plugin %s: connection=%08x visible=%u\n",phase,rc,count);
+    if (R_SUCCEEDED(rc)) {
+        Dnx2Status state={};
+        Result sr=serviceDispatchOut(&plugin,1,state);
+        diagf("plugin %s: status=%08x magic=%08x abi=%u cmds=%u probes=%u generation=%u heartbeat=%u\n",
+            phase,sr,state.magic,state.abi,state.command_count,state.probe_count,state.generation,state.heartbeat);
+        if (R_SUCCEEDED(sr) && state.magic==DNX2_MAGIC && state.abi==2) {
+            Dnx2Services services={};
+            Result pr=serviceDispatchOut(&plugin,2,services);
+            diagf("plugin %s: probe=%08x hid=%08x in=%08x out=%08x bsd=%08x count=%u\n",
+                phase,pr,services.hid,services.audin,services.audout,services.bsd,services.probe_count);
+        }
+    }
+    if(serviceIsActive(&plugin)) serviceClose(&plugin);
+    if(serviceIsActive(&hen)) serviceClose(&hen);
+    if(serviceIsActive(&ro)) serviceClose(&ro);
+}
+static void controller_trials(void) {
+    diagf("\n[INPUT] 4 windows, 5 seconds each. A, B, C, then other controls.\n");
+    Result rc=hidInitialize();
+    diagf("hidInitialize=%08x\n",rc);
+    if (R_FAILED(rc)) return;
+    padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+    PadState pad={};
+    padInitializeDefault(&pad);
+    const char *labels[]={"A: press/release A","B: press/release B","C: press/release C (GameChat may open)","Other: sticks/triggers/plus"};
+    for (unsigned phase=0;phase<4;phase++) {
+        u64 seen=0,last=0,unknown=0;
+        unsigned connected=0,changes=0,logged=0;
+        diagf("trial %u: %s\n",phase+1,labels[phase]);
+        for(unsigned i=0;i<250;i++) {
+            padUpdate(&pad);
+            const u64 buttons=padGetButtons(&pad);
+            seen|=buttons;
+            if(padIsConnected(&pad)) connected++;
+            if(buttons!=last) {
+                if(logged<24) {
+                    diagf("  sample=%u held=%016llx down=%016llx up=%016llx\n",
+                          i,(unsigned long long)buttons,
+                          (unsigned long long)padGetButtonsDown(&pad),
+                          (unsigned long long)padGetButtonsUp(&pad));
+                    logged++;
+                }
+                changes++;
+                last=buttons;
+            }
+            unknown |= buttons & ~((1ULL<<35)-1);
+            svcSleepThread(20000000LL);
+        }
+        diagf("trial %u summary connected=%u/250 transitions=%u seen=%016llx highbits=%016llx\n",
+             phase+1,connected,changes,(unsigned long long)seen,(unsigned long long)unknown);
+        /* Save intermediate results: if GameChat takes focus, earlier data remains. */
+        diagf("checkpoint write=%08x\n",write_diagnostics());
+    }
+    hidExit();
+}
+static void audio_trials(void) {
+    diagf("\n[AUDIO INPUT]\n");
+    Result rc=audinInitialize();
+    diagf("audinInitialize=%08x\n",rc);
+    if(R_SUCCEEDED(rc)) {
+        AudioInState state=AudioInState_Stopped;
+        diagf("sample_rate=%u channels=%u pcm_format=%u initial_state=%u\n",
+             audinGetSampleRate(),audinGetChannelCount(),(unsigned)audinGetPcmFormat(),(unsigned)audinGetDeviceState());
+        rc=audinGetAudioInState(&state);
+        diagf("audinGetAudioInState=%08x state=%u\n",rc,(unsigned)state);
+        rc=audinStartAudioIn();
+        diagf("audinStartAudioIn=%08x\n",rc);
+        if(R_SUCCEEDED(rc)) {
+            /* 4096 aligned and sized for short PCM capture, bounded event wait.
+             * Buffer remains allocated until audio input has been stopped.
+             */
+            static unsigned char samples[0x4000] __attribute__((aligned(0x1000)));
+            memset(samples,0,sizeof(samples));
+            AudioInBuffer input={0};
+            input.buffer=samples;
+            input.buffer_size=sizeof(samples);
+            input.data_size=sizeof(samples);
+            Result ar=audinAppendAudioInBuffer(&input);
+            diagf("audinAppendAudioInBuffer=%08x\n",ar);
+            if(R_SUCCEEDED(ar)) {
+                AudioInBuffer *released=NULL;
+                u32 released_count=0;
+                Result wr=audinWaitCaptureFinish(&released,&released_count,1000000000ULL);
+                diagf("audinWaitCaptureFinish=%08x released_count=%u same_buffer=%u data_size=%llu\n",
+                    wr,released_count,released==&input,
+                    (unsigned long long)input.data_size);
+                if(R_SUCCEEDED(wr)&&released_count && released==&input) {
+                    int peak=0;
+                    unsigned nonzero=0;
+                    const int16_t *pcm=(const int16_t *)samples;
+                    size_t n=input.data_size/sizeof(int16_t);
+                    if(n>sizeof(samples)/sizeof(int16_t)) n=sizeof(samples)/sizeof(int16_t);
+                    for(size_t i=0;i<n;i++) {
+                        int value=pcm[i];
+                        int absval=value<0?-value:value;
+                        if(absval>peak) peak=absval;
+                        if(value) nonzero++;
+                    }
+                    diagf("captured samples=%u nonzero=%u peak=%d (no PCM saved)\n",
+                        (unsigned)n,nonzero,peak);
+                }
+            }
+            Result stop=audinStopAudioIn();
+            diagf("audinStopAudioIn=%08x\n",stop);
+        }
+        audinExit();
+    }
+    diagf("\n[AUDIO OUTPUT]\n");
+    Result orc=audoutInitialize();
+    diagf("audoutInitialize=%08x\n",orc);
+    if(R_SUCCEEDED(orc)) {
+        diagf("sample_rate=%u channels=%u pcm_format=%u state=%u\n",
+            audoutGetSampleRate(),audoutGetChannelCount(),
+            (unsigned)audoutGetPcmFormat(),(unsigned)audoutGetDeviceState());
+        AudioOutState state=AudioOutState_Stopped;
+        Result sr=audoutGetAudioOutState(&state);
+        diagf("audoutGetAudioOutState=%08x state=%u\n",sr,(unsigned)state);
+        Result start=audoutStartAudioOut();
+        diagf("audoutStartAudioOut=%08x\n",start);
+        if(R_SUCCEEDED(start)) {
+            Result stop=audoutStopAudioOut();
+            diagf("audoutStopAudioOut=%08x\n",stop);
+        }
+        audoutExit();
+    }
+}
+static void service_trials(void) {
+    diagf("\n[SERVICE SESSIONS: open/close only]\n");
+    const char *names[]={"hid","audin:u","audout:u","bsd:u","aud:u"};
+    for(unsigned i=0;i<sizeof(names)/sizeof(names[0]);i++) {
+        Service svc={};
+        Result rc=smGetService(&svc,names[i]);
+        diagf("smGetService %-8s =%08x\n",names[i],rc);
+        if(R_SUCCEEDED(rc)) serviceClose(&svc);
+    }
+}
+static void hardware_report(void) {
+    diag_len=0;
+    diagf("DiscordNX2 comprehensive foreground diagnostic v0.4\n");
+    diagf("20s controller trials + finite audio tests + plugin IPC.\n");
+    diagf("No GameChat suppression; no Discord connection; no PCM file written.\n");
+    diagf("initial write=%08x\n",write_diagnostics());
+    plugin_snapshot("before");
+    diagf("checkpoint write=%08x\n",write_diagnostics());
+    controller_trials();
+    diagf("checkpoint write=%08x\n",write_diagnostics());
+    audio_trials();
+    diagf("checkpoint write=%08x\n",write_diagnostics());
+    service_trials();
+    plugin_snapshot("after");
+    diagf("\nCompleted test sequence; no actual PTT or audio playback performed.\n");
+    diagf("final report write=%08x\n",write_diagnostics());
+    (void)write_diagnostics();
 }
 
 int main(void) {
