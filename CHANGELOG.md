@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.6 multi-stream HID C-button investigation
+
+Instead of repeating the same pad polling, the foreground NRO now reads four published libounce HID histories (handheld, full-key, system-extended, and system) separately for the handheld and Player 1 controller IDs. It compares six timed conditions, capturing changed button bits, sampling-number freshness, and state availability for every channel. It also calls read-only controller interface/style/last-active APIs. The test checkpoints the SD report after each stage and retains microphone capture, audio output, service probes, and background NSO continuity checks. No GameChat override or raw Bluetooth/USB interception was added; compatibility with console firmware still needs a local build and hardware test. The resident NSO was not changed.
+
 ## November 17, 2026 — C-button-focused trials without NSO replacement
 
 The previous hardware run proved microphone capture and audio-device initialization. Since C still opens GameChat instead of appearing as a standard button, I expanded the NRO-only test into timed stages: no-button baseline; hold C; release C; press C repeatedly; dismiss the GameChat selection with B; and A/B comparison. Every stage polls Player 1, handheld, and merged HID masks separately, logs transitions, and checkpoints results to the existing SD report. Audio recording-level checks, audio-output initialization, service checks, and background-plugin IPC persistence tests remain. This does not prevent GameChat from opening or establish C interception, and it does not connect to Discord. The installed NSO remains unchanged; only the NRO source has been updated. Local compilation and real-console execution are still required.

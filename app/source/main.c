@@ -124,63 +124,98 @@ static void plugin_snapshot(const char *phase) {
  * Compare both Player 1 and handheld input, in addition to the normal
  * merged pad mask. A C-only event may never be published to HID.
  */
+static const char *stream_names[]={
+    "HandheldState","FullKeyState","SystemExtState","SystemState"
+};
+
+/* Poll the four different HID state histories exposed by libounce.
+ * No direct controller-transport access, writes or unknown IPC commands.
+ */
+static size_t read_hid_stream(unsigned stream,HidNpadIdType id,
+                              HidNpadCommonState *out) {
+    switch(stream) {
+    case 0: return hidGetNpadStatesHandheld(id,(HidNpadHandheldState *)out,1);
+    case 1: return hidGetNpadStatesFullKey(id,(HidNpadFullKeyState *)out,1);
+    case 2: return hidGetNpadStatesSystemExt(id,(HidNpadSystemExtState *)out,1);
+    case 3: return hidGetNpadStatesSystem(id,(HidNpadSystemState *)out,1);
+    default: return 0;
+    }
+}
+
 static void controller_trials(void) {
-    diagf("\n[C-BUTTON TRIALS / FOREGROUND ONLY]\n");
-    diagf("Please hold C after ~3 seconds. Keep holding for ~15 seconds.\n");
-    diagf("Then release, press C again, dismiss GameChat with B, and press A/B.\n");
-    diagf("This does NOT intercept GameChat. No PTT or Discord connection occurs.\n");
+    diagf("\n[C-BUTTON / FOUR HID STREAMS x TWO CONTROLLER IDS]\n");
+    diagf("Stages: baseline 3s, C hold 15s, release 5s, C taps 10s, dismiss with B 8s, A/B 6s.\n");
+    diagf("Channels are HandheldState, FullKeyState, SystemExtState, SystemState.\n");
+    diagf("No GameChat override, no system patches, no arbitrary shared-memory scan.\n");
     Result rc=hidInitialize();
     diagf("hidInitialize=%08x\n",rc);
-    if(R_FAILED(rc)) return;
+    if (R_FAILED(rc)) return;
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);
-    PadState primary={},handheld={},merged={};
-    padInitialize(&primary,HidNpadIdType_No1);
-    padInitialize(&handheld,HidNpadIdType_Handheld);
-    padInitializeDefault(&merged);
-    const char *label[]={
-        "Baseline: no buttons",
-        "Hold C continuously",
-        "Release C, do not press anything",
-        "Press C a few times",
-        "Press B to dismiss GameChat",
-        "Press A and B for comparison"
-    };
-    const u32 frames[]={150,750,250,500,400,300};
-    for(unsigned phase=0;phase<6;phase++) {
-        u64 prev[3]={0},seen[3]={0};
-        unsigned connected[3]={0},changed[3]={0},logged=0;
-        diagf("stage %u: %s, duration_ms=%u\n",
-              phase+1,label[phase],frames[phase]*20);
-        for(u32 i=0;i<frames[phase];i++) {
-            padUpdate(&primary);
-            padUpdate(&handheld);
-            padUpdate(&merged);
-            const PadState *pads[]={&primary,&handheld,&merged};
-            for(unsigned p=0;p<3;p++) {
-                u64 held=padGetButtons(pads[p]);
-                seen[p]|=held;
-                if(padIsConnected(pads[p])) connected[p]++;
-                if(held!=prev[p]) {
-                    if(logged<48) {
-                        diagf(" sample=%u source=%u held=%016llx down=%016llx up=%016llx\n",
-                            i,p,(unsigned long long)held,
-                            (unsigned long long)padGetButtonsDown(pads[p]),
-                            (unsigned long long)padGetButtonsUp(pads[p]));
-                        logged++;
-                    }
-                    changed[p]++;
-                    prev[p]=held;
+    const HidNpadIdType ids[]={HidNpadIdType_Handheld,HidNpadIdType_No1};
+    const char *idnames[]={"handheld","player1"};
+    const char *stage_names[]={"baseline","HOLD C","release C","tap C","dismiss GameChat B","A/B reference"};
+    const u32 samples[]={150,750,250,500,400,300};
+    for(unsigned id=0;id<2;id++) {
+        diagf("controller=%s style=%08x device_type=%08x\n",
+              idnames[id],hidGetNpadStyleSet(ids[id]),hidGetNpadDeviceType(ids[id]));
+    }
+    diagf("read-only hidsys metadata\n");
+    Result hs=hidsysInitialize();
+    diagf("hidsysInitialize=%08x\n",hs);
+    if(R_SUCCEEDED(hs)) {
+        u32 last=0;
+        Result lr=hidsysGetLastActiveNpad(&last);
+        diagf("last-active rc=%08x id=%u\n",lr,last);
+        for(unsigned i=0;i<2;i++) {
+            u8 interface_type=0;
+            Result ir=hidsysGetNpadInterfaceType(ids[i],&interface_type);
+            diagf("interface %s rc=%08x type=%u\n",idnames[i],ir,(unsigned)interface_type);
+        }
+        hidsysExit();
+    }
+    diagf("checkpoint=%08x\n",write_diagnostics());
+    for(unsigned stage=0;stage<6;stage++) {
+        u64 seen[2][4] = {{0}};
+        u64 prior[2][4] = {{0}};
+        u64 prior_sample[2][4] = {{0}};
+        u32 valid[2][4] = {{0}},changes[2][4]={{0}},fresh[2][4]={{0}};
+        unsigned recorded=0;
+        diagf("stage %u (%s) start duration_ms=%u\n",stage+1,stage_names[stage],samples[stage]*20);
+        for(u32 tick=0;tick<samples[stage];tick++) {
+            for(unsigned id=0;id<2;id++) for(unsigned stream=0;stream<4;stream++) {
+                HidNpadCommonState state={0};
+                size_t n=read_hid_stream(stream,ids[id],&state);
+                if(!n) continue;
+                valid[id][stream]++;
+                const u64 buttons=state.buttons;
+                seen[id][stream] |= buttons;
+                if(prior_sample[id][stream]!=state.sampling_number) {
+                    fresh[id][stream]++;
+                    prior_sample[id][stream]=state.sampling_number;
+                }
+                if(buttons!=prior[id][stream]) {
+                    if(recorded<32)
+                        diagf(" tick=%u id=%s stream=%s buttons=%016llx changed=%016llx sample=%llu attr=%08x\n",
+                            tick,idnames[id],stream_names[stream],
+                            (unsigned long long)buttons,
+                            (unsigned long long)(buttons^prior[id][stream]),
+                            (unsigned long long)state.sampling_number,state.attributes);
+                    recorded++;
+                    changes[id][stream]++;
+                    prior[id][stream]=buttons;
                 }
             }
             svcSleepThread(20000000LL);
         }
-        for(unsigned p=0;p<3;p++)
-            diagf(" stage=%u source=%u connected=%u/%u changes=%u seen=%016llx\n",
-                phase+1,p,connected[p],frames[phase],changed[p],
-                (unsigned long long)seen[p]);
-        diagf(" checkpoint=%08x\n",write_diagnostics());
+        for(unsigned id=0;id<2;id++) for(unsigned stream=0;stream<4;stream++) {
+            diagf(" summary id=%s stream=%s valid=%u fresh=%u changes=%u seen=%016llx\n",
+                idnames[id],stream_names[stream],valid[id][stream],fresh[id][stream],
+                changes[id][stream],(unsigned long long)seen[id][stream]);
+        }
+        diagf("stage=%u checkpoint=%08x\n",stage+1,write_diagnostics());
     }
-    diagf("source 0=Player1; 1=Handheld; 2=Merged; no C-button bit assumed.\n");
+    diagf("If no stream changes during C, ordinary HID histories do not expose C here.\n");
+    diagf("This does not establish anything about controller transport reports or GameChat internal APIs.\n");
     hidExit();
 }
 static void audio_trials(void) {
@@ -266,8 +301,8 @@ static void service_trials(void) {
 }
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 comprehensive C-button diagnostic v0.5\n");
-    diagf("47s scheduled C-button trials (Player1/Handheld/Merged) + audio + IPC.\n");
+    diagf("DiscordNX2 four-stream C-button diagnostic v0.6\n");
+    diagf("47s C hold/tap trials in four HID histories x two IDs + audio + IPC.\n");
     diagf("No GameChat suppression; no Discord connection; no PCM file written.\n");
     diagf("initial write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
