@@ -73,9 +73,10 @@
     "Added portable voice_packet.h/.c: 10ms mono 48kHz PCM frame, sequence, timestamp, RMS/peak/VAD hangover, noncryptographic checksum and decode roundtrip",
     "NRO processes captured frames offline, validates against originals and rejects deliberate packet corruption",
     "Switched network test to socketInitialize for proper BSD version, tries default and one-session config; localhost UDP marker and 1 diagnostic PCM frame only",
-    "NSO and kaiHEN preserved; no remote audio sending, no Discord authentication, Opus or DAVE"
+    "NSO and kaiHEN preserved; no remote audio sending, no Discord authentication, Opus or DAVE",
+    "Added optional native host unit tests for packet encoding/decoding and corruption, without changing Build-NRO.bat."
   ],
-  "build_validation": "v0.14 audio clean on real Switch 2. v0.15 not independently compiled with the user's console toolchain or hardware tested.",
+  "build_validation": "v0.14 audible audio clean on real hardware. v0.15 source has independent portable host tests in tests/ (not executed here), but cross-compile and real hardware socket test remain pending.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",

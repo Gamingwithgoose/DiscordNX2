@@ -310,6 +310,7 @@ static void service_trials(void) {
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <unistd.h>
 
 #define VOICE_CHUNK_BYTES 0x4000u
 #define VOICE_CHUNKS 36u

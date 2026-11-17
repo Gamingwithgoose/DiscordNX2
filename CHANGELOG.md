@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.15 portable tests and POSIX compatibility
+
+Added portable host-native tests for the packet encoder/decoder, silence, nonzero voice, hangover, data corruption and 16-bit edge values; fixed the missing POSIX `unistd.h` declaration for `close()` in the socket test. The tests can be run with `sh tests/run-host-tests.sh` on a machine with `cc`. These tests do not substitute for local Switch 2 compilation or hardware verification. The installed NSO remains unchanged.
+
 ## November 17, 2026 — v0.15 portable voice packet pipeline and socket fix
 
 Real-hardware report: v0.14 eliminated audible popping. Built around that proven three-buffer mic capture rather than changing its timing. Implemented a standalone, bounded 10ms stereo PCM16 → mono PCM16 versioned packet format with sequence/timestamp, RMS/peak telemetry, VAD hangover, checksumming and a verified decode path. Added NRO packet roundtrip/negative corruption tests over every full captured frame. Replaced the failed raw `bsdInitialize` call, which used an invalid zero-version default configuration, with libounce's `socketInitialize` wrapper and standard socket APIs. The transport test runs exclusively on localhost and sends at most one diagnostic voice frame plus a marker. This is local transport preparation, not Discord integration or an actual call; there is no Opus encoder, authentication, remote network transmission or DAVE. The background NSO is untouched. Requires local compilation and console validation.
