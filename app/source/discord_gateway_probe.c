@@ -135,6 +135,7 @@ Dnx2DiscordProbe dnx2DiscordGatewayProbe(Dnx2LogFn log) {
     if(R_FAILED(rc))goto cleanup_sock;
     SslContext ctx={0};
     SslConnection conn={0};
+    int returned_sock=-1;
     rc=sslCreateContext(&ctx,SslVersion_TlsV12|SslVersion_TlsV13);
     log("discord sslCreateContext=%08x\n",rc);
     if(R_FAILED(rc))goto cleanup_ssl;
@@ -150,7 +151,10 @@ Dnx2DiscordProbe dnx2DiscordGatewayProbe(Dnx2LogFn log) {
     int passed=socketSslConnectionSetSocketDescriptor(&conn,sock);
     log("discord TLS socketAttach=%d errno=%d\n",passed,errno);
     if(passed<0&&errno!=ENOENT)goto cleanup_conn;
-    if(passed>=0)close(passed);
+    /* Keep any returned socket open for the entire TLS session. */
+    returned_sock=passed>=0?passed:-1;
+    rc=sslConnectionSetIoTimeout(&conn,5000);
+    log("discord TLS I/O timeout setup=%08x\n",rc);
     u32 certbytes=0,certcount=0;
     rc=sslConnectionDoHandshake(&conn,&certbytes,&certcount,NULL,0);
     log("discord TLS handshake=%08x certs=%u\n",rc,certcount);
@@ -222,6 +226,7 @@ Dnx2DiscordProbe dnx2DiscordGatewayProbe(Dnx2LogFn log) {
     log("discord probe sends no user token, bot token, identify, or audio.\n");
 cleanup_conn:
     sslConnectionClose(&conn);
+    if(returned_sock>=0)close(returned_sock);
 cleanup_context:
     sslContextClose(&ctx);
 cleanup_ssl:

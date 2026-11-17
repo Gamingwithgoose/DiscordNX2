@@ -78,7 +78,8 @@
     "Adds a bounded ~15 second three-buffer microphone stress test, discarding samples and logging throughput/error stats after stopping",
     "Windows PC Discord-Login.bat launches official OAuth2 PKCE browser auth, fetches Discord identity and guilds; no tokens stored or sent to Switch",
     "Native controller menu with A full comprehensive test, X public Discord Gateway, Y voice loopback+packet tests, L 15s mic stress, + exit",
-    "Public unauthenticated Discord Gateway DNS/TCP/TLS/WebSocket upgrade and HELLO probe; no tokens or Discord audio sent"
+    "Public unauthenticated Discord Gateway DNS/TCP/TLS/WebSocket upgrade and HELLO probe; no tokens or Discord audio sent",
+    "SSL socket ownership hardening: descriptor remains open during handshake and SSL I/O timeout requested"
   ],
   "build_validation": "v0.15 working on real hardware. v0.17 native UI and TLS/WebSocket source pushed but not independently built in the user's local devkitPro toolchain or tested on Switch 2.",
   "key_risks": [

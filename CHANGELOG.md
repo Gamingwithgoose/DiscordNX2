@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.17 SSL resource fix
+
+Keep the SSL socket wrapper's returned descriptor open throughout the TLS handshake and Gateway upgrade; close it during teardown. Request a bounded SSL I/O timeout. No NSO changes.
+
 ## November 17, 2026 — v0.17 Native interactive Switch 2 mega-test
 
 Replaced unconditional startup diagnostics with a Joy-Con/controller menu (A full suite, X Discord public Gateway, Y microphone+packets, L bounded long microphone capture, + exit), explicit completion status, retained reporting to `/kaihen/discordnx2-hardware.txt`, and a new TLS/WebSocket Gateway public HELLO probe. This probes DNS, TCP 443, libounce SSL with host validation, WebSocket HTTP Upgrade and the Gateway heartbeat interval. Never uses Discord account credentials or sends audio to Discord. Keeps successful v0.14 capture logic and the existing background NSO unchanged. Not yet cross-compiled or tested on Switch 2.
