@@ -2,7 +2,7 @@
 
 I want Discord voice chat on my Switch 2 while playing games, with the C button as push-to-talk. This is the first hardware test, **not a working Discord voice client**.
 
-**CURRENT TESTING INSTRUCTIONS (v0.11): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
+**CURRENT TESTING INSTRUCTIONS (v0.12): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
 
 Right now the project builds a homebrew NRO plus a kaiHEN background NSO. The NRO asks the background plugin for a handshake, its status and counters, and permission to open basic HID, audio-input, audio-output and network service sessions. It saves the results to the SD card. Before attempting Discord, I need to prove that a plugin can stay running while a game is open, that C can be read during gameplay, and that microphone and audio playback work at the same time as a game.
 
@@ -87,3 +87,7 @@ A 0.5-second quiet synthetic tone now plays before the familiar recorded voice. 
 ## v0.11 — Unity-gain playback comparison
 
 The synthetic reference tone sounded clean, but recorded speech still popped at v0.10. This test plays the recorded voice at its native PCM level (gain 1.0x, **no amplification and no clipping limiter**) with the same 10ms fade at both ends. It retains a quiet reference tone and the original three-second recording. Speak naturally; recorded speech will sound quieter than v0.8/v0.9. Pull, run `Build-NRO.bat`, and FTP ONLY `dist/DiscordNX2.nro`, leaving the existing resident NSO untouched. Compare how often the voice pops, and send `/kaihen/discordnx2-hardware.txt`. No Discord call or game-audio mixing yet.
+
+## v0.12 — Playback stop transition comparison
+
+Generated reference tone now receives an extra 250ms silence tail, as does microphone speech. Compare whether the tone-end click and speech popping improve. Build with `Build-NRO.bat` and FTP ONLY `dist/DiscordNX2.nro`; do not touch the NSO or restart kaiHEN. Send `/kaihen/discordnx2-hardware.txt`. This is a foreground-only diagnostic test.

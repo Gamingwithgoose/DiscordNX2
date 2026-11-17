@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.12 output silence transition test
+
+User noticed the generated tone clicks near its stop as well as popping during voice playback, making output transition a plausible contributor. Added a 250ms aligned zero-PCM buffer queued behind tone and voice audio, bounded buffer-drain logging, and a brief delay before stopping each output stream. Preserved unity gain and existing audio capture. This is a diagnostic hypothesis, not a confirmed correction. No changes to NSO or kaiHEN; local build and hardware testing required.
+
 ## November 17, 2026 — v0.11 unity-gain audio comparison
 
 The generated reference tone was clean, but recorded speech still popped. Changed only recorded-speech playback from the adaptive amplification used in v0.9/v0.10 back to unamplified 1.0x PCM, removing the 24000 peak limiter. The 10 ms start/end fades, roughly three-second capture, reference tone, diagnostic logging and localhost network probe remain unchanged. This isolates whether the amplification and limiting contribute to popping; it does not claim to fix capture continuity. No NSO modifications. Requires local compilation and real hardware playback comparison.

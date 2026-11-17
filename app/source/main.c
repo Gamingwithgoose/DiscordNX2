@@ -472,6 +472,36 @@ static void voice_prepare_playback(void) {
  * A clean tone followed by crackling speech points toward the speech path.
  */
 static unsigned char reference_tone[0x18000] __attribute__((aligned(0x1000)));
+
+/* Queue a zero-PCM tail so the output device receives silence before stop. */
+static unsigned char output_silence[0xc000] __attribute__((aligned(0x1000)));
+static void queue_silence_tail(AudioOutBuffer *tail) {
+    memset(output_silence,0,sizeof(output_silence));
+    memset(tail,0,sizeof(*tail));
+    tail->buffer=output_silence;
+    tail->buffer_size=sizeof(output_silence);
+    tail->data_size=sizeof(output_silence);
+}
+static void drain_playback(AudioOutBuffer *main_buffer, AudioOutBuffer *tail, u64 timeout) {
+    bool done_main=false,done_tail=false;
+    for(unsigned attempt=0;attempt<4 && (!done_main||!done_tail);attempt++) {
+        AudioOutBuffer *released=NULL;
+        u32 count=0;
+        Result wr=audoutWaitPlayFinish(&released,&count,timeout);
+        diagf("drain attempt=%u result=%08x count=%u released_main=%u released_tail=%u\n",
+            attempt,wr,count,released==main_buffer,released==tail);
+        if(R_FAILED(wr))break;
+        bool pending_main=true,pending_tail=true;
+        Result mr=audoutContainsAudioOutBuffer(main_buffer,&pending_main);
+        Result tr=audoutContainsAudioOutBuffer(tail,&pending_tail);
+        if(R_SUCCEEDED(mr)&&!pending_main)done_main=true;
+        if(R_SUCCEEDED(tr)&&!pending_tail)done_tail=true;
+        if(count && released==main_buffer)done_main=true;
+        if(count && released==tail)done_tail=true;
+    }
+    diagf("drain completed main=%u tail=%u\n",done_main,done_tail);
+}
+
 static void voice_reference_tone_test(void) {
     diagf("\n[AUDIO OUTPUT REFERENCE: SYNTHETIC TONE]\n");
     const unsigned sample_frames=24000; /* 0.5 seconds, 48 kHz stereo */
@@ -505,12 +535,17 @@ static void voice_reference_tone_test(void) {
         rc=audoutAppendAudioOutBuffer(&b);
         diagf("reference append=%08x\n",rc);
         if(R_SUCCEEDED(rc)) {
-            AudioOutBuffer *released=NULL;
-            u32 released_count=0;
-            Result wr=audoutWaitPlayFinish(&released,&released_count,2000000000ULL);
-            diagf("reference completed=%08x count=%u same=%u\n",
-                  wr,released_count,released==&b);
+            AudioOutBuffer tail={0};
+            queue_silence_tail(&tail);
+            Result sr=audoutAppendAudioOutBuffer(&tail);
+            diagf("reference silence_append=%08x\n",sr);
+            if(R_SUCCEEDED(sr))drain_playback(&b,&tail,2500000000ULL);
+            else {
+                AudioOutBuffer *released=NULL;u32 n=0;
+                diagf("reference fallback_wait=%08x\n",audoutWaitPlayFinish(&released,&n,2500000000ULL));
+            }
         }
+        svcSleepThread(50000000LL);
         diagf("reference stop=%08x\n",audoutStopAudioOut());
     }
     audoutExit();
@@ -544,12 +579,17 @@ static void voice_playback_test(void) {
         rc=audoutAppendAudioOutBuffer(&buffer);
         diagf("voice audoutAppendAudioOutBuffer=%08x data_bytes=%u\n",rc,(unsigned)voice_used);
         if(R_SUCCEEDED(rc)) {
-            AudioOutBuffer *released=NULL;
-            u32 count=0;
-            Result wr=audoutWaitPlayFinish(&released,&count,7500000000ULL);
-            diagf("voice audoutWaitPlayFinish=%08x released=%u matches=%u\n",
-                  wr,count,released==&buffer);
+            AudioOutBuffer tail={0};
+            queue_silence_tail(&tail);
+            Result sr=audoutAppendAudioOutBuffer(&tail);
+            diagf("voice silence_append=%08x\n",sr);
+            if(R_SUCCEEDED(sr))drain_playback(&buffer,&tail,7500000000ULL);
+            else {
+                AudioOutBuffer *released=NULL;u32 count=0;
+                diagf("voice fallback_wait=%08x\n",audoutWaitPlayFinish(&released,&count,7500000000ULL));
+            }
         }
+        svcSleepThread(50000000LL);
         Result stop=audoutStopAudioOut();
         diagf("voice audoutStopAudioOut=%08x\n",stop);
     }
@@ -600,7 +640,7 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 unity-gain voice playback diagnostic v0.11\n");
+    diagf("DiscordNX2 output-tail playback diagnostic v0.12\n");
     diagf("Foreground-only, ~3 seconds PCM capture, unity gain 1.0x and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
@@ -614,7 +654,7 @@ static void hardware_report(void) {
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.11. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.12. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }

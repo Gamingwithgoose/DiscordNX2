@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.11-unity-gain-playback",
+  "version": "0.12-output-tail",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -53,16 +53,18 @@
     "v10": [
       "Reference synthetic tone played cleanly",
       "Recorded microphone speech still popped on playback"
+    ],
+    "v11": [
+      "User notices small pop at generated tone ending as well as recorded speech pops"
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
-    "Foreground NRO records approximately three seconds of mic PCM",
-    "Plays low-volume synthetic reference tone, then voice at 1.0x PCM amplitude, no hard limiter or adaptive amplification; only 10ms end fades",
-    "Retains existing UDP local loopback, service sessions and resident NSO continuity checks",
-    "No Discord integration, persistent mic or C interception"
+    "v0.12 queues 250ms PCM silence after generated tone and recorded voice before audout stop",
+    "retains 3 second capture and unity-gain playback",
+    "reports buffer completion state, still no Discord calls or background mic"
   ],
-  "build_validation": "v0.10 reference tone clean and recorded speech pops. v0.11 source committed; not compiled or hardware-tested.",
+  "build_validation": "Code pushed; awaiting local build and hardware confirmation.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -83,10 +85,9 @@
     ]
   },
   "next_user_workflow": [
-    "Pull latest GitHub Desktop and run Build-NRO.bat",
-    "Transfer ONLY dist/DiscordNX2.nro; preserve NSO/kaiHEN",
-    "Compare unamplified voice playback popping against v0.10; voice will be quieter",
-    "Send /kaihen/discordnx2-hardware.txt"
+    "Pull main in GitHub Desktop and run Build-NRO.bat",
+    "FTP ONLY dist/DiscordNX2.nro; leave resident NSO and kaiHEN intact",
+    "Compare tone stop click and recorded voice popping; send hardware report"
   ],
   "next_developer_work": [
     "fix real compile or audio failures from user report first",
