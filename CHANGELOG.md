@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.19 Discord OAuth LAN profile pairing
+
+Added opt-in PC OAuth PKCE metadata bridge (Discord-Pair.bat, tools/discord_pair.py) with UDP discovery, explicit matching six-digit approval, and one-shot HTTP metadata delivery to Switch 2; no Discord tokens leave PC memory. Added NRO LAN pairing client, secure random challenge generation, account display name + real server list rendering and server selection on the existing graphical Servers tab, with bounded network timeout and no stored profile on SD. Integrated new module into NRO Makefile. Voice remains unavailable; Discord identify/guilds OAuth does not authorize voice and the PC bridge is temporary, local-LAN-only, and cannot replace a fully native user client. No resident NSO change.
+
 ## November 17, 2026 — v0.18 sidebar/content focus correction
 
 Changed D-pad and left-stick navigation to two-column focus: Up/Down selects sidebar sections, Right/A enters section content when actionable, Left/B returns to sidebar, Up/Down selects actions, and A activates. Distinct focus highlights; joystick edge detection prevents fast tab cycling. No changes to existing v0.17 audio/network tests or NSO; no Discord login or voice calls added.

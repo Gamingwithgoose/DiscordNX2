@@ -127,3 +127,22 @@ Build exactly as before: GitHub Desktop pull, run `Build-NRO.bat`, FTP only `dis
 ### v0.18 navigation correction (November 17, 2026)
 
 The UI now uses **two-column focus** rather than left/right cycling tabs. Start focused on the left sidebar: Up/Down chooses Dashboard, Servers, Voice Chat, or Diagnostics, and A or Right enters the chosen content when actionable. Left or B returns from content to sidebar; Right on an unimplemented Server/Voice screen does not invent a selectable control. Up/Down in content moves between actionable cards, A launches the highlighted test. The left analog stick uses threshold-crossing events to avoid rapid auto-scroll, matching D-pad directional behavior. X/Y/L diagnostic shortcuts and + exit remain active. A separate focus highlight distinguishes the sidebar from its content. Navigation-only hardware verification does not require another audio test. **No sign-in, server loading, or voice calls are enabled by this correction.**
+
+
+## v0.19 — Live Discord account metadata LAN pairing experiment
+
+This is a **real profile-and-server-navigation test**, not simulated server data and **not Discord voice**. It uses the preexisting OAuth PKCE PC helper to authorize with Discord in a PC browser, retrieves the authenticated account's identity and server names through the Discord API, and delivers only that sanitized read-only metadata over a **trusted local network** to the graphical Switch 2 NRO after six-digit code approval.
+
+**One-time developer setup:** The DiscordNX2 project owner creates **one** Discord OAuth application (Public Client) at https://discord.com/developers/applications and registers exactly \`http://127.0.0.1:8765/discordnx2/callback\` for OAuth2. Copy its public Application ID. Ordinary users do **not** create developer applications. This is a short-lived PC prototype; the final goal is Switch-only authentication with no PC.
+
+**Test sequence (one integrated account test):**
+1. Update the repo in GitHub Desktop. Run \`Build-NRO.bat\` and FTP only \`dist/DiscordNX2.nro\`. Do not touch the kaiHEN NSO.
+2. On the **same trusted LAN**, double-click \`Discord-Pair.bat\` on Windows. Paste the one shared DiscordNX2 Public Client ID. Your PC browser opens Discord's actual OAuth \`identify guilds\` consent flow.
+3. Once authorized, leave the PC window open. Allow **Private network only** in Windows Firewall if prompted. PC emits a harmless UDP discovery beacon on port 39274, and listens for pair requests on TCP port 39275.
+4. On Switch 2, navigate to **Servers**, press Right/A to focus content, then **A on PAIR WITH PC**. A secure random six-digit code appears on the screen.
+5. The PC displays the request source IP and six-digit code. Type exactly \`YES\` if they match. The Switch then loads the **actual OAuth account display name and up to 64 guild names/IDs**, in RAM only.
+6. Use Up/Down to navigate the real server list and A to select one; the Voice Chat view shows the selected server but remains disconnected.
+
+**Security:** The PC never transfers its Discord OAuth access token, refresh token, password, email, or client secret to the Switch. The PC does not write them to disk. It shares only **metadata** (account display name, username, server names, server IDs) over HTTP on your LAN, after explicit code matching and approval. **Only run on a trusted private LAN**: the metadata is not encrypted on the LAN. Pairing exits after the first approved transfer. This is not authentication to Discord on the Switch and does not authorize voice calls. Never expose TCP 39275 to the Internet or forward ports.
+
+**Limitations:** Discord's \`identify guilds\` OAuth scopes do not authorize voice, do not list voice-channel membership or grant remote user Gateway access. QR login is *not* available in this build. This is a temporary, optional companion for verifying real account metadata and graphical server navigation, **not a replacement for a fully native voice client**. A new login backend or Discord-approved voice access is still necessary before two-way voice testing. The PC must have Python 3 and must be on the same LAN as the Switch. Report pairing errors without sharing authorization URLs, callback codes, access tokens or secrets.

@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.18-native-graphical-client-shell",
+  "version": "0.19-oauth-lan-profile-pairing",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -82,9 +82,11 @@
     "SSL socket ownership hardening: descriptor remains open during handshake and SSL I/O timeout requested",
     "Graphical native 1280x720 RGBA8 framebuffer with Dashboard / Servers / Voice Chat / Diagnostics, D-pad navigation and A/B/+/X/Y/L controls; fallback to console if unavailable",
     "Authentication and voice tabs explicitly display disconnected/unavailable; no faked guild data or calls, no account passwords or tokens",
-    "v0.18 UI navigation corrected to two-column focus: sidebar Up/Down, Right/A enters content, content Up/Down selects, Left/B returns; left analog stick edge thresholds"
+    "v0.18 UI navigation corrected to two-column focus: sidebar Up/Down, Right/A enters content, content Up/Down selects, Left/B returns; left analog stick edge thresholds",
+    "v0.19 opt-in local PC OAuth PKCE pairing: Windows Discord-Pair.bat authenticates and advertises discovery over UDP 39274; NRO requests metadata with six-digit on-screen code and explicit PC approval over TCP 39275",
+    "Graphical Servers panel shows verified profile display name and actual Discord OAuth guild names/IDs, can select a server; actual Discord voice and channel lists remain disconnected. No Discord token sent to Switch."
   ],
-  "build_validation": "v0.17 tested on Switch 2: microphone captures and voice packets pass, public Discord Gateway DNS TCP TLS WebSocket 101 HELLO passed heartbeat 41250ms. v0.18 graphical UI source added and not yet compiled with user's toolchain or tested on real Switch 2.",
+  "build_validation": "v0.17 Switch hardware DNS/TCP/TLS/WS HELLO and audio/packet suite passed. v0.18 GUI/navigation confirmed pleasant by user. v0.19 LAN pairing source committed but not built in user's toolchain or tested with Discord OAuth, LAN firewall, or Switch 2 hardware.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -105,17 +107,17 @@
     ]
   },
   "next_user_workflow": [
-    "Pull main via GitHub Desktop, run Build-NRO.bat and FTP only dist/DiscordNX2.nro",
-    "Verify graphical UI opens; use Up/Down to move Dashboard/Servers/Voice Chat/Diagnostics on left",
-    "Select Diagnostics, press Right or A, use Up/Down among actions, Left/B returns to sidebar",
-    "Verify left analog stick and D-pad controls do not rapidly switch tabs on horizontal input",
-    "No need to re-run hardware suite unless desired; account sign-in and voice still not implemented"
+    "Pull latest main with GitHub Desktop; run Build-NRO.bat and FTP only dist/DiscordNX2.nro; never touch resident NSO",
+    "Configure one shared DiscordNX2 Public Client application OAuth redirect http://127.0.0.1:8765/discordnx2/callback (developer only, not every user)",
+    "Run Discord-Pair.bat on Windows PC on same trusted LAN; sign in with Discord browser OAuth identify guilds",
+    "On Switch choose Servers -> PAIR WITH PC, compare the six-digit code with PC and type YES to authorize sending profile metadata",
+    "Verify actual account display name, server list and selection; report errors without callback URL, code, token, or account secrets",
+    "This build does not support voice chatting; do not expect a voice join or sending microphone audio."
   ],
   "next_developer_work": [
-    "Cross-compile and fix graphical UI issues on the actual libounce release",
-    "Implement developer-owned secure Discord login flow (no per-user Discord apps), requiring an owned client ID and callback",
-    "After Discord approval for user voice access, wire actual account-scoped guild/voice channel list and Opus/DAVE audio transport",
-    "Or evaluate explicitly consented unofficial client route with account security and ToS risks before any credentials are handled",
-    "Preserve the proven NSO and background limitations until foreground voice works"
+    "Cross-compile and verify v0.19, fix source-level issues and LAN discovery/firewall as needed",
+    "Implement native QR authenticated user access with appropriate crypto and consent only after reviewing unofficial protocol risks or secure official integration",
+    "Build authenticated voice-channel navigation and voice gateway with Opus, RTP and DAVE, license-check any TriCord-derived code",
+    "Add display font upgrade after backend works; keep existing NSO unchanged until foreground voice real"
   ]
 }
