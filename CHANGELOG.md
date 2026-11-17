@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.15 sustained microphone stress capture
+
+Added an approximately 15-second bounded, three-buffer microphone stress test after the familiar record/replay and packet validation. It follows the successful v0.14 prequeue/requeue pattern, performs no SD writes during capture and retains no PCM afterward. Reports buffer counts, failed waits/requeues, approximate total PCM duration, and peak sample. This validates more sustained microphone operation before a background Discord client is attempted, without requiring an NSO update. It is not a continuous voice call and has not been tested on hardware yet.
+
 ## November 17, 2026 — v0.15 portable tests and POSIX compatibility
 
 Added portable host-native tests for the packet encoder/decoder, silence, nonzero voice, hangover, data corruption and 16-bit edge values; fixed the missing POSIX `unistd.h` declaration for `close()` in the socket test. The tests can be run with `sh tests/run-host-tests.sh` on a machine with `cc`. These tests do not substitute for local Switch 2 compilation or hardware verification. The installed NSO remains unchanged.

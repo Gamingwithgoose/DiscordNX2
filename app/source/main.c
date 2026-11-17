@@ -470,6 +470,88 @@ static void voice_capture_test(void) {
     diagf("voice capture checkpoint=%08x\n",write_diagnostics());
 }
 
+/* v0.15 sustained, non-recording stress test of the successful
+ * prequeued microphone architecture. No PCM is saved or transmitted.
+ * Requeue immediately and do all diagnostics after stopping.
+ * A fixed upper bound means this cannot become an unattended open mic.
+ */
+#define STRESS_CAPTURE_BUFFERS 180u /* nominal ~15.36 seconds */
+static void voice_capture_stability_test(void) {
+    diagf("\n[VOICE: SUSTAINED MICROPHONE STABILITY TEST]\n");
+    Result rc=audinInitialize();
+    diagf("stress initialize=%08x\n",rc);
+    if(R_FAILED(rc))return;
+    if(audinGetSampleRate()!=48000 || audinGetChannelCount()!=2 ||
+       audinGetPcmFormat()!=PcmFormat_Int16) {
+        diagf("stress skipped: unexpected format\n");
+        audinExit();return;
+    }
+    for(unsigned i=0;i<CAPTURE_SLOTS;i++) {
+        memset(capture_pcm[i],0,sizeof(capture_pcm[i]));
+        memset(&capture_desc[i],0,sizeof(capture_desc[i]));
+        capture_desc[i].buffer=capture_pcm[i];
+        capture_desc[i].buffer_size=VOICE_CHUNK_BYTES;
+        capture_desc[i].data_size=VOICE_CHUNK_BYTES;
+    }
+    unsigned queued=0;
+    for(unsigned i=0;i<CAPTURE_SLOTS;i++) {
+        Result qr=audinAppendAudioInBuffer(&capture_desc[i]);
+        if(R_FAILED(qr)) {
+            diagf("stress queue failure=%08x slot=%u\n",qr,i);
+            break;
+        }
+        queued++;
+    }
+    if(queued!=CAPTURE_SLOTS){audinExit();return;}
+    rc=audinStartAudioIn();
+    diagf("stress start=%08x\n",rc);
+    if(R_FAILED(rc)){audinExit();return;}
+    unsigned received=0,submitted=queued,errors=0;
+    unsigned long long bytes=0;
+    unsigned peak=0;
+    for(;received<STRESS_CAPTURE_BUFFERS;) {
+        AudioInBuffer *released=NULL;
+        u32 count=0;
+        Result wr=audinWaitCaptureFinish(&released,&count,1500000000ULL);
+        if(R_FAILED(wr)||!released||count==0) {
+            diagf("stress wait fail rc=%08x count=%u at=%u\n",wr,count,received);
+            errors++;break;
+        }
+        int slot=-1;
+        for(unsigned i=0;i<CAPTURE_SLOTS;i++)
+            if(released==&capture_desc[i]){slot=(int)i;break;}
+        if(slot<0){errors++;diagf("stress release invalid\n");break;}
+        size_t size=released->data_size;
+        if(size>VOICE_CHUNK_BYTES)size=VOICE_CHUNK_BYTES;
+        bytes+=size;
+        /* Only a small peak scan, no filesystem access on capture path. */
+        const int16_t *samples=(const int16_t*)capture_pcm[slot];
+        for(size_t j=0;j<size/2;j++) {
+            int v=samples[j],a=v<0?-v:v;
+            if((unsigned)a>peak)peak=(unsigned)a;
+        }
+        received++;
+        if(submitted<STRESS_CAPTURE_BUFFERS) {
+            memset(released,0,sizeof(*released));
+            released->buffer=capture_pcm[slot];
+            released->buffer_size=VOICE_CHUNK_BYTES;
+            released->data_size=VOICE_CHUNK_BYTES;
+            Result qr=audinAppendAudioInBuffer(released);
+            if(R_FAILED(qr)){
+                diagf("stress requeue fail rc=%08x at=%u\n",qr,received);
+                errors++;break;
+            }
+            submitted++;
+        }
+    }
+    Result stop=audinStopAudioIn();
+    audinExit();
+    diagf("stress end stopped=%08x buffers=%u expected=%u submitted=%u errors=%u bytes=%llu peak=%u\n",
+          stop,received,(unsigned)STRESS_CAPTURE_BUFFERS,submitted,errors,bytes,peak);
+    diagf("stress capture is local-only and never writes PCM or sends network audio.\n");
+    diagf("stress checkpoint=%08x\n",write_diagnostics());
+}
+
 /* Process the entire recording as one signal rather than hard-clipping
  * each chunk separately. A global gain and short fade at the endpoints
  * avoid some distortion and abrupt playback clicks. Other pops could
@@ -781,6 +863,7 @@ static void hardware_report(void) {
     voice_playback_test();
     diagf("audio checkpoint=%08x\n",write_diagnostics());
     voice_packet_test();
+    voice_capture_stability_test();
     diagf("packet checkpoint=%08x\n",write_diagnostics());
     voice_network_test();
     service_trials();

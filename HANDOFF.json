@@ -74,7 +74,8 @@
     "NRO processes captured frames offline, validates against originals and rejects deliberate packet corruption",
     "Switched network test to socketInitialize for proper BSD version, tries default and one-session config; localhost UDP marker and 1 diagnostic PCM frame only",
     "NSO and kaiHEN preserved; no remote audio sending, no Discord authentication, Opus or DAVE",
-    "Added optional native host unit tests for packet encoding/decoding and corruption, without changing Build-NRO.bat."
+    "Added optional native host unit tests for packet encoding/decoding and corruption, without changing Build-NRO.bat.",
+    "Adds a bounded ~15 second three-buffer microphone stress test, discarding samples and logging throughput/error stats after stopping"
   ],
   "build_validation": "v0.14 audible audio clean on real hardware. v0.15 source has independent portable host tests in tests/ (not executed here), but cross-compile and real hardware socket test remain pending.",
   "key_risks": [
@@ -100,7 +101,8 @@
     "GitHub Desktop pull latest and run Build-NRO.bat",
     "FTP ONLY dist/DiscordNX2.nro; preserve NSO and current jailbreak",
     "Confirm voice still clean, attach /kaihen/discordnx2-hardware.txt",
-    "Check packet roundtrip invalid=0, corruption rejected=1, socket UDP marker/audio loopback results"
+    "Check packet roundtrip invalid=0, corruption rejected=1, socket UDP marker/audio loopback results",
+    "NRO includes separate ~15-second mic stability test, so it runs longer than prior 3-second diagnostics"
   ],
   "next_developer_work": [
     "fix real compile or audio failures from user report first",
