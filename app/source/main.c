@@ -437,7 +437,7 @@ static void voice_prepare_playback(void) {
          * A large jump across this boundary may indicate dropped samples.
          */
         if(i>=VOICE_CHUNK_BYTES/2 && ((i%(VOICE_CHUNK_BYTES/2))<2)) {
-            int diff=v-(int)samples[i-VOICE_CHUNK_BYTES/2];
+            int diff=v-(int)samples[i-2];
             if(diff<0)diff=-diff;
             if(diff>10000)boundary_jumps++;
         }
