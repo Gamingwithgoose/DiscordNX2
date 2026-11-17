@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.9 reduced popping and diagnostic audio processing
+
+Real-hardware testing confirmed v0.8 playback is substantially louder, but audible cracking/pops remain. Removed per-buffer hard sample clipping in favor of retaining captured PCM and applying one whole-recording gain factor (up to 1.5x, reduced when needed to stay near a 24000 peak). Added 10ms fade-in/fade-out and extra peak/discontinuity diagnostics. This should reduce clipping and clicks at recording boundaries without losing the v0.8 level on quiet speech. It is not proof that all popping was caused by the prior limiter; capture continuity or device behavior may still matter. The code only changes foreground NRO playback, preserves the NSO, and must be verified in a local build and another hardware test.
+
 ## November 17, 2026 — v0.8 longer microphone test and safer gain
 
 The first actual local playback was audible on Switch 2 hardware, but only when speaking loudly. Extended the foreground PCM recording from 12 to 36 aligned 16-KiB chunks (approximately 3.07 seconds at stereo 48 kHz, 16-bit), changed combined digital gain from 0.5x to 1.5x, and clamped resulting samples to +/-24000 before playback to reduce clipping and loud spikes. Extended the playback wait to 7.5 seconds so the longer voice clip is allowed to finish. This is software gain, not an undocumented hardware microphone sensitivity setting. No Nintendo audio mix is modified, and separate voice/game volume controls remain a future background feature. Audio is neither saved nor network-transmitted. The resident NSO remains unchanged. The code still needs local build and hardware validation.

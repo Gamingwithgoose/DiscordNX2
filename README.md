@@ -75,3 +75,7 @@ Output: `/kaihen/discordnx2-hardware.txt` (same as before). Look for the header 
 ## v0.8 — Longer, louder voice loopback
 
 Voice playback has now been heard on real Switch 2 hardware, though it required unusually loud speech. Pull and run `Build-NRO.bat`; transfer **ONLY** `dist/DiscordNX2.nro`, never the current resident NSO. The foreground test captures about three seconds of speech and plays it back after recording ends, with 1.5x combined digital amplitude versus 0.5x in v0.7, capped at +/-24000 to reduce clipping. Speak at a normal volume and keep the Switch 2 playback volume modest. The log remains `/kaihen/discordnx2-hardware.txt`. This does not yet change hardware microphone sensitivity, adjust game volume, or mix Discord call audio during gameplay. Independent voice and game volume settings are design targets for the later voice engine, not functional controls in this test.
+
+## v0.9 — smoother speech playback
+
+User confirmed v0.8 was louder but had audible popping/crackling. v0.9 keeps the ~3-second capture and uses a whole-recording peak-aware gain (up to 1.5x) instead of hard clipping individual samples. It adds 10ms fade-in/out and logs raw peak and likely discontinuities. Pull, run `Build-NRO.bat`, transfer ONLY `dist/DiscordNX2.nro` and do not touch NSO. After speaking normally, send `/kaihen/discordnx2-hardware.txt` and say whether pops occur during words or only at playback start/end. It still doesn't make live Discord calls or mix game volume.

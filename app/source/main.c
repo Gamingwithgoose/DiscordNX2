@@ -393,17 +393,10 @@ static void voice_capture_test(void) {
         }
         if(peak<100)quiet++;
         if(voice_used+valid<=sizeof(voice_output)) {
-            for(size_t i=0;i<valid/2;i++) {
-                /* Digital mic gain 2.0x and playback scaling 0.75x
-                 * yield 1.5x total, versus v0.7's 0.5x. Limit peaks
-                 * to +/-24000 to reduce clipping and surprise volume.
-                 */
-                int sample=(int)((const int16_t*)voice_input)[i];
-                int amplified=(sample*3)/2;
-                if(amplified>24000)amplified=24000;
-                if(amplified< -24000)amplified= -24000;
-                ((int16_t*)(voice_output+voice_used))[i]=(int16_t)amplified;
-            }
+            /* Preserve unchanged PCM until all chunks are captured.
+             * One consistent gain avoids hard clipping at loud syllables.
+             */
+            memcpy(voice_output+voice_used,voice_input,valid);
             voice_used+=valid;
         }
         passed++;
@@ -414,11 +407,66 @@ static void voice_capture_test(void) {
     Result stop=audinStopAudioIn();
     diagf("voice audinStopAudioIn=%08x\n",stop);
     audinExit();
-    diagf("voice captured_frames=%u errors=%u quiet_frames=%u pcm_bytes=%u combined_playback_gain=1.5 limiter=24000\n",
+    voice_prepare_playback();
+    diagf("voice captured_frames=%u errors=%u quiet_frames=%u pcm_bytes=%u adaptive_peak_gain=1.5max fade_ms=10\n",
           passed,failed,quiet,(unsigned)voice_used);
     diagf("voice capture checkpoint=%08x\n",write_diagnostics());
 }
 
+/* Process the entire recording as one signal rather than hard-clipping
+ * each chunk separately. A global gain and short fade at the endpoints
+ * avoid some distortion and abrupt playback clicks. Other pops could
+ * still originate in capture discontinuities or audio hardware.
+ */
+static void voice_prepare_playback(void) {
+    if(!voice_used) return;
+    int16_t *samples=(int16_t*)voice_output;
+    const size_t total=voice_used/sizeof(int16_t);
+    int peak=0, discontinuities=0, boundary_jumps=0;
+    int previous=0;
+    for(size_t i=0;i<total;i++) {
+        int v=samples[i],a=v<0?-v:v;
+        if(a>peak)peak=a;
+        if(i>=2 && (i%2)==0) {
+            int delta=v-previous;
+            if(delta<0) delta=-delta;
+            if(delta>10000) discontinuities++;
+        }
+        previous=v;
+        /* 16 KiB recording chunks; compare corresponding channel.
+         * A large jump across this boundary may indicate dropped samples.
+         */
+        if(i>=VOICE_CHUNK_BYTES/2 && ((i%(VOICE_CHUNK_BYTES/2))<2)) {
+            int diff=v-(int)samples[i-VOICE_CHUNK_BYTES/2];
+            if(diff<0)diff=-diff;
+            if(diff>10000)boundary_jumps++;
+        }
+    }
+    /* Target 1.5x whenever possible; reduce globally if louder speech
+     * would exceed 24000. Avoid per-sample hard limiting.
+     */
+    float gain=1.5f;
+    if(peak>0 && ((float)peak*gain)>24000.0f)gain=24000.0f/(float)peak;
+    const size_t fade_frames=480; /* 10 ms at 48kHz */
+    const size_t frames=total/2;
+    for(size_t frame=0;frame<frames;frame++) {
+        float fade=1.0f;
+        if(frame<fade_frames)fade=(float)frame/(float)fade_frames;
+        if(frames-1-frame<fade_frames) {
+            float end=(float)(frames-1-frame)/(float)fade_frames;
+            if(end<fade)fade=end;
+        }
+        for(size_t channel=0;channel<2;channel++) {
+            size_t i=frame*2+channel;
+            int result=(int)((float)samples[i]*gain*fade);
+            if(result>24000)result=24000;
+            if(result< -24000)result= -24000;
+            samples[i]=(int16_t)result;
+        }
+    }
+    diagf("signal original_peak=%d gain_x100=%u limiting_target=24000 channel_jump_gt10000=%d chunk_boundary_flags=%d fade_ms=10\n",
+          peak,(unsigned)(gain*100.0f),discontinuities,boundary_jumps);
+}
 static void voice_playback_test(void) {
     diagf("\n[VOICE: AUDIBLE DELAYED PLAYBACK]\n");
     if(!voice_used) {
@@ -502,8 +550,8 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 voice gain and extended loopback diagnostic v0.8\n");
-    diagf("Foreground-only, ~3 seconds capture, 1.5x combined gain with limiting, then delayed playback.\n");
+    diagf("DiscordNX2 smoother voice loopback diagnostic v0.9\n");
+    diagf("Foreground-only, ~3 seconds PCM capture, adaptive global gain and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
@@ -514,7 +562,7 @@ static void hardware_report(void) {
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.8. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.9. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }
