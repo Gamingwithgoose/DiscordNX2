@@ -6,7 +6,7 @@
  * features are locked until an actual supported implementation exists.
  */
 #include "graphical_ui.h"
-#include "discord_lan_pair.h"
+#include "vendor/qrcodegen.h"
 #include <switch.h>
 #include <switch/display/framebuffer.h>
 #include <stdio.h>
@@ -104,8 +104,29 @@ static void item(int x,int y,int w,int h,const char *name,
     text_line(x+24,y+15,name,C_WHITE,3,30);
     text_line(x+24,y+53,hint,C_MUTED,2,44);
 }
-static void draw(const char *feedback,int tab,int selection,int focus,int pairing_code) {
+/* Reusable native QR renderer; only encode URLs provided by a validated
+ * future authentication session. No static "login" QR is displayed. */
+static uint8_t qr_temp[qrcodegen_BUFFER_LEN_MAX];
+static uint8_t qr_data[qrcodegen_BUFFER_LEN_MAX];
+static int qr_render_url(int x,int y,int area,const char *url) {
+    if(!url || strncmp(url,"https://discord.com/",20)!=0)return 0;
+    if(!qrcodegen_encodeText(url,qr_temp,qr_data,qrcodegen_Ecc_MEDIUM,
+                             qrcodegen_VERSION_MIN,qrcodegen_VERSION_MAX,
+                             qrcodegen_Mask_AUTO,true))return 0;
+    int size=qrcodegen_getSize(qr_data);
+    if(size<=0)return 0;
+    int pitch=area/(size+8);
+    if(pitch<1)return 0;
+    int total=(size+8)*pitch;
+    rect(x,y,total,total,C_WHITE);
+    for(int row=0;row<size;row++)for(int col=0;col<size;col++)
+        if(qrcodegen_getModule(qr_data,col,row))
+            rect(x+(col+4)*pitch,y+(row+4)*pitch,pitch,pitch,C_DARK);
+    return size;
+}
+static void draw(const char *feedback,int tab,int selection,int focus,int qr_preview) {
     rect(0,0,W,H,C_BG);
+    if(qr_preview)qr_render_url(800,160,340,"https://discord.com/activate");
     rect(0,0,268,H,C_SIDEBAR);
     rect(0,0,268,9,C_PRIMARY);
     text_line(28,42,"DISCORDNX2",C_WHITE,4,18);
@@ -119,10 +140,9 @@ static void draw(const char *feedback,int tab,int selection,int focus,int pairin
         text_line(34,y+7,tabs[t],tab==t?C_WHITE:C_MUTED,3,18);
     }
     rect(19,635,231,54,C_CARD);
-    text_line(31,652,"LOCAL BUILD 0.19",C_MUTED,2,23);
+    text_line(31,652,"LOCAL BUILD 0.20",C_MUTED,2,23);
 
-    const Dnx2PairProfile *profile=dnx2PairProfile();
-    pill(1080,36,160,profile->paired?"PAIRED":"NO LOGIN",profile->paired?C_GREEN:C_CARD_HI);
+    pill(1080,36,160,"NO LOGIN",C_CARD_HI);
     text_line(308,40,tabs[tab],C_WHITE,4,26);
     text_line(309,93,"DISCORDNX2 - NATIVE CLIENT FOUNDATION",C_MUTED,2,50);
     line(310,139,930,C_LINE);
@@ -135,49 +155,27 @@ static void draw(const char *feedback,int tab,int selection,int focus,int pairin
         item(310,376,930,107,"CONNECTIVITY CHECK","PUBLIC GATEWAY - NO ACCOUNT LOGIN",focus==1&&focus==1&&selection==0);
         item(310,501,930,107,"FULL HARDWARE TEST","AUDIO, PACKETS, UDP AND DISCORD GATEWAY",focus==1&&focus==1&&selection==1);
     } else if(tab==1) {
-        if(profile->paired) {
-            pill(310,165,265,"PROFILE LOADED",C_GREEN);
-            text_line(593,176,profile->display_name,C_WHITE,3,25);
-            text_line(315,217,"YOUR DISCORD SERVERS",C_WHITE,3,32);
-            int start=(selection/7)*7;
-            if(start>=profile->count)start=0;
-            if(profile->count==0)
-                text_line(315,291,"NO SERVERS RETURNED BY OAUTH",C_MUTED,3,35);
-            for(int i=0;i<7 && start+i<profile->count;i++) {
-                int index=start+i;
-                int y=262+i*48;
-                rect(310,y,925,42,index==profile->selected?C_CARD_HI:C_CARD);
-                if(focus==1&&selection==index)rect(310,y,7,42,C_GREEN);
-                text_line(333,y+10,profile->guilds[index].name,C_WHITE,3,39);
-            }
-            text_line(314,616,"SELECT SERVER WITH A - VOICE CONNECTION NOT AVAILABLE",C_WARN,2,62);
-        } else {
-            block(310,172,930,360,C_CARD);
-            pill(343,201,260,"NOT SIGNED IN",C_WARN);
-            text_line(343,266,"PAIR YOUR DISCORD ACCOUNT",C_WHITE,4,35);
-            text_line(343,324,"RUN DISCORD-PAIR.BAT ON A WINDOWS PC FIRST.",C_MUTED,2,58);
-            text_line(343,365,"THEN SELECT PAIR WITH PC BELOW.",C_MUTED,2,54);
-            item(343,410,864,99,"PAIR WITH PC","TRANSFERS PROFILE METADATA ONLY - NO TOKEN",focus==1);
-            if(pairing_code>=0) {
-                char code_line[80];
-                snprintf(code_line,sizeof(code_line),"VERIFY CODE: %06d ON YOUR PC",pairing_code);
-                text_line(343,548,code_line,C_WARN,3,50);
-            }
-        }
+        block(310,172,930,433,C_CARD);
+        pill(343,201,305,"AUTH NOT READY",C_WARN);
+        text_line(343,264,"DISCORD QR LOGIN",C_WHITE,4,33);
+        text_line(343,316,"NO ACCOUNT TOKEN IS ACTIVE.",C_MUTED,3,46);
+        text_line(343,361,"REMOTE AUTH REQUIRES SECURE RSA SESSION SUPPORT.",C_MUTED,2,58);
+        item(343,420,866,95,"TEST REMOTE AUTH CONNECTION",
+             "REAL DISCORD REMOTE AUTH WEBSOCKET HELLO",focus==1&&selection==0);
+        text_line(343,554,"QR SCAN AUTHENTICATION IS NOT ENABLED YET.",C_WARN,2,57);
     } else if(tab==2) {
         block(310,172,930,355,C_CARD);
         pill(342,200,300,"VOICE DISCONNECTED",C_WARN);
         text_line(342,271,"VOICE CHANNEL",C_WHITE,4,38);
         text_line(342,333,"NO ACTIVE DISCORD VOICE SESSION",C_MUTED,3,49);
-        if(profile->paired && profile->count>0)
-            text_line(342,470,profile->guilds[profile->selected].name,C_WHITE,3,39);
         text_line(342,383,"OPUS AND DAVE ARE NOT CONNECTED YET.",C_MUTED,2,58);
         text_line(342,420,"OPEN MIC IS NOT TRANSMITTING.",C_MUTED,2,52);
     } else {
         item(310,174,930,98,"FULL INTEGRATION TEST","MIC, PLAYBACK, PACKETS, UDP AND GATEWAY",focus==1&&selection==0);
         item(310,287,930,98,"DISCORD GATEWAY TEST","REAL TLS + WEBSOCKET HELLO",focus==1&&selection==1);
         item(310,400,930,98,"MICROPHONE AND PLAYBACK","LOCAL RECORD, PLAY, ENCODE AND DECODE",focus==1&&selection==2);
-        item(310,513,930,98,"SUSTAINED MICROPHONE","BOUNDED CAPTURE STABILITY TEST",focus==1&&selection==3);
+        item(310,513,930,75,"SUSTAINED MICROPHONE","BOUNDED CAPTURE STABILITY",focus==1&&selection==3);
+        item(310,590,930,48,"REMOTE AUTH GATEWAY","SECURE QR LOGIN NETWORK FOUNDATION",focus==1&&selection==4);
     }
     rect(294,641,963,58,C_SIDEBAR);
     text_line(315,657,"LEFT: MENU   RIGHT: CONTENT   UP/DOWN: MOVE   A: OPEN",C_MUTED,2,68);
@@ -185,10 +183,10 @@ static void draw(const char *feedback,int tab,int selection,int focus,int pairin
     if(focus==0)text_line(311,590,"SIDEBAR FOCUS - PRESS RIGHT FOR CONTENT",C_WARN,2,52);
     else text_line(311,590,"CONTENT FOCUS - PRESS LEFT FOR SIDEBAR",C_WARN,2,52);
 }
-static int options_for(int tab){const Dnx2PairProfile *p=dnx2PairProfile();return tab==0?2:tab==1?(p->paired?p->count:1):tab==3?4:0;}
+static int options_for(int tab){return tab==0?2:tab==1?1:tab==3?5:0;}
 static int action_for(int tab,int selection) {
     if(tab==0)return selection==0?2:1;
-    if(tab==3)return selection==0?1:selection==1?2:selection==2?3:4;
+    if(tab==3)return selection==0?1:selection==1?2:selection==2?3:selection==3?4:5;
     return 0;
 }
 int dnx2GraphicalMenu(void) {
@@ -203,7 +201,6 @@ int dnx2GraphicalMenu(void) {
     PadState pad={0};padInitializeDefault(&pad);
     int tab=0,sel=0,action=0;
     int focus=0; /* 0 = left sidebar; 1 = right content */
-    int pairing_code=-1;
     char status[128]="SELECT AN OPTION";
     int analog_prior=0; /* analog stick edges; no auto-repeating tabs */
     int dirty=1;
@@ -213,7 +210,7 @@ int dnx2GraphicalMenu(void) {
             pixels=(uint32_t*)framebufferBegin(&fb,&stride);
             if(!pixels) {action=-1;break;}
             stride_pixels=(int)(stride/4);
-            draw(status,tab,sel,focus,pairing_code);
+            draw(status,tab,sel,focus,0);
             framebufferEnd(&fb);
             pixels=NULL;dirty=0;
         }
@@ -239,7 +236,7 @@ int dnx2GraphicalMenu(void) {
             if(focus==1) {focus=0;dirty=1;}
         } else if(down & HidNpadButton_AnyRight) {
             if(focus==0 && options_for(tab)>0) {focus=1;sel=0;dirty=1;}
-            /* Empty server / voice panels remain on the sidebar. */
+            /* Voice has no actions; Servers can test remote-auth gateway. */
         }
         int n=focus==0?4:options_for(tab);
         if(n>0&&(down & HidNpadButton_AnyUp)) {
@@ -256,32 +253,8 @@ int dnx2GraphicalMenu(void) {
             if(focus==0) {
                 if(options_for(tab)>0){focus=1;sel=0;dirty=1;}
             } else if(tab==1) {
-                if(dnx2PairProfile()->paired) {
-                    dnx2PairSelect(sel);
-                    snprintf(status,sizeof(status),"SELECTED SERVER - VOICE NOT YET IMPLEMENTED");
-                } else {
-                    Result randrc=csrngInitialize();
-                    if(R_SUCCEEDED(randrc)) {
-                        uint32_t random_value=0;
-                        randrc=csrngGetRandomBytes(&random_value,sizeof(random_value));
-                        csrngExit();
-                        if(R_SUCCEEDED(randrc)) {
-                            pairing_code=(int)(random_value%1000000u);
-                            u32 next_stride=0;
-                            pixels=(uint32_t*)framebufferBegin(&fb,&next_stride);
-                            if(pixels) {
-                                stride_pixels=(int)(next_stride/4);
-                                draw("PAIRING - CONFIRM MATCHING CODE ON YOUR PC",tab,sel,focus,pairing_code);
-                                framebufferEnd(&fb);
-                                pixels=NULL;
-                            }
-                            dnx2PairReceive((unsigned)pairing_code,status,sizeof(status));
-                            pairing_code=-1;
-                            sel=0;
-                        } else snprintf(status,sizeof(status),"SECURE RANDOM GENERATION FAILED");
-                    } else snprintf(status,sizeof(status),"SECURE RANDOM SERVICE UNAVAILABLE");
-                }
-                dirty=1;
+                action=5; /* Remote Auth TLS + HELLO, not sign-in. */
+                break;
             } else {
                 action=action_for(tab,sel);
                 if(action>0)break;

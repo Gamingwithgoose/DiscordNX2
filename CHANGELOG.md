@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.20 standalone native auth foundation
+
+Removed v0.19 Windows PC pairing workflow from the NRO startup and Servers screen; preserved the previous implementation only for reference. Added a direct Switch 2 remote-auth WebSocket TLS+HELLO probe to Discord's remote-auth Gateway with no credentials or token handling, wired it into the graphical Servers/Diagnostics views, imported Project Nayuki MIT QR library and linked an on-device QR renderer for future legitimate session-bound URLs. No QR is presented as a working login before a verified remote-auth session exists. The actual secure RSA exchange, fingerprint validation, session authentication, server navigation and voice support remain unimplemented. Existing audio stack and installed resident NSO untouched.
+
 ## November 17, 2026 — v0.19 Discord OAuth LAN profile pairing
 
 Added opt-in PC OAuth PKCE metadata bridge (Discord-Pair.bat, tools/discord_pair.py) with UDP discovery, explicit matching six-digit approval, and one-shot HTTP metadata delivery to Switch 2; no Discord tokens leave PC memory. Added NRO LAN pairing client, secure random challenge generation, account display name + real server list rendering and server selection on the existing graphical Servers tab, with bounded network timeout and no stored profile on SD. Integrated new module into NRO Makefile. Voice remains unavailable; Discord identify/guilds OAuth does not authorize voice and the PC bridge is temporary, local-LAN-only, and cannot replace a fully native user client. No resident NSO change.

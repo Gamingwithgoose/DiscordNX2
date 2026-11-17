@@ -21,9 +21,11 @@ $(BUILD)/discord_gateway_probe.o: source/discord_gateway_probe.c source/discord_
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/graphical_ui.o: source/graphical_ui.c source/graphical_ui.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/discord_lan_pair.o: source/discord_lan_pair.c source/discord_lan_pair.h | $(BUILD)
+$(BUILD)/discord_remote_probe.o: source/discord_remote_probe.c source/discord_gateway_probe.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_lan_pair.o
+$(BUILD)/qrcodegen.o: source/vendor/qrcodegen.c source/vendor/qrcodegen.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@

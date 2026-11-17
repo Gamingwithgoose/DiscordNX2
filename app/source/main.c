@@ -944,6 +944,14 @@ static void run_gui_action(int action) {
     else if(action==2)run_discord_only();
     else if(action==3)run_voice_only();
     else if(action==4)run_stress_only();
+    else if(action==5) {
+        diag_len=0;
+        diagf("DiscordNX2 v0.20 Remote Auth Gateway only - NO ACCOUNT LOGIN\n");
+        Dnx2DiscordProbe result=dnx2DiscordRemoteAuthProbe(diagf);
+        diagf("remote-auth tcp=%u tls=%u websocket=%u hello=%u interval=%u\n",result.tcp_ok,result.tls_ok,result.websocket_ok,result.hello_ok,result.hello_interval_ms);
+        diagf("report_write=%08x\n",write_diagnostics());
+        (void)write_diagnostics();
+    }
 }
 static void run_ui(void) {
     /* The framebuffer is released before an audio/network action begins, so
