@@ -444,11 +444,10 @@ static void voice_prepare_playback(void) {
             if(diff>10000)boundary_jumps++;
         }
     }
-    /* Target 1.5x whenever possible; reduce globally if louder speech
-     * would exceed 24000. Avoid per-sample hard limiting.
+    /* Diagnostic A/B test: unity gain (no boost or peak limiter).
+     * Keep only the short fade to avoid playback start/end clicks.
      */
-    float gain=1.5f;
-    if(peak>0 && ((float)peak*gain)>24000.0f)gain=24000.0f/(float)peak;
+    const float gain=1.0f;
     const size_t fade_frames=480; /* 10 ms at 48kHz */
     const size_t frames=total/2;
     for(size_t frame=0;frame<frames;frame++) {
@@ -460,13 +459,11 @@ static void voice_prepare_playback(void) {
         }
         for(size_t channel=0;channel<2;channel++) {
             size_t i=frame*2+channel;
-            int result=(int)((float)samples[i]*gain*fade);
-            if(result>24000)result=24000;
-            if(result< -24000)result= -24000;
+            int result=(int)((float)samples[i]*fade);
             samples[i]=(int16_t)result;
         }
     }
-    diagf("signal original_peak=%d gain_x100=%u limiting_target=24000 channel_jump_gt10000=%d chunk_boundary_flags=%d fade_ms=10\n",
+    diagf("signal original_peak=%d gain_x100=%u limiting_target=none channel_jump_gt10000=%d chunk_boundary_flags=%d fade_ms=10\n",
           peak,(unsigned)(gain*100.0f),discontinuities,boundary_jumps);
 }
 
@@ -603,8 +600,8 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 tone vs microphone playback diagnostic v0.10\n");
-    diagf("Foreground-only, ~3 seconds PCM capture, adaptive global gain and 10ms fade, then playback.\n");
+    diagf("DiscordNX2 unity-gain voice playback diagnostic v0.11\n");
+    diagf("Foreground-only, ~3 seconds PCM capture, unity gain 1.0x and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
@@ -617,7 +614,7 @@ static void hardware_report(void) {
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.10. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.11. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }

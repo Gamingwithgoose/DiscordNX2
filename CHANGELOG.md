@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.11 unity-gain audio comparison
+
+The generated reference tone was clean, but recorded speech still popped. Changed only recorded-speech playback from the adaptive amplification used in v0.9/v0.10 back to unamplified 1.0x PCM, removing the 24000 peak limiter. The 10 ms start/end fades, roughly three-second capture, reference tone, diagnostic logging and localhost network probe remain unchanged. This isolates whether the amplification and limiting contribute to popping; it does not claim to fix capture continuity. No NSO modifications. Requires local compilation and real hardware playback comparison.
+
 ## November 17, 2026 — v0.10 controlled audio-output comparison
 
 In the v0.9 real hardware report, all 36 PCM capture buffers succeeded and audio output released its buffer, but the user still heard popping. The source PCM showed four large same-channel sample jumps, although no input clipping; the localhost UDP test also failed during `bsdInitialize` with `00001759`. To distinguish speaker/output-path artifacts from microphone processing artifacts, this release adds a short, quiet synthetic 400 Hz triangle-wave reference tone using the same audio-output service, with a fade at both ends, before recorded speech playback. The source and NSO are not changed beyond this foreground diagnostic. It does not claim the pop is fixed. Local compile/hardware testing still required.

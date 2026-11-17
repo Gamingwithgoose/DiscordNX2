@@ -2,7 +2,7 @@
 
 I want Discord voice chat on my Switch 2 while playing games, with the C button as push-to-talk. This is the first hardware test, **not a working Discord voice client**.
 
-**CURRENT TESTING INSTRUCTIONS (v0.7): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
+**CURRENT TESTING INSTRUCTIONS (v0.11): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
 
 Right now the project builds a homebrew NRO plus a kaiHEN background NSO. The NRO asks the background plugin for a handshake, its status and counters, and permission to open basic HID, audio-input, audio-output and network service sessions. It saves the results to the SD card. Before attempting Discord, I need to prove that a plugin can stay running while a game is open, that C can be read during gameplay, and that microphone and audio playback work at the same time as a game.
 
@@ -83,3 +83,7 @@ User confirmed v0.8 was louder but had audible popping/crackling. v0.9 keeps the
 ## v0.10 — Reference tone versus microphone playback
 
 A 0.5-second quiet synthetic tone now plays before the familiar recorded voice. Listen for any clicks during the tone and compare with the speech playback. If the tone is clean but voice cracks, microphone capture/processing is a more likely cause; if the tone also pops, output buffering/device behavior is suspect. Pull, run `Build-NRO.bat` and copy ONLY the NRO. Retrieve `/kaihen/discordnx2-hardware.txt`; do not replace NSO or reboot. UDP test initialization returned `00001759` in the last report and remains an open networking issue.
+
+## v0.11 — Unity-gain playback comparison
+
+The synthetic reference tone sounded clean, but recorded speech still popped at v0.10. This test plays the recorded voice at its native PCM level (gain 1.0x, **no amplification and no clipping limiter**) with the same 10ms fade at both ends. It retains a quiet reference tone and the original three-second recording. Speak naturally; recorded speech will sound quieter than v0.8/v0.9. Pull, run `Build-NRO.bat`, and FTP ONLY `dist/DiscordNX2.nro`, leaving the existing resident NSO untouched. Compare how often the voice pops, and send `/kaihen/discordnx2-hardware.txt`. No Discord call or game-audio mixing yet.
