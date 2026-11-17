@@ -1,5 +1,9 @@
 # Changelog
 
+## November 17, 2026 — v0.13 streaming output queue based on KaiPlayer
+
+The reference tone also clicked slightly near its ending and recorded speech still popped after a silence-tail experiment. Inspected KaiPlayer (MIT) and switch2iptv; KaiPlayer uses three 8-KiB AudioOutBuffer slots, a persistent output service, and a queue/reclaim loop, whereas switch2iptv delegates its audio path to mpv. Replaced the one-large-buffer output in the foreground NRO with three rotating aligned buffers for both reference tone and microphone playback, retaining an end-of-stream silence tail and bounded diagnostics. Added flush on stop. This targets output scheduling/queue reuse rather than changing microphone gain. The implementation is adapted to our short buffered test, not a full copy of KaiPlayer's thread architecture. Nothing alters the resident NSO. Requires local compilation and physical console testing.
+
 ## November 17, 2026 — v0.12 output silence transition test
 
 User noticed the generated tone clicks near its stop as well as popping during voice playback, making output transition a plausible contributor. Added a 250ms aligned zero-PCM buffer queued behind tone and voice audio, bounded buffer-drain logging, and a brief delay before stopping each output stream. Preserved unity gain and existing audio capture. This is a diagnostic hypothesis, not a confirmed correction. No changes to NSO or kaiHEN; local build and hardware testing required.

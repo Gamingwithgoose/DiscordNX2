@@ -473,130 +473,131 @@ static void voice_prepare_playback(void) {
  */
 static unsigned char reference_tone[0x18000] __attribute__((aligned(0x1000)));
 
-/* Queue a zero-PCM tail so the output device receives silence before stop. */
-static unsigned char output_silence[0xc000] __attribute__((aligned(0x1000)));
-static void queue_silence_tail(AudioOutBuffer *tail) {
-    memset(output_silence,0,sizeof(output_silence));
-    memset(tail,0,sizeof(*tail));
-    tail->buffer=output_silence;
-    tail->buffer_size=sizeof(output_silence);
-    tail->data_size=sizeof(output_silence);
-}
-static void drain_playback(AudioOutBuffer *main_buffer, AudioOutBuffer *tail, u64 timeout) {
-    bool done_main=false,done_tail=false;
-    for(unsigned attempt=0;attempt<4 && (!done_main||!done_tail);attempt++) {
-        AudioOutBuffer *released=NULL;
-        u32 count=0;
-        Result wr=audoutWaitPlayFinish(&released,&count,timeout);
-        diagf("drain attempt=%u result=%08x count=%u released_main=%u released_tail=%u\n",
-            attempt,wr,count,released==main_buffer,released==tail);
-        if(R_FAILED(wr))break;
-        bool pending_main=true,pending_tail=true;
-        Result mr=audoutContainsAudioOutBuffer(main_buffer,&pending_main);
-        Result tr=audoutContainsAudioOutBuffer(tail,&pending_tail);
-        if(R_SUCCEEDED(mr)&&!pending_main)done_main=true;
-        if(R_SUCCEEDED(tr)&&!pending_tail)done_tail=true;
-        if(count && released==main_buffer)done_main=true;
-        if(count && released==tail)done_tail=true;
+/* Three rotating 8 KiB buffers, modeled after KaiPlayer's playback
+ * scheduling (MIT; https://github.com/mizuiroame/kaiplayer).
+ * The source samples live in memory; copy them only into a released slot.
+ * Keep service running while queued, then stop and flush on teardown.
+ */
+#define PLAYBACK_SLOTS 3
+#define PLAYBACK_SLOT_BYTES 8192u
+#define PLAYBACK_SILENCE_BYTES 49152u  /* 256 ms @ 48 kHz stereo s16 */
+static unsigned char playback_slots[PLAYBACK_SLOTS][PLAYBACK_SLOT_BYTES] __attribute__((aligned(0x1000)));
+static AudioOutBuffer playback_desc[PLAYBACK_SLOTS];
+
+static void play_buffered_pcm(const unsigned char *pcm, size_t bytes, const char *tag) {
+    diagf("\n[%s / 3-BUFFER STREAMING OUTPUT]\n",tag);
+    Result rc=audoutInitialize();
+    diagf("stream initialize=%08x\n",rc);
+    if(R_FAILED(rc))return;
+    const u32 rate=audoutGetSampleRate(),ch=audoutGetChannelCount();
+    const unsigned fmt=(unsigned)audoutGetPcmFormat();
+    diagf("stream format rate=%u channels=%u pcm=%u\n",rate,ch,fmt);
+    if(rate!=48000 || ch!=2 || fmt!=(unsigned)PcmFormat_Int16){
+        diagf("stream SKIP: unsupported format\n");
+        audoutExit();
+        return;
     }
-    diagf("drain completed main=%u tail=%u\n",done_main,done_tail);
+    memset(playback_desc,0,sizeof(playback_desc));
+    bool queued[PLAYBACK_SLOTS]={false};
+    const size_t total=bytes+PLAYBACK_SILENCE_BYTES;
+    size_t position=0;
+    unsigned submissions=0, releases=0, queue_errors=0, wait_errors=0;
+    unsigned iterations=0;
+    Result start=audoutStartAudioOut();
+    diagf("stream start=%08x samples_bytes=%u silent_tail_bytes=%u\n",
+          start,(unsigned)bytes,(unsigned)PLAYBACK_SILENCE_BYTES);
+    if(R_SUCCEEDED(start)) {
+        /* Long enough for ~3 seconds speech and a short output tail.
+         * Each wait is bounded; a stalled audio service cannot loop forever.
+         */
+        while(iterations++<650) {
+            for(unsigned i=0;i<PLAYBACK_SLOTS;i++) {
+                if(queued[i] || position>=total)continue;
+                size_t amount=total-position;
+                if(amount>PLAYBACK_SLOT_BYTES)amount=PLAYBACK_SLOT_BYTES;
+                memset(playback_slots[i],0,PLAYBACK_SLOT_BYTES);
+                size_t from_voice=0;
+                if(position<bytes) {
+                    from_voice=bytes-position;
+                    if(from_voice>amount)from_voice=amount;
+                    memcpy(playback_slots[i],pcm+position,from_voice);
+                }
+                AudioOutBuffer *buffer=&playback_desc[i];
+                memset(buffer,0,sizeof(*buffer));
+                buffer->buffer=playback_slots[i];
+                buffer->buffer_size=PLAYBACK_SLOT_BYTES;
+                buffer->data_size=amount;
+                Result qr=audoutAppendAudioOutBuffer(buffer);
+                if(R_FAILED(qr)){
+                    diagf("stream queue failure=%08x slot=%u position=%u\n",
+                          qr,i,(unsigned)position);
+                    queue_errors++;
+                    break;
+                }
+                queued[i]=true;
+                position+=amount;
+                submissions++;
+            }
+            unsigned pending=0;
+            for(unsigned i=0;i<PLAYBACK_SLOTS;i++)pending+=queued[i]?1:0;
+            if((position>=total && pending==0) || queue_errors)break;
+            AudioOutBuffer *released=NULL;
+            u32 released_count=0;
+            Result wr=audoutWaitPlayFinish(&released,&released_count,20000000ULL);
+            if(R_FAILED(wr))wait_errors++;
+            /* The API can return a released count >1. Poll all slots,
+             * not just its first released pointer.
+             */
+            for(unsigned i=0;i<PLAYBACK_SLOTS;i++) {
+                if(!queued[i])continue;
+                bool contains=true;
+                Result cr=audoutContainsAudioOutBuffer(&playback_desc[i],&contains);
+                if(R_SUCCEEDED(cr) && !contains) {
+                    queued[i]=false;
+                    releases++;
+                } else if(R_FAILED(cr) && released==&playback_desc[i]) {
+                    queued[i]=false;
+                    releases++;
+                }
+            }
+        }
+        diagf("stream completed bytes_queued=%u total=%u submissions=%u releases=%u waits_failed=%u queue_errors=%u iterations=%u\n",
+              (unsigned)position,(unsigned)total,submissions,releases,wait_errors,queue_errors,iterations);
+        svcSleepThread(50000000LL);
+        Result stop=audoutStopAudioOut();
+        diagf("stream stop=%08x\n",stop);
+        bool flushed=false;
+        Result fr=audoutFlushAudioOutBuffers(&flushed);
+        diagf("stream flush=%08x flushed=%u\n",fr,flushed);
+    }
+    audoutExit();
 }
 
+static unsigned char reference_tone[0x18000] __attribute__((aligned(0x1000)));
 static void voice_reference_tone_test(void) {
-    diagf("\n[AUDIO OUTPUT REFERENCE: SYNTHETIC TONE]\n");
-    const unsigned sample_frames=24000; /* 0.5 seconds, 48 kHz stereo */
+    diagf("\n[AUDIO REFERENCE TONE]\n");
+    const unsigned frames=24000;
     int16_t *pcm=(int16_t*)reference_tone;
     memset(reference_tone,0,sizeof(reference_tone));
-    for(unsigned i=0;i<sample_frames;i++) {
-        unsigned phase=i%120;  /* 400 Hz */
-        int value=(phase<60)?((int)phase*100-3000):(9000-(int)phase*100);
+    for(unsigned i=0;i<frames;i++) {
+        unsigned phase=i%120;
+        int value=phase<60?(int)phase*100-3000:9000-(int)phase*100;
         unsigned ramp=i;
-        if(sample_frames-1-i<ramp)ramp=sample_frames-1-i;
+        if(frames-1-i<ramp)ramp=frames-1-i;
         if(ramp<480)value=(value*(int)ramp)/480;
         pcm[2*i]=(int16_t)value;
         pcm[2*i+1]=(int16_t)value;
     }
-    Result rc=audoutInitialize();
-    diagf("reference audoutInitialize=%08x\n",rc);
-    if(R_FAILED(rc))return;
-    if(audoutGetSampleRate()!=48000 || audoutGetChannelCount()!=2 ||
-       audoutGetPcmFormat()!=PcmFormat_Int16) {
-        diagf("reference skipped: output format unsupported\n");
-        audoutExit();
-        return;
-    }
-    rc=audoutStartAudioOut();
-    diagf("reference start=%08x\n",rc);
-    if(R_SUCCEEDED(rc)) {
-        AudioOutBuffer b={0};
-        b.buffer=reference_tone;
-        b.buffer_size=sizeof(reference_tone);
-        b.data_size=sample_frames*2*sizeof(int16_t);
-        rc=audoutAppendAudioOutBuffer(&b);
-        diagf("reference append=%08x\n",rc);
-        if(R_SUCCEEDED(rc)) {
-            AudioOutBuffer tail={0};
-            queue_silence_tail(&tail);
-            Result sr=audoutAppendAudioOutBuffer(&tail);
-            diagf("reference silence_append=%08x\n",sr);
-            if(R_SUCCEEDED(sr))drain_playback(&b,&tail,2500000000ULL);
-            else {
-                AudioOutBuffer *released=NULL;u32 n=0;
-                diagf("reference fallback_wait=%08x\n",audoutWaitPlayFinish(&released,&n,2500000000ULL));
-            }
-        }
-        svcSleepThread(50000000LL);
-        diagf("reference stop=%08x\n",audoutStopAudioOut());
-    }
-    audoutExit();
-    diagf("Listen: did this short quiet tone also pop? Compare to speech playback next.\n");
+    play_buffered_pcm(reference_tone,frames*2*sizeof(int16_t),"REFERENCE TONE");
 }
 
 static void voice_playback_test(void) {
-    diagf("\n[VOICE: AUDIBLE DELAYED PLAYBACK]\n");
-    if(!voice_used) {
-        diagf("SKIP: no successful captured audio buffers.\n");
+    if(!voice_used){
+        diagf("voice playback skipped: no captured PCM\n");
         return;
     }
-    Result rc=audoutInitialize();
-    diagf("voice audoutInitialize=%08x\n",rc);
-    if(R_FAILED(rc))return;
-    diagf("voice output rate=%u channels=%u format=%u\n",
-          audoutGetSampleRate(),audoutGetChannelCount(),(unsigned)audoutGetPcmFormat());
-    if(audoutGetSampleRate()!=48000 || audoutGetChannelCount()!=2 ||
-       audoutGetPcmFormat()!=PcmFormat_Int16) {
-        diagf("SKIP: output format mismatch.\n");
-        audoutExit();
-        return;
-    }
-    rc=audoutStartAudioOut();
-    diagf("voice audoutStartAudioOut=%08x\n",rc);
-    if(R_SUCCEEDED(rc)) {
-        AudioOutBuffer buffer={0};
-        buffer.buffer=voice_output;
-        buffer.buffer_size=sizeof(voice_output);
-        buffer.data_size=voice_used;
-        rc=audoutAppendAudioOutBuffer(&buffer);
-        diagf("voice audoutAppendAudioOutBuffer=%08x data_bytes=%u\n",rc,(unsigned)voice_used);
-        if(R_SUCCEEDED(rc)) {
-            AudioOutBuffer tail={0};
-            queue_silence_tail(&tail);
-            Result sr=audoutAppendAudioOutBuffer(&tail);
-            diagf("voice silence_append=%08x\n",sr);
-            if(R_SUCCEEDED(sr))drain_playback(&buffer,&tail,7500000000ULL);
-            else {
-                AudioOutBuffer *released=NULL;u32 count=0;
-                diagf("voice fallback_wait=%08x\n",audoutWaitPlayFinish(&released,&count,7500000000ULL));
-            }
-        }
-        svcSleepThread(50000000LL);
-        Result stop=audoutStopAudioOut();
-        diagf("voice audoutStopAudioOut=%08x\n",stop);
-    }
-    audoutExit();
-    diagf("If you did not hear your voice, report that; a successful API call is not audible playback proof.\n");
+    play_buffered_pcm(voice_output,voice_used,"CAPTURED SPEECH");
 }
-
 /* A network transport smoke test that sends only a fixed marker to itself.
  * Never sends microphone data or Discord credentials.
  */
@@ -640,7 +641,7 @@ static void voice_network_test(void) {
 
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 output-tail playback diagnostic v0.12\n");
+    diagf("DiscordNX2 streaming-buffer playback diagnostic v0.13\n");
     diagf("Foreground-only, ~3 seconds PCM capture, unity gain 1.0x and 10ms fade, then playback.\n");
     diagf("No C-button interception, no GameChat changes, no persistent mic recording.\n");
     diagf("initial report write=%08x\n",write_diagnostics());
@@ -654,7 +655,7 @@ static void hardware_report(void) {
     voice_network_test();
     service_trials();
     plugin_snapshot("after");
-    diagf("DONE v0.12. Microphone closed, audio output closed, network sockets closed.\n");
+    diagf("DONE v0.13. Microphone closed, audio output closed, network sockets closed.\n");
     diagf("final report write=%08x\n",write_diagnostics());
     (void)write_diagnostics();
 }

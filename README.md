@@ -2,7 +2,7 @@
 
 I want Discord voice chat on my Switch 2 while playing games, with the C button as push-to-talk. This is the first hardware test, **not a working Discord voice client**.
 
-**CURRENT TESTING INSTRUCTIONS (v0.12): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
+**CURRENT TESTING INSTRUCTIONS (v0.13): Build-NRO.bat only; transfer ONLY the NRO. Do not transfer or replace the NSO or restart kaiHEN. The initial setup steps further below are historical.**
 
 Right now the project builds a homebrew NRO plus a kaiHEN background NSO. The NRO asks the background plugin for a handshake, its status and counters, and permission to open basic HID, audio-input, audio-output and network service sessions. It saves the results to the SD card. Before attempting Discord, I need to prove that a plugin can stay running while a game is open, that C can be read during gameplay, and that microphone and audio playback work at the same time as a game.
 
@@ -91,3 +91,7 @@ The synthetic reference tone sounded clean, but recorded speech still popped at 
 ## v0.12 — Playback stop transition comparison
 
 Generated reference tone now receives an extra 250ms silence tail, as does microphone speech. Compare whether the tone-end click and speech popping improve. Build with `Build-NRO.bat` and FTP ONLY `dist/DiscordNX2.nro`; do not touch the NSO or restart kaiHEN. Send `/kaihen/discordnx2-hardware.txt`. This is a foreground-only diagnostic test.
+
+## v0.13 — KaiPlayer-inspired audio streaming buffer comparison
+
+Based on the MIT-licensed [KaiPlayer](https://github.com/mizuiroame/kaiplayer) output scheduling model, the v0.13 foreground NRO feeds three rotating aligned 8 KiB buffers (2,048 stereo frames each) and reuses a buffer only after the audio service reports it is no longer queued. Both the 400 Hz reference tone and the three-second recorded speech now use this path, followed by 256 ms of silent PCM. It logs the queue/release counts, wait errors, errors and flush status. This is a targeted test of buffer scheduling, not a claim that the popping is fixed. Pull then run `Build-NRO.bat`; FTP **only** `dist/DiscordNX2.nro` and leave the running NSO alone. Report any compile errors and whether the end-tone pop or recorded-speech pops change; retrieve `/kaihen/discordnx2-hardware.txt`. The separate [switch2iptv](https://github.com/davidkalil10/switch2iptv) project uses libmpv rather than exposing its own AudioOutBuffer scheduling, so it served as a secondary architectural reference, not code copied into this project.
