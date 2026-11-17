@@ -119,43 +119,68 @@ static void plugin_snapshot(const char *phase) {
     if(serviceIsActive(&hen)) serviceClose(&hen);
     if(serviceIsActive(&ro)) serviceClose(&ro);
 }
+
+/* C-button-focused observation. These stages do not suppress GameChat.
+ * Compare both Player 1 and handheld input, in addition to the normal
+ * merged pad mask. A C-only event may never be published to HID.
+ */
 static void controller_trials(void) {
-    diagf("\n[INPUT] 4 windows, 5 seconds each. A, B, C, then other controls.\n");
+    diagf("\n[C-BUTTON TRIALS / FOREGROUND ONLY]\n");
+    diagf("Please hold C after ~3 seconds. Keep holding for ~15 seconds.\n");
+    diagf("Then release, press C again, dismiss GameChat with B, and press A/B.\n");
+    diagf("This does NOT intercept GameChat. No PTT or Discord connection occurs.\n");
     Result rc=hidInitialize();
     diagf("hidInitialize=%08x\n",rc);
-    if (R_FAILED(rc)) return;
+    if(R_FAILED(rc)) return;
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);
-    PadState pad={};
-    padInitializeDefault(&pad);
-    const char *labels[]={"A: press/release A","B: press/release B","C: press/release C (GameChat may open)","Other: sticks/triggers/plus"};
-    for (unsigned phase=0;phase<4;phase++) {
-        u64 seen=0,last=0,unknown=0;
-        unsigned connected=0,changes=0,logged=0;
-        diagf("trial %u: %s\n",phase+1,labels[phase]);
-        for(unsigned i=0;i<250;i++) {
-            padUpdate(&pad);
-            const u64 buttons=padGetButtons(&pad);
-            seen|=buttons;
-            if(padIsConnected(&pad)) connected++;
-            if(buttons!=last) {
-                if(logged<24) {
-                    diagf("  sample=%u held=%016llx down=%016llx up=%016llx\n",
-                          i,(unsigned long long)buttons,
-                          (unsigned long long)padGetButtonsDown(&pad),
-                          (unsigned long long)padGetButtonsUp(&pad));
-                    logged++;
+    PadState primary={},handheld={},merged={};
+    padInitialize(&primary,HidNpadIdType_No1);
+    padInitialize(&handheld,HidNpadIdType_Handheld);
+    padInitializeDefault(&merged);
+    const char *label[]={
+        "Baseline: no buttons",
+        "Hold C continuously",
+        "Release C, do not press anything",
+        "Press C a few times",
+        "Press B to dismiss GameChat",
+        "Press A and B for comparison"
+    };
+    const u32 frames[]={150,750,250,500,400,300};
+    for(unsigned phase=0;phase<6;phase++) {
+        u64 prev[3]={0},seen[3]={0};
+        unsigned connected[3]={0},changed[3]={0},logged=0;
+        diagf("stage %u: %s, duration_ms=%u\n",
+              phase+1,label[phase],frames[phase]*20);
+        for(u32 i=0;i<frames[phase];i++) {
+            padUpdate(&primary);
+            padUpdate(&handheld);
+            padUpdate(&merged);
+            const PadState *pads[]={&primary,&handheld,&merged};
+            for(unsigned p=0;p<3;p++) {
+                u64 held=padGetButtons(pads[p]);
+                seen[p]|=held;
+                if(padIsConnected(pads[p])) connected[p]++;
+                if(held!=prev[p]) {
+                    if(logged<48) {
+                        diagf(" sample=%u source=%u held=%016llx down=%016llx up=%016llx\n",
+                            i,p,(unsigned long long)held,
+                            (unsigned long long)padGetButtonsDown(pads[p]),
+                            (unsigned long long)padGetButtonsUp(pads[p]));
+                        logged++;
+                    }
+                    changed[p]++;
+                    prev[p]=held;
                 }
-                changes++;
-                last=buttons;
             }
-            unknown |= buttons & ~((1ULL<<35)-1);
             svcSleepThread(20000000LL);
         }
-        diagf("trial %u summary connected=%u/250 transitions=%u seen=%016llx highbits=%016llx\n",
-             phase+1,connected,changes,(unsigned long long)seen,(unsigned long long)unknown);
-        /* Save intermediate results: if GameChat takes focus, earlier data remains. */
-        diagf("checkpoint write=%08x\n",write_diagnostics());
+        for(unsigned p=0;p<3;p++)
+            diagf(" stage=%u source=%u connected=%u/%u changes=%u seen=%016llx\n",
+                phase+1,p,connected[p],frames[phase],changed[p],
+                (unsigned long long)seen[p]);
+        diagf(" checkpoint=%08x\n",write_diagnostics());
     }
+    diagf("source 0=Player1; 1=Handheld; 2=Merged; no C-button bit assumed.\n");
     hidExit();
 }
 static void audio_trials(void) {
@@ -241,8 +266,8 @@ static void service_trials(void) {
 }
 static void hardware_report(void) {
     diag_len=0;
-    diagf("DiscordNX2 comprehensive foreground diagnostic v0.4\n");
-    diagf("20s controller trials + finite audio tests + plugin IPC.\n");
+    diagf("DiscordNX2 comprehensive C-button diagnostic v0.5\n");
+    diagf("47s scheduled C-button trials (Player1/Handheld/Merged) + audio + IPC.\n");
     diagf("No GameChat suppression; no Discord connection; no PCM file written.\n");
     diagf("initial write=%08x\n",write_diagnostics());
     plugin_snapshot("before");
