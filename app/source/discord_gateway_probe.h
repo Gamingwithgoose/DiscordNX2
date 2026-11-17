@@ -9,4 +9,5 @@ typedef struct {
     unsigned last_result, last_errno;
 } Dnx2DiscordProbe;
 Dnx2DiscordProbe dnx2DiscordGatewayProbe(Dnx2LogFn log);
+Dnx2DiscordProbe dnx2DiscordRemoteAuthProbe(Dnx2LogFn log);
 #endif
