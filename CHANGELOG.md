@@ -169,3 +169,13 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Decode non-200 HTTP bodies to identify only fixed CAPTCHA/rate-limit categories and bounded numeric API error codes. Never print response messages, CAPTCHA fields, ticket/token or raw bodies. No CAPTCHA bypass or automatic retries.
 - Add production-path host HTTP regression tests; passed successful token framing, outgoing request, CAPTCHA, chunked API rejection, truncation, rate limiting and state reset. Clean NRO build passed; live login remains unverified.
 - Pull main, Build-NRO.bat, FTP only NRO, retry phone approval. If blocked, stage-only hardware report now distinguishes the rejection. Audio, menus, font, controls, Gateway probes and resident NSO unchanged.
+
+
+## v0.26 - Discord-only interface and bounded login reads
+
+- Replace test dashboard with login/logout; retain only Dashboard, Servers and Voice chat. Remove diagnostic tab, connectivity/audio tests and test shortcuts from active interface.
+- Use smaller mixed-case shared-font text (Pretendo/bitmap fallback), explicit column bounds and generous QR padding. Fix auth text incorrectly clipped to sidebar width.
+- Save sanitized login progress at every stage, before UI/network waits. Use bounded nonblocking TLS I/O; preserve partial WebSocket headers/payloads across polls, reassemble text fragments and handle interleaved ping/pong.
+- Add production WS tests for partial frames, fragments, binary ping, oversized/masked/orphan rejection. Existing HTTP regression tests pass. NRO build and host menu/auth rendering checks passed.
+- Server rows use real cached guilds after successful login. Voice displays selected server plus channel/member disconnected states; channel/member networking and Discord voice remain unimplemented. Live login and console appearance still need hardware verification.
+- Pull main, Build-NRO.bat, transfer only NRO, Dashboard > Log in. No resident NSO changes. Stage-only hardware log is now written during login even if a later wait fails.

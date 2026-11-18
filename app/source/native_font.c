@@ -22,7 +22,7 @@ static struct {
     CachedGlyph glyphs[3][128];
     int initialized,pl_live;
 } font_state;
-static const int heights[3]={16,24,32};
+static const int heights[3]={18,22,28};
 static void destroy_cache(void) {
     for(int sz=0;sz<3;sz++)for(int c=0;c<128;c++){
         free(font_state.glyphs[sz][c].bitmap);
@@ -32,14 +32,12 @@ static void destroy_cache(void) {
 int dnx2FontInit(void) {
     if(font_state.initialized)return 1;
     const unsigned char *data=pretendo_font;
-    int idx=stbtt_GetFontOffsetForIndex(data,0);
-    if(idx<0 || !stbtt_InitFont(&font_state.info,data,idx)) {
-        if(R_FAILED(plInitialize(PlServiceType_User)))return 0;
+    int idx;
+    if(!R_FAILED(plInitialize(PlServiceType_User))){
         font_state.pl_live=1;
-        PlFontData font={0};
-        if(R_FAILED(plGetSharedFontByType(&font,PlSharedFontType_Standard)) ||
-           !font.address || font.size<64)goto fail;
-        data=(const unsigned char*)font.address;
+        PlFontData shared={0};
+        if(!R_FAILED(plGetSharedFontByType(&shared,PlSharedFontType_Standard)) && shared.address && shared.size>=64)
+            data=(const unsigned char*)shared.address;
     }
     /* Avoid parsing non-font wrappers as a TTF. */
     if(!((data[0]==0&&data[1]==1&&data[2]==0&&data[3]==0)||

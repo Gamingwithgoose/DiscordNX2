@@ -11,6 +11,7 @@
 #include "native_font.h"
 #include "brand_icon.h"
 #include <math.h>
+#include <ctype.h>
 #include "vendor/font8x8_basic.h"
 #include <switch.h>
 #include <switch/display/framebuffer.h>
@@ -34,6 +35,8 @@
 
 static uint32_t *pixels;
 static int stride_pixels;
+static int text_right=1240;
+static char auth_notice[128];
 static void rect(int x,int y,int width,int height,uint32_t color) {
     if(!pixels||width<=0||height<=0)return;
     if(x<0){width+=x;x=0;}if(y<0){height+=y;y=0;}
@@ -73,11 +76,11 @@ static void brand(int x,int y) {
  * Independent horizontal metrics preserve sidebar and card layout widths. */
 static void text_line(int x,int y,const char *s,uint32_t color,int scale,int maxchars) {
     if(!s||scale<1)return;
-    int right=x<268?252:(y<80 && x<1080?1060:1240);
+    int right=text_right;
     if(dnx2FontDraw(pixels,stride_pixels,right,H,x,y,s,color,scale,maxchars))return;
     const int horizontal=scale>=3?2:1;
     const int advance=6*scale;
-    for(int i=0;s[i]&&i<maxchars;i++) {
+    for(int i=0;s[i]&&i<maxchars && x+(i+1)*advance<=right;i++) {
         unsigned char ch=(unsigned char)s[i];
         if(ch>=128)ch='?';
         const unsigned char *g=(const unsigned char*)font8x8_basic[ch];
@@ -94,10 +97,6 @@ static void line(int x,int y,int width,uint32_t color){rect(x,y,width,2,color);}
 static void block(int x,int y,int w,int h,uint32_t color) {
     rounded(x,y,w,h,18,C_LINE);
     rounded(x+1,y+1,w-2,h-2,17,color);
-}
-static void pill(int x,int y,int w,const char *label,uint32_t color) {
-    rounded(x,y,w,35,11,color);
-    text_line(x+15,y+9,label,C_WHITE,2,28);
 }
 static void item(int x,int y,int w,int h,const char *name,
                  const char *hint,int active) {
@@ -127,86 +126,83 @@ static int qr_render_url(int x,int y,int area,const char *url) {
     return size;
 }
 static void draw(const char *feedback,int tab,int selection,int focus,int qr_preview) {
+    (void)feedback;(void)qr_preview;
+    const Dnx2Account *p=dnx2Account();
+    const char *tabs[]={"Dashboard","Servers","Voice chat"};
     rect(0,0,W,H,C_BG);
-    (void)feedback;
-    (void)qr_preview; /* QR URLs only shown by an authenticated live session. */
-    rounded(10,14,258,H-28,22,C_SIDEBAR);
-    brand(27,33);
-    text_line(102,54,"DISCORDNX2",C_WHITE,2,18);
-    text_line(29,91,"SWITCH 2 NATIVE",C_MUTED,2,22);
-    line(23,135,218,C_LINE);
-    const char *tabs[4]={"DASHBOARD","SERVERS","VOICE CHAT","DIAGNOSTICS"};
-    for(int t=0;t<4;t++) {
-        int y=175+t*86;
-        if(tab==t)rounded(20,y-9,232,65,14,focus==0?C_CARD_HI:C_CARD);
-        if(tab==t)rounded(20,y+7,4,33,2,focus==0?C_GREEN:C_PRIMARY);
-        text_line(34,y+7,tabs[t],tab==t?C_WHITE:C_MUTED,3,18);
+    rounded(16,16,252,688,20,C_SIDEBAR);
+    text_right=250;
+    brand(28,30);
+    text_line(104,50,"DiscordNX2",C_WHITE,2,20);
+    text_line(32,102,"Switch 2 Native",C_MUTED,2,24);
+    for(int t=0;t<3;t++){
+        int y=180+t*76;
+        if(t==tab)rounded(28,y,228,56,14,focus==0?C_CARD_HI:C_CARD);
+        if(t==tab)rounded(28,y+14,4,28,2,C_PRIMARY);
+        text_line(48,y+17,tabs[t],t==tab?C_WHITE:C_MUTED,3,24);
     }
-
-    const Dnx2Account *profile=dnx2Account();
-    pill(1080,36,160,profile->signed_in?"SIGNED IN":"NO LOGIN",profile->signed_in?C_GREEN:C_CARD_HI);
-    text_line(308,40,tabs[tab],C_WHITE,4,26);
-    text_line(309,93,"YOUR SERVERS. YOUR COMMUNITY.",C_MUTED,2,50);
-    line(310,139,930,C_LINE);
-    if(tab==0) {
-        block(310,224,930,130,C_CARD);
-        text_line(339,248,"WELCOME TO DISCORDNX2",C_WHITE,3,38);
-        text_line(339,291,"OPEN SERVERS TO SIGN IN WITH YOUR PHONE.",C_MUTED,2,60);
-        item(310,376,930,107,"CONNECTIVITY CHECK","PUBLIC GATEWAY - NO ACCOUNT LOGIN",focus==1&&selection==0);
-        item(310,501,930,107,"FULL HARDWARE TEST","AUDIO, PACKETS, UDP AND DISCORD GATEWAY",focus==1&&selection==1);
-    } else if(tab==1) {
-        if(profile->signed_in) {
-            pill(310,165,245,"ACCOUNT LOADED",C_GREEN);
-            text_line(573,178,profile->display_name,C_WHITE,3,28);
-            text_line(315,220,"YOUR DISCORD SERVERS",C_WHITE,3,38);
+    text_right=1240;
+    text_line(312,48,tabs[tab],C_WHITE,4,32);
+    line(312,112,920,C_LINE);
+    if(tab==0){
+        block(312,160,920,340,C_CARD);
+        text_line(344,196,p->signed_in?"Your account":"Welcome to DiscordNX2",C_WHITE,3,46);
+        text_line(344,248,p->signed_in?p->display_name:"Sign in using the Discord app on your phone.",C_MUTED,2,64);
+        item(344,332,856,96,p->signed_in?"Log out":"Log in with QR code",
+             p->signed_in?"Clear this session":"Scan the code, then approve on your phone",focus==1);
+    }else if(tab==1){
+        if(!p->signed_in){
+            block(312,160,920,170,C_CARD);
+            text_line(344,200,"Your servers will appear here",C_WHITE,3,50);
+            text_line(344,252,"Log in from Dashboard to continue.",C_MUTED,2,60);
+        }else{
             int start=(selection/7)*7;
-            if(start>=profile->server_count)start=0;
-            if(profile->server_count==0)
-                text_line(315,292,"YOUR ACCOUNT HAS NO SERVERS",C_MUTED,3,40);
-            for(int i=0;i<7&&start+i<profile->server_count;i++){
-                int index=start+i,y=262+i*46;
-                rounded(310,y,925,40,12,index==profile->selected?C_CARD_HI:C_CARD);
-                if(focus==1&&selection==index)rounded(316,y+8,4,24,2,C_GREEN);
-                text_line(333,y+8,profile->servers[index].name,C_WHITE,2,54);
+            if(!p->server_count)text_line(344,200,"This account has no servers.",C_MUTED,3,50);
+            for(int i=0;i<7 && start+i<p->server_count;i++){
+                int n=start+i,y=152+i*64;
+                rounded(312,y,920,52,12,focus==1&&selection==n?C_CARD_HI:C_CARD);
+                if(p->selected==n)rounded(322,y+14,4,24,2,C_GREEN);
+                text_line(344,y+16,p->servers[n].name,C_WHITE,2,70);
             }
-            if(selection>=profile->server_count || profile->server_count<7)
-                item(310,570,925,63,"LOG OUT","CLEAR SESSION METADATA",focus==1&&selection==profile->server_count);
-            text_line(314,614,"VOICE CHAT IS NOT AVAILABLE YET.",C_WARN,2,59);
-        } else {
-            block(310,172,930,433,C_CARD);
-            pill(343,201,315,"DISCORD SIGN IN",C_WARN);
-            text_line(343,265,"SIGN IN TO DISCORD",C_WHITE,4,35);
-            text_line(343,322,"SCAN WITH THE DISCORD APP ON YOUR PHONE.",C_MUTED,2,58);
-            text_line(343,369,"USE A TEST ACCOUNT - UNOFFICIAL CLIENT.",C_WARN,2,58);
-            item(343,430,864,110,"SIGN IN WITH QR CODE",
-                 "APPROVE SIGN IN ON YOUR PHONE",focus==1);
-            text_line(343,566,"TOKENS AND PRIVATE KEYS ARE NEVER SAVED.",C_MUTED,2,58);
         }
-    } else if(tab==2) {
-        block(310,172,930,355,C_CARD);
-        pill(342,200,300,"VOICE DISCONNECTED",C_WARN);
-        text_line(342,271,"VOICE CHANNEL",C_WHITE,4,38);
-        text_line(342,333,"NO ACTIVE DISCORD VOICE SESSION",C_MUTED,3,49);
-        text_line(342,383,"VOICE CHAT IS COMING IN A FUTURE UPDATE.",C_MUTED,2,58);
-        text_line(342,420,"OPEN MIC IS NOT TRANSMITTING.",C_MUTED,2,52);
-        if(profile->signed_in && profile->server_count>0)
-            text_line(342,473,profile->servers[profile->selected].name,C_WHITE,2,58);
-    } else {
-        item(310,174,930,98,"FULL INTEGRATION TEST","MIC, PLAYBACK, PACKETS, UDP AND GATEWAY",focus==1&&selection==0);
-        item(310,287,930,98,"DISCORD GATEWAY TEST","REAL TLS + WEBSOCKET HELLO",focus==1&&selection==1);
-        item(310,400,930,98,"MICROPHONE AND PLAYBACK","LOCAL RECORD, PLAY, ENCODE AND DECODE",focus==1&&selection==2);
-        item(310,513,930,75,"SUSTAINED MICROPHONE","BOUNDED CAPTURE STABILITY",focus==1&&selection==3);
-        item(310,590,930,48,"REMOTE AUTH GATEWAY","SECURE QR LOGIN NETWORK FOUNDATION",focus==1&&selection==4);
+    }else{
+        block(312,160,920,178,C_CARD);
+        text_line(344,190,"Server",C_MUTED,2,30);
+        text_line(344,224,p->signed_in&&p->server_count?p->servers[p->selected].name:"No server selected",C_WHITE,3,55);
+        text_line(344,280,"Channel: Not connected",C_MUTED,2,60);
+        block(312,364,920,248,C_CARD);
+        text_line(344,398,"Members",C_WHITE,3,40);
+        text_line(344,450,"No voice channel connected.",C_MUTED,2,60);
     }
-    rounded(294,655,963,49,14,C_SIDEBAR);
-    text_line(315,670,"LEFT: MENU   RIGHT: CONTENT   UP/DOWN: MOVE   A: OPEN",C_MUTED,2,68);
+    if(tab==0 && auth_notice[0] && !p->signed_in)text_line(344,536,auth_notice,C_MUTED,2,96);
+    text_line(312,670,"B: Back    A: Select    +: Exit",C_MUTED,2,60);
 }
-static int options_for(int tab){const Dnx2Account *p=dnx2Account();return tab==0?2:tab==1?(p->signed_in?p->server_count+1:1):tab==3?5:0;}
-static int action_for(int tab,int selection) {
-    if(tab==0)return selection==0?2:1;
-    if(tab==3)return selection==0?1:selection==1?2:selection==2?3:selection==3?4:5;
-    return 0;
+static void draw_auth(const char *phase,const char *qr_url){
+    text_right=1216;
+    rect(0,0,W,H,C_BG);
+    brand(64,38);
+    text_line(150,54,"DiscordNX2",C_WHITE,4,30);
+    text_line(64,124,"Sign in with your phone",C_MUTED,2,60);
+    block(64,180,1152,420,C_SIDEBAR);
+    if(qr_url && strncmp(qr_url,"https://discord.com/ra/",23)==0){
+        qr_render_url(800,216,344,qr_url);
+        text_right=760;
+        text_line(100,234,"Open Discord on your phone",C_WHITE,3,50);
+        text_line(100,294,"Go to Settings, then Scan QR code.",C_MUTED,2,60);
+        text_line(100,338,"Approve this login on your phone.",C_MUTED,2,60);
+    }else{
+        text_line(100,234,"Connecting your account",C_WHITE,3,50);
+        text_line(100,294,"Please wait. You can cancel with B.",C_MUTED,2,60);
+    }
+    text_right=1180;
+    char readable[128];
+    snprintf(readable,sizeof(readable),"%s",phase?phase:"Connecting");
+    for(size_t i=0;readable[i];i++)readable[i]=(char)tolower((unsigned char)readable[i]);
+    readable[0]=(char)toupper((unsigned char)readable[0]);
+    text_line(100,526,readable,C_GREEN,2,96);
+    text_line(64,650,"B: Cancel    +: Cancel",C_MUTED,2,60);
 }
+static int options_for(int tab){const Dnx2Account *p=dnx2Account();return tab==0?1:tab==1&&p->signed_in?p->server_count:0;}
 int dnx2GraphicalMenu(void) {
     Result rc=hidInitialize();
     if(R_FAILED(rc))return -1;
@@ -256,7 +252,7 @@ int dnx2GraphicalMenu(void) {
             if(focus==0 && options_for(tab)>0) {focus=1;sel=0;dirty=1;}
             /* Voice has no actions; Servers can test remote-auth gateway. */
         }
-        int n=focus==0?4:options_for(tab);
+        int n=focus==0?3:options_for(tab);
         if(n>0&&(down & HidNpadButton_AnyUp)) {
             if(focus==0)tab=(tab+n-1)%n;
             else sel=(sel+n-1)%n;
@@ -270,20 +266,13 @@ int dnx2GraphicalMenu(void) {
         if(down & HidNpadButton_A) {
             if(focus==0) {
                 if(options_for(tab)>0){focus=1;sel=0;dirty=1;}
+            } else if(tab==0) {
+                if(dnx2Account()->signed_in){dnx2AccountLogout();sel=0;dirty=1;}
+                else {action=6;break;}
             } else if(tab==1) {
-                const Dnx2Account *account=dnx2Account();
-                if(!account->signed_in){action=6;break;}
-                if(sel==account->server_count){dnx2AccountLogout();sel=0;dirty=1;}
-                else {dnx2AccountSelect(sel);snprintf(status,sizeof(status),"SERVER SELECTED - VOICE COMING NEXT");dirty=1;}
-            } else {
-                action=action_for(tab,sel);
-                if(action>0)break;
+                dnx2AccountSelect(sel);tab=2;focus=0;sel=0;dirty=1;
             }
         }
-        /* Preserve v0.17 quick diagnostic shortcuts without switching focus. */
-        if(down & HidNpadButton_X){action=2;break;}
-        if(down & HidNpadButton_Y){action=3;break;}
-        if(down & HidNpadButton_L){action=4;break;}
         svcSleepThread(16000000LL);
     }
     framebufferClose(&fb);
@@ -318,29 +307,13 @@ int dnx2GraphicalAuthCancel(void) {
     return !!(buttons&(HidNpadButton_B|HidNpadButton_Plus));
 }
 void dnx2GraphicalAuthStatus(const char *phase,const char *qr_url) {
+    snprintf(auth_notice,sizeof(auth_notice),"%s",phase?phase:"");
     if(!auth_fb_ready)return;
     u32 stride=0;
     pixels=(uint32_t*)framebufferBegin(&auth_fb,&stride);
     if(!pixels)return;
     stride_pixels=(int)(stride/4);
-    rect(0,0,W,H,C_BG);
-    rect(0,0,W,13,C_PRIMARY);
-    brand(65,40);
-    text_line(150,60,"DISCORDNX2",C_WHITE,4,35);
-    text_line(65,119,"SIGN IN WITH YOUR PHONE",C_MUTED,2,55);
-    block(60,175,1160,444,C_SIDEBAR);
-    if(qr_url && strncmp(qr_url,"https://discord.com/ra/",23)==0) {
-        if(qr_render_url(735,209,370,qr_url)){
-            text_line(86,232,"SCAN USING DISCORD MOBILE",C_WHITE,3,55);
-            text_line(86,292,"SETTINGS - SCAN QR CODE",C_MUTED,2,55);
-            text_line(86,335,"CONFIRM THIS LOGIN ON YOUR PHONE",C_WARN,2,55);
-        }else text_line(86,245,"QR ENCODING ERROR",C_WARN,3,42);
-    }else {
-        text_line(88,240,"ESTABLISHING A SECURE SESSION",C_WHITE,3,48);
-        text_line(88,300,"NEVER SHARE ACCOUNT TOKENS",C_MUTED,2,50);
-    }
-    text_line(87,542,phase?phase:"CONNECTING",C_GREEN,2,62);
-    text_line(87,650,"B: CANCEL    PLUS: CANCEL    NO PASSWORDS REQUIRED",C_MUTED,2,65);
+    draw_auth(phase,qr_url);
     framebufferEnd(&auth_fb);
     pixels=NULL;
 }

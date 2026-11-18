@@ -6,6 +6,7 @@
  */
 #include "native_login.h"
 #include "auth_crypto.h"
+#include "native_ws.h"
 #include <switch.h>
 #include <switch/services/bsd.h>
 #include <sys/socket.h>
@@ -42,6 +43,8 @@ static unsigned char http_body[HTTP_BUF];
 static unsigned last_http_status;
 static unsigned last_discord_error;
 static int last_captcha_required;
+static Dnx2WsReader ws_reader;
+static Dnx2AuthCancel active_cancel;
 static unsigned char ws_payload[WS_BUF+1];
 
 const Dnx2Account *dnx2Account(void){return &account;}
@@ -102,19 +105,22 @@ static int tls_open(TlsSession *s,const char *host) {
     if(R_FAILED(sslConnectionDoHandshake(&s->conn,&bytes,&certs,NULL,0)))goto fail;
     /* PeerCA + HostName verification are enabled by default by libounce SSL;
      * never set SkipDefaultVerify or disable SSL hostname checking. */
+    if(R_FAILED(sslConnectionSetIoMode(&s->conn,SslIoMode_NonBlocking)))goto fail;
     return 1;
 fail:
     tls_close(s);return 0;
 }
 static int tls_send(TlsSession *s,const void *data,size_t n){
     const unsigned char *p=(const unsigned char*)data;
-    size_t at=0;
-    while(at<n){
+    size_t at=0;u64 deadline=dnx2MonotonicMs()+5000;
+    while(at<n && dnx2MonotonicMs()<deadline){
         u32 written=0;
-        if(R_FAILED(sslConnectionWrite(&s->conn,p+at,(u32)(n-at),&written))||written==0)return 0;
+        if(active_cancel&&active_cancel())return 0;
+        if(R_FAILED(sslConnectionWrite(&s->conn,p+at,(u32)(n-at),&written))){svcSleepThread(8000000LL);continue;}
+        if(written==0)return 0;
         at+=written;
     }
-    return 1;
+    return at==n;
 }
 static int tls_get(TlsSession *s,unsigned char *out,size_t max){
     if(s->pending_off<s->pending_size) {
@@ -127,16 +133,6 @@ static int tls_get(TlsSession *s,unsigned char *out,size_t max){
     u32 got=0;
     Result rc=sslConnectionRead(&s->conn,out,(u32)max,&got);
     return R_SUCCEEDED(rc)?(int)got:-1;
-}
-static int tls_exact(TlsSession *s,unsigned char *buf,size_t n,u64 deadline){
-    size_t at=0;
-    while(at<n && dnx2MonotonicMs()<deadline) {
-        int got=tls_get(s,buf+at,n-at);
-        if(got>0)at+=(size_t)got;
-        else if(got==0)return 0;
-        else svcSleepThread(10000000LL);
-    }
-    return at==n;
 }
 static int random_bytes(unsigned char *out,size_t n){
     Result rc=csrngInitialize();
@@ -164,10 +160,12 @@ static int ws_connect(TlsSession *s){
     if(len<=0||(size_t)len>=sizeof(req)||!tls_send(s,req,(size_t)len))return 0;
     unsigned char hdr[4096]={0};
     size_t length=0,where=0;
-    for(int reads=0;reads<20 && length<sizeof(hdr)-1;reads++){
+    u64 upgrade_deadline=dnx2MonotonicMs()+10000;
+    while(dnx2MonotonicMs()<upgrade_deadline && length<sizeof(hdr)-1){
         u32 n=0;
         Result rc=sslConnectionRead(&s->conn,hdr+length,sizeof(hdr)-1-length,&n);
-        if(R_FAILED(rc)||n==0)return 0;
+        if(R_FAILED(rc)){svcSleepThread(8000000LL);continue;}
+        if(n==0)return 0;
         length+=n;hdr[length]=0;
         char *sep=strstr((char*)hdr,"\r\n\r\n");
         if(sep){where=(size_t)(sep-(char*)hdr)+4;break;}
@@ -221,26 +219,21 @@ static int ws_text(TlsSession *s,const char *msg){
     return ws_send(s,1,msg,strlen(msg));
 }
 static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){
-    unsigned char head[2],extra[8];
-    if(!tls_exact(s,head,2,deadline))return -1;
-    if(head[1]&0x80)return -1; /* server frames MUST NOT be masked */
-    size_t n=head[1]&127;unsigned opcode=head[0]&15;
-    if(n==126){
-        if(!tls_exact(s,extra,2,deadline))return -1;
-        n=((size_t)extra[0]<<8)|extra[1];
-    }else if(n==127){
-        if(!tls_exact(s,extra,8,deadline))return -1;
-        n=0;
-        for(int i=0;i<8;i++)n=(n<<8)|extra[i];
+    while(dnx2MonotonicMs()<deadline){
+        if(active_cancel&&active_cancel())return -2;
+        size_t before=ws_reader.used;
+        int result=dnx2WsNext(&ws_reader,out,cap);
+        if(result<0)return result;
+        if(result==1)return (int)strlen((char*)out);
+        if(result==2){if(!ws_send(s,10,(char*)out,ws_reader.control_size))return -1;}
+        if(ws_reader.used<before)continue;
+        if(ws_reader.used==sizeof(ws_reader.wire))return -1;
+        int n=tls_get(s,ws_reader.wire+ws_reader.used,sizeof(ws_reader.wire)-ws_reader.used);
+        if(n>0)ws_reader.used+=(size_t)n;
+        else if(n==0)return -2;
+        else svcSleepThread(8000000LL);
     }
-    if(n>=cap)return -1;
-    if(!tls_exact(s,out,n,deadline))return -1;
-    out[n]=0;
-    if(opcode==8)return -2;
-    if(opcode==9){ws_send(s,10,(const char*)out,n);return 0;}
-    if(opcode!=1)return 0;
-    if(!(head[0]&0x80))return -1; /* fragmented frames unsupported */
-    return (int)n;
+    return 0; /* keep partial frame for next poll */
 }
 static int json_string(const char *body,const char *key,char *out,size_t cap){
     if(!body||!key||!out||cap==0)return 0;
@@ -298,11 +291,13 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     wipe(req,sizeof(req));
     if(!sent)return 0;
     if(bodylen&&!tls_send(s,body,bodylen))return 0;
-    size_t used=0;
-    while(used+1<cap){
+    size_t used=0;u64 read_deadline=dnx2MonotonicMs()+15000;
+    while(used+1<cap && dnx2MonotonicMs()<read_deadline){
+        if(active_cancel&&active_cancel())return 0;
         u32 got=0;
         Result rc=sslConnectionRead(&s->conn,out+used,(u32)(cap-1-used),&got);
-        if(R_FAILED(rc)||got==0)break;
+        if(R_FAILED(rc)){svcSleepThread(8000000LL);continue;}
+        if(got==0)break;
         used+=got;
     }
     out[used]=0;
@@ -417,6 +412,7 @@ static int fetch_profile(const char *token,Dnx2AuthStatus status){
     return 1;
 }
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
+    memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
     dnx2AccountLogout();
     if(!dnx2AuthCryptoAvailable()){status("MBEDTLS NOT INSTALLED - CANNOT SIGN IN",NULL);return 0;}
     status("GENERATING SECURE RSA-2048 SESSION",NULL);
@@ -444,7 +440,8 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     for(unsigned attempts=0;attempts<180 && dnx2MonotonicMs()<expire;attempts++){
         if(cancel&&cancel()){status("LOGIN CANCELED",NULL);break;}
         int n=ws_receive(&remote,ws_payload,sizeof(ws_payload),dnx2MonotonicMs()+4500);
-        if(n==-2)break;
+        if(n==-2){status("LOGIN CONNECTION CLOSED OR CANCELED",NULL);break;}
+        if(n<0){status("LOGIN MESSAGE INVALID - PLEASE RETRY",NULL);break;}
         if(n<=0) {
             if(dnx2MonotonicMs()-last_heartbeat>(u64)heartbeat) {
                 if(!ws_text(&remote,"{\"op\":\"heartbeat\"}"))break;
@@ -517,6 +514,7 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
             last_heartbeat=dnx2MonotonicMs();
         }
     }
+    if(!ticket[0] && dnx2MonotonicMs()>=expire)status("LOGIN TIMED OUT - PLEASE RETRY",NULL);
 remote_cleanup:
     /* Redeem promptly before releasing our remote session. */
     if(ticket[0]&&qr_shown){
@@ -553,6 +551,7 @@ remote_cleanup:
 network_cleanup:
     if(network_ready){sslExit();socketExit();}
     wipe(http_body,sizeof(http_body));wipe(ws_payload,sizeof(ws_payload));
+    wipe(&ws_reader,sizeof(ws_reader));active_cancel=NULL;
     wipe(ticket,sizeof(ticket));wipe(fingerprint,sizeof(fingerprint));
     wipe(pubkey,sizeof(pubkey));
     dnx2AuthCryptoClose();

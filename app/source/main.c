@@ -944,6 +944,7 @@ static void run_console_ui(void);
 static void dnx2AuthProgressAndReport(const char *phase,const char *qr_url) {
     /* Only static status labels reach SD diagnostics. Never QR URLs, tokens, IDs. */
     diagf("auth stage=%s\n",phase?phase:"UNKNOWN");
+    (void)write_diagnostics();
     dnx2GraphicalAuthStatus(phase,qr_url);
 }
 static void run_gui_action(int action) {
@@ -953,7 +954,7 @@ static void run_gui_action(int action) {
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.25 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.26 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();
@@ -981,7 +982,11 @@ static void run_ui(void) {
         if(action==0)return;
     }
     /* Fallback for systems where the Switch 2 framebuffer service fails. */
-    run_console_ui();
+    consoleInit(NULL);
+    printf("DiscordNX2 could not open the display.\nPlease relaunch the app.\n");
+    consoleUpdate(NULL);
+    svcSleepThread(2000000000LL);
+    consoleExit(NULL);
 }
 static void run_console_ui(void) {
     Result rc=hidInitialize();
