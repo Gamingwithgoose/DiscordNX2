@@ -42,7 +42,7 @@ static int ws_text(TlsSession *s,const char *body){
 }
 static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){
     (void)s;(void)deadline;
-    const char *event=frames==0?"{\"op\":10,\"d\":{\"heartbeat_interval\":1000}}":frames==1?"{\"op\":0,\"s\":1,\"t\":\"READY\",\"d\":{\"session_id\":\"synthetic-session\"}}":frames==2?"{\"op\":0,\"s\":2,\"t\":\"MESSAGE_CREATE\",\"d\":{\"channel_id\":\"200000000000000001\"}}":"{\"op\":11,\"d\":null}";
+    const char *event=frames==0?"{\"op\":10,\"d\":{\"heartbeat_interval\":1000}}":frames==1?"{\"op\":0,\"s\":1,\"t\":\"READY\",\"d\":{\"session_id\":\"synthetic-session\"}}":frames==2?"{\"op\":0,\"s\":2,\"t\":\"MESSAGE_CREATE\",\"d\":{\"channel_id\":\"200000000000000001\",\"id\":\"900000000000000001\",\"author\":{\"username\":\"live fixture\"},\"content\":\"instant message\"}}":"{\"op\":11,\"d\":null}";
     frames++;assert(strlen(event)<cap);strcpy((char*)out,event);return (int)strlen(event);
 }
 static int http_request(TlsSession *s,const char *host,const char *method,const char *path,const char *body,const char *token,char *out,size_t cap){
@@ -54,12 +54,14 @@ static int http_request(TlsSession *s,const char *host,const char *method,const 
 static int dnx2JobBusy(void){return 0;}
 static void svcSleepThread(long long n);
 #include "live_gateway.inc"
+static void live_image_step(void){}
+static void live_images_finish(void){}
 static void svcSleepThread(long long n){(void)n;now+=16;if(now>7000)__atomic_store_n(&live_stop,1,__ATOMIC_RELEASE);}
 int main(void){
     account.signed_in=1;account.server_count=1;account.channel_count=1;account.selected_channel=0;
     strcpy(account.servers[0].id,"100000000000000001");strcpy(account.channels[0].id,"200000000000000001");strcpy(session_token,"synthetic-token");
-    dnx2LiveStart();live_worker(NULL);assert(identify_sent==1&&subscription_sent==1&&heartbeat_sent>0&&requests>=2);
-    assert(service_count==0&&locks==0);assert(dnx2LiveApply());assert(account.message_count==1&&strstr(account.messages[0].content,"message"));assert(!strcmp(dnx2LiveStatus(),"Live updates"));
+    dnx2LiveStart();live_worker(NULL);assert(identify_sent==1&&subscription_sent==1&&heartbeat_sent>0&&requests==1);
+    assert(service_count==0&&locks==0);assert(dnx2LiveApply());assert(account.message_count==2&&strstr(account.messages[1].content,"instant message"));assert(!strcmp(dnx2LiveStatus(),"Live updates"));
     dnx2LiveStop();assert(!live_token[0]);
     dnx2LiveStart();assert(live_identify(&(TlsSession){0})&&resume_sent==1);dnx2LiveStop();
     strcpy(live_token,"synthetic-token");http_code=429;Dnx2Account *result=calloc(1,sizeof(*result));assert(result);u64 retry=0;

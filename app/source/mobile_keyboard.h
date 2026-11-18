@@ -2,6 +2,14 @@
 #ifndef DNX2_MOBILE_KEYBOARD_H
 #define DNX2_MOBILE_KEYBOARD_H
 #include <string.h>
+#include <stdint.h>
+typedef struct {uint64_t next,started;int held;} DnxDeleteRepeat;
+static inline int dnx_delete_repeat(DnxDeleteRepeat *r,int held,uint64_t now){
+    if(!held){memset(r,0,sizeof(*r));return 0;}
+    if(!r->held){r->held=1;r->started=now;r->next=now+400;return 1;}
+    if(now<r->next)return 0;
+    r->next=now+(now-r->started>=1600?35:70);return 1;
+}
 enum {DNX_KEY_TEXT,DNX_KEY_SHIFT,DNX_KEY_DELETE,DNX_KEY_PAGE,DNX_KEY_EMOJI,DNX_KEY_SPACE,DNX_KEY_DONE};
 typedef struct {int x,y,w,h,action;char label[12];} DnxKey;
 static inline void dnx_key_add(DnxKey *keys,int *count,int x,int y,int w,const char *label,int action){DnxKey *k=&keys[(*count)++];k->x=x;k->y=y;k->w=w;k->h=54;k->action=action;size_t n=strlen(label);if(n>=sizeof(k->label))n=sizeof(k->label)-1;memcpy(k->label,label,n);k->label[n]=0;}

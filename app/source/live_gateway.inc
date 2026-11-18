@@ -2,7 +2,10 @@
 /* One foreground text subscription worker. No UI/HID calls from this thread.
  * Main thread owns the visible account; pending snapshots cross a mutex.
  * All other account requests run only after this worker has joined. */
+static void live_image_step(void);
+static void live_images_finish(void);
 static Thread live_thread;
+static int live_accept_images;
 static Mutex live_mutex;
 static int live_running,live_stop,live_mode;
 static unsigned live_generation,live_applied;
@@ -68,6 +71,7 @@ static void live_worker(void *unused){
     unsigned dispatches=0,refreshes=0;
     u64 heartbeat=40000,last_beat=0,next_refresh=dnx2MonotonicMs()+5000,hello_deadline=0,retry_until=0;
     TlsSession gateway={0};gateway.socket_fd=gateway.returned_fd=-1;
+    if(result){mutexLock(&live_mutex);result->message_count=live_count;memcpy(result->messages,live_pending,(size_t)live_count*sizeof(Dnx2Message));mutexUnlock(&live_mutex);}
     if(!result||!event||R_FAILED(socketInitialize(NULL)))goto done;
     sockets=1;
     if(R_FAILED(sslInitialize(1)))goto done;
@@ -75,17 +79,18 @@ static void live_worker(void *unused){
     if(R_FAILED(csrngInitialize()))goto done;
     rng=1;active_cancel=live_cancel;last_http_status=0;
     memset(&ws_reader,0,sizeof(ws_reader));live_set_mode(1);
+    mutexLock(&live_mutex);live_accept_images=1;mutexUnlock(&live_mutex);
     if(tls_open(&gateway,"gateway.discord.gg")&&ws_connect_to(&gateway,"gateway.discord.gg","/?v=10&encoding=json")){
         connected=1;hello_deadline=dnx2MonotonicMs()+15000;
     }else {tls_close(&gateway);live_set_mode(3);}
     while(!live_cancel()){
-        u64 now=dnx2MonotonicMs();
+        u64 now=dnx2MonotonicMs();int gateway_idle=1;
         if(connected){
             if((!ready&&now>hello_deadline)||(identified&&now-last_beat>=heartbeat&&awaiting))connected=0;
             if(connected&&identified&&now-last_beat>=heartbeat){if(!live_heartbeat(&gateway))connected=0;last_beat=now;awaiting=1;}
             int n=connected?ws_receive(&gateway,event,DNX2_WS_MAX+1,now+40):0;
             if(n<0)connected=0;
-            if(n>0){
+            if(n>0){gateway_idle=0;
                 DnxJson root=dj_root((char*)event),data=dj_field(root,"d");int op=dj_int(root,"op",-1);
                 DnxJson seq=dj_field(root,"s");if(seq.p&&*seq.p!='n'){char *end;long long value=strtoll(seq.p,&end,10);if(end==seq.end&&value>=0)live_sequence=value;}
                 if(op==10){int ms=dj_int(data,"heartbeat_interval",40000);if(ms<1000||ms>120000)connected=0;else {heartbeat=(u64)ms;identified=live_identify(&gateway);if(!identified)connected=0;last_beat=now-heartbeat;}}
@@ -98,7 +103,16 @@ static void live_worker(void *unused){
                         if(!strcmp(kind,"READY"))dj_get(data,"session_id",live_session,sizeof(live_session));
                         ready=1;live_set_mode(2);live_subscribe(&gateway);next_refresh=now;
                     }else if(!strcmp(kind,"MESSAGE_CREATE")||!strcmp(kind,"MESSAGE_UPDATE")||!strcmp(kind,"MESSAGE_DELETE")||!strcmp(kind,"MESSAGE_DELETE_BULK")){
-                        char channel[24]={0};if(dj_get(data,"channel_id",channel,sizeof(channel))&&!strcmp(channel,live_channel)&&now>=retry_until&&next_refresh>now+150)next_refresh=now+150;
+                        char channel[24]={0};if(dj_get(data,"channel_id",channel,sizeof(channel))&&!strcmp(channel,live_channel)){
+                            if(!strcmp(kind,"MESSAGE_CREATE")&&dj_field(data,"author").p){
+                                size_t size=(size_t)(data.end-data.p);char *array=malloc(size+3);Dnx2Account *one=calloc(1,sizeof(*one));
+                                if(array&&one){array[0]='[';memcpy(array+1,data.p,size);array[size+1]=']';array[size+2]=0;dnx_messages(one,array);
+                                    if(one->message_count){Dnx2Message *m=&one->messages[0];int found=-1;for(int i=0;i<result->message_count;i++)if(!strcmp(result->messages[i].id,m->id))found=i;
+                                        if(found>=0)result->messages[found]=*m;else {if(result->message_count==DNX2_MAX_MESSAGES){memmove(result->messages,result->messages+1,(DNX2_MAX_MESSAGES-1)*sizeof(*m));result->message_count--;}result->messages[result->message_count++]=*m;}live_publish(result);}
+                                }free(array);free(one);
+                            }else if(!strcmp(kind,"MESSAGE_DELETE")){char id[24]={0};dj_get(data,"id",id,sizeof(id));for(int i=0;i<result->message_count;i++)if(!strcmp(result->messages[i].id,id)){memmove(result->messages+i,result->messages+i+1,(size_t)(result->message_count-i-1)*sizeof(Dnx2Message));result->message_count--;live_publish(result);break;}}
+                            else if(now>=retry_until&&next_refresh>now+150)next_refresh=now+150;
+                        }
                     }
                 }
                 wipe(event,(size_t)n);
@@ -113,12 +127,14 @@ static void live_worker(void *unused){
             if(ok)live_set_mode(connected&&ready?2:3);
             retry_until=retry;next_refresh=retry?retry:dnx2MonotonicMs()+(connected&&ready?15000:5000);
         }
+        if(gateway_idle)live_image_step();
         svcSleepThread(16000000LL);
     }
 done:
+    mutexLock(&live_mutex);live_accept_images=0;live_images_finish();mutexUnlock(&live_mutex);
     if(!live_cancel()&&__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE)==1)live_set_mode(4);
     FILE *report=fopen("sdmc:/kaihen/discordnx2-live.txt","w");
-    if(report){fprintf(report,"DiscordNX2 v0.40 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
+    if(report){fprintf(report,"DiscordNX2 v0.42 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
     tls_close(&gateway);if(rng)csrngExit();if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
     wipe(&ws_reader,sizeof(ws_reader));if(event){wipe(event,DNX2_WS_MAX+1);free(event);}if(result){wipe(result,sizeof(*result));free(result);}
 }
@@ -134,8 +150,10 @@ void dnx2LiveStart(void){
     snprintf(live_guild,sizeof(live_guild),"%s",account.servers[account.selected].id);snprintf(live_token,sizeof(live_token),"%s",session_token);
     live_count=account.message_count;memcpy(live_pending,account.messages,(size_t)live_count*sizeof(Dnx2Message));live_generation=live_applied=0;
     __atomic_store_n(&live_stop,0,__ATOMIC_RELEASE);
+    mutexLock(&live_mutex);live_accept_images=1;mutexUnlock(&live_mutex);
     if(R_SUCCEEDED(threadCreate(&live_thread,live_worker,NULL,NULL,128*1024,0x3b,-2))){
         if(R_SUCCEEDED(threadStart(&live_thread))){live_running=1;return;}threadClose(&live_thread);
     }
+    mutexLock(&live_mutex);live_accept_images=0;live_images_finish();mutexUnlock(&live_mutex);
     wipe(live_token,sizeof(live_token));live_set_mode(4);
 }

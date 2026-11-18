@@ -21,6 +21,7 @@ const char *dnx2JobSticker(void);
 int dnx2RequestImages(int type,int first,int count);
 const unsigned char *dnx2ChatImage(int type,int index);
 const Dnx2MediaCatalog *dnx2MediaCatalog(void);
+int dnx2MessageMediaState(const char *id);
 const unsigned char *dnx2MessageImage(int type,const char *id);
 int dnx2RequestMessageImages(int first,int count);
 void dnx2ChatReset(void);

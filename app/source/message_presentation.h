@@ -14,9 +14,11 @@ static inline int dnx_message_media(DnxJson value,char *url,size_t cap){
     char candidate[1536]={0},host[48],path[1536];
     if(!dj_get(value,"proxy_url",candidate,sizeof(candidate)))dj_get(value,"url",candidate,sizeof(candidate));
     if(!dnx_media_url(candidate,host,path))return 0;
+    if(!strcmp(host,"cdn.discordapp.com")&&!strncmp(path,"/attachments/",13))snprintf(host,sizeof(host),"media.discordapp.net");
     int proxy=!strcmp(host,"media.discordapp.net")||!strncmp(host,"images-ext-",11);
-    int gif=strstr(path,".gif")!=NULL;int n=snprintf(url,cap,"https://%s%s%s",host,path,proxy?(strchr(path,'?')?"&width=256&height=144":"?width=256&height=144"):"");
-    (void)gif;return n>0&&(size_t)n<cap;
+    int gif=strstr(path,".gif")!=NULL;
+    int n=snprintf(url,cap,"https://%s%s%s%s",host,path,proxy?(strchr(path,'?')?"&width=640&height=360":"?width=640&height=360"):"",proxy&&!gif?"&format=png":"");
+    return n>0&&(size_t)n<cap;
 }
 static inline unsigned dnx_default_avatar(const char *id,const char *discriminator){
     unsigned old=discriminator?(unsigned)strtoul(discriminator,NULL,10):0;

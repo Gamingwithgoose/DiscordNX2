@@ -334,3 +334,10 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Preserve Unicode/newlines; vendor pinned MIT utf8proc for grapheme-aware deletion/wrapping/scrolling and NFC display normalization. Complex-script shaping, RTL and joined/color emoji rendering remain incomplete.
 - Add explicit native voice connection test with muted/deafened join, scoped session/server events, TLS voice WebSocket, 4017 handling and best-effort automatic leave. This is not voice calling: Opus and DAVE/MLS crypto port remain required; microphone/audio never start.
 - Synthetic production-path media/Unicode/voice tests and existing chat/live/session tests pass; source syntax checked without an NRO build. User hardware build/test pending. Resident NSO, audio diagnostics, public loader and login encryption preserved.
+
+## v0.42 — 2026-11-18
+
+- Move message attachments beneath captions with taller rows, aspect-preserving previews, larger bounded image decoding and resized Discord PNG requests; accept image filenames when MIME metadata is missing. Failed images show unavailable instead of indefinite loading.
+- Add blinking end caret and scrolling draft tail; hold Backspace to repeat/accelerate by whole graphemes. Done sends through the existing guarded send job. New x/B/Plus cancel clears the draft and selected sticker.
+- Apply complete Gateway incoming messages and deletions directly, avoiding an extra history request. Keep Gateway open during artwork downloads and keyboard entry; same network owner services one bounded image request between pending Gateway events.
+- Add real1200x900 image, variable attachment geometry, held-delete timing, direct-event delivery and delegated artwork cancellation tests. Source and host tests pass; no NRO built and console verification pending.

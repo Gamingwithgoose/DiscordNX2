@@ -663,6 +663,7 @@ int dnx2RequestImages(int t,int f,int n){(void)t;(void)f;(void)n;return 0;}
 const unsigned char *dnx2ChatImage(int t,int n){(void)t;(void)n;return NULL;}
 const Dnx2MediaCatalog *dnx2MediaCatalog(void){static Dnx2MediaCatalog m;return &m;}
 int dnx2RequestMessageImages(int f,int n){(void)f;(void)n;return 0;}
+int dnx2MessageMediaState(const char *id){(void)id;return 0;}
 const Dnx2DecodedMedia *dnx2MessageMedia(const char *id){(void)id;return NULL;}
 const unsigned char *dnx2AuthorAvatar(const char *i,const char *a,const char *g,unsigned d){(void)i;(void)a;(void)g;(void)d;return NULL;}const unsigned char *dnx2MessageImage(int t,const char *p){(void)t;(void)p;return NULL;}
 void dnx2LiveStart(void){}

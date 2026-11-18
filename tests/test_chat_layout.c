@@ -13,5 +13,6 @@ int main(void){
     h=dnx_chat_hit(1200,600,0,0,0,0,1);assert(h.kind==DNX_FALLBACK);
     h=dnx_chat_hit(1280,650,0,0,0,0,1);assert(!h.kind);
     h=dnx_chat_hit(1200,650,0,0,0,0,0);assert(!h.kind);
+    int images[]={0,1,1,0};assert(dnx_message_bottom(images,4)==2);assert(dnx_message_hit(images,4,1,120)==1);assert(dnx_message_hit(images,4,1,465)==1);assert(dnx_message_hit(images,4,1,466)==-1);assert(dnx_message_hit(images,4,1,588)==-1);assert(dnx_message_hit(images,4,2,466)==3);
     puts("PASS shared touch/layout geometry: input, Send, channels, servers, message anchors, account and bounds");
 }

@@ -2,7 +2,7 @@
 
 > **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.41 source adds chat avatars/nicknames, image and bounded animated-GIF previews, Unicode grapheme editing and accent normalization. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.42 source adds chat avatars/nicknames, image and bounded animated-GIF previews, Unicode grapheme editing and accent normalization. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
@@ -12,7 +12,7 @@ DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.41 sourc
 | Native QR login | User confirmed successful account connection after the project-hosted phone CAPTCHA handoff in v0.37. |
 | Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. User confirmed account connection; individual future attempts may still be rejected or expire. |
 | Servers | Loads up to 200 real servers. Reads Discord folder/order settings and flattens folders in order; falls back to API order if unavailable. |
-| Channels / text | Text/announcement channels show the latest 30 messages. A foreground Gateway worker listens for message events and refreshes affected history; five-second automatic polling is the fallback. Tap input to open the compact full-width phone-style QWERTY layout with separate symbol pages. |
+| Channels / text | Text/announcement channels show the latest 30 messages. A foreground Gateway worker applies complete incoming messages and deletions directly, and refreshes history for partial edits or resync; five-second automatic polling is the fallback. Tap input to open the compact full-width phone-style QWERTY layout with separate symbol pages. |
 | Voice chat | Voice/stage channels expose an explicit connection test: briefly join muted/deafened, check the voice WebSocket and leave. No call audio or live members. DAVE/Opus integration remains blocked. |
 | Emoji / stickers | Common Unicode emoji and current-server emoji/sticker picker. Emoji PNG and PNG/APNG sticker first-frame previews; explicit Send for drafts/stickers. Posted PNG/JPEG/GIF images and embed image/thumbnail previews are supported within limits below. GIF search and full rich media remain unfinished. |
 | Saved login | Optional eight-digit PIN encrypts credentials on SD. Enter PIN on future launches instead of scanning QR; expiry/revocation may require login again. New in v0.38. |
@@ -92,15 +92,15 @@ The interface has three areas: a narrow **server rail** on the left, the selecte
 2. Tap a text/announcement channel in the channel sidebar. Swipe the sidebar to scroll categories and channels. With a controller, move Right to channels, choose a row and press A.
 3. New messages update automatically while the conversation is open. **Live updates** means Gateway Ready/Resume succeeded; message-create/update/delete events trigger history refresh. **Auto refresh (5 s)** means Gateway was unavailable and REST polling is active. A slow connection, rate limit or access failure can delay updates. A periodic resync also catches missed events. This is foreground-only, not a background plugin feature.
 4. Swipe the conversation or use Up/Down to read recent messages. New messages follow the bottom only if you were already at the bottom; older reading keeps an ID anchor where possible. Tap a message, or press A in the conversation, for expanded reading. B closes expanded reading; live snapshots wait until you return so the message does not change underneath you.
-5. Tap the **message box** at the bottom, or press X, to open the phone-style touch keyboard. **Tap Send or press R** after closing the keyboard to send the draft. Incoming updates never send or overwrite it. A failed/unconfirmed send preserves it; check history before retrying.
-6. Letter mode uses QWERTY rows. **?123** opens numbers/symbols, **#+=** switches symbol sets, and **ABC** returns to letters. Shift, Space, Delete and Done have touch buttons; controller equivalents are Y, X, L and R. **Done does not send.** The smiley opens the media picker; B leaves the overlay with the draft intact. Backspace deletes a complete Unicode grapheme, including joined emoji or combining accents.
+5. Tap the **message box** at the bottom, or press X, to open the phone-style touch keyboard. **Done sends the draft** and closes the keyboard; the main Send button/R also sends. Incoming updates never send or overwrite it. A failed/unconfirmed send preserves it; check history before retrying.
+6. Letter mode uses QWERTY rows. **?123** opens numbers/symbols, **#+=** switches symbol sets, and **ABC** returns to letters. Shift, Space, Delete and Done have touch buttons; controller equivalents are Y, X, L and R. **Done sends.** The smiley opens the media picker; The small **x**, B or Plus closes the keyboard and clears the entire draft, including a selected sticker. Backspace deletes a complete Unicode grapheme, including joined emoji or combining accents. Hold it (or controller L/A on Delete) to repeat after 400 ms, accelerating after 1.6 seconds. A blinking end cursor follows the visible end of long drafts.
 7. Drafts hold up to 512 UTF-8 bytes. The keyboard has an English letter layout plus emoji selection, not a full multilingual input method. Automatic mention parsing is disabled. History remains limited to the latest 30 messages.
 
 ### Profiles, images and Unicode
 
 Messages show available nicknames, author avatars (including server-specific avatars), default-avatar fallback and UTC times. Images load in the background without replacing the conversation. Tap a message for a larger preview. PNG/JPEG and GIF attachment or embed image/thumbnail previews use approved Discord, Tenor and Giphy media hosts only; no account credential is sent to image hosts.
 
-Previews are limited to 512 KiB downloads and 512x512 decoded sources, resized to at most 256x144. Small GIFs (up to 12 frames and 256x256 source) animate; longer/larger GIFs show the first frame. Four media previews are cached in memory. Only the first image per message is shown. Video, WebP, arbitrary website embeds, full-resolution viewing and GIF search are not implemented.
+Previews accept downloads below 1 MiB and sources up to 2048x2048 (4 megapixels), resized to at most 640x360 for stills. Discord attachment URLs request resized PNG previews; image attachments without MIME metadata can be recognized by filename. Images appear beneath captions with aspect ratio preserved; tap a message for the larger view. Small GIFs (up to 12 frames and 256x256 source) animate; longer/larger GIFs show the first frame. Four media previews are cached in memory. Only the first image per message is shown. Video, WebP, arbitrary website embeds, full-resolution viewing and GIF search are not implemented.
 
 Unicode text is preserved in storage and messages. Display normalizes decomposed accents to NFC; wrapping, fitting and deletion respect grapheme boundaries. Font fallbacks cover many Unicode characters, but this renderer does not implement Arabic/Indic shaping, bidirectional layout or joined/color emoji ligatures. A grapheme staying intact does not guarantee its font can render it correctly.
 
@@ -129,7 +129,7 @@ Voice/stage selection displays the actual selected channel and disconnected stat
 | Tap server / channel | Select and open it. |
 | Swipe server rail / channel sidebar / conversation | Scroll that area; a drag does not activate a row or Send. |
 | Tap message box / X | Open the phone-style keyboard. |
-| Tap Send / R | Send the current nonempty draft. |
+| Tap Send / R / keyboard Done | Send the current nonempty draft. |
 | Left / Right | Change focus between rail, channels, conversation and input. |
 | Up / Down | Navigate or scroll the focused area. |
 | A | Activate focused item; read a message; edit the input when input is focused. |
@@ -221,3 +221,7 @@ Thanks to the ouncebrew, kaiHEN, devkitPro and upstream projects referenced in t
 The PNG/JPEG/GIF decoder in `app/source/vendor/stb_image.h` retains its upstream public-domain/MIT license; `stb_image-source.txt` records the exact source revision.
 
 Unicode segmentation and normalization use vendored utf8proc, pinned in `app/source/vendor/utf8proc/SOURCE.txt`, with its MIT license included. Run `sh tests/run-presentation-tests.sh` for grapheme/NFC, message metadata, URL validation, actual GIF decoding and synthetic production voice-signaling tests. These checks never contact a real account or start a call.
+
+### v0.42 message delivery
+
+Complete Gateway MESSAGE_CREATE events appear without a second REST request; deletes apply directly. Partial edits still fetch history, with the existing periodic resync and five-second polling fallback. Artwork is fetched one item at a time by the same network worker while retaining the Gateway connection; queued Gateway frames are handled first. Image requests have a 2.5-second cancellation deadline while live updates run, so a slow image can still briefly delay messages. Opening the phone keyboard keeps the live worker connected. Network/provider restrictions can still force polling; desktop-equivalent delivery is not guaranteed. Failed/unsupported previews say Image unavailable rather than loading forever. Y/manual history refresh clears failed-image entries so they can retry. New source changes need console verification.

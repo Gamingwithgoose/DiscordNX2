@@ -14,5 +14,6 @@ int main(void){
         }
     }
     n=dnx_keys(keys,0,1);assert(!strcmp(keys[0].label,"Q"));assert(dnx_key_move(keys,n,0,1,0)==1);assert(dnx_key_move(keys,n,0,0,1)>=10);
+    DnxDeleteRepeat repeat={0};assert(dnx_delete_repeat(&repeat,1,1000));assert(!dnx_delete_repeat(&repeat,1,1399));assert(dnx_delete_repeat(&repeat,1,1400));assert(!dnx_delete_repeat(&repeat,1,1469));assert(dnx_delete_repeat(&repeat,1,1470));assert(dnx_delete_repeat(&repeat,1,2700));assert(repeat.next==2735);assert(!dnx_delete_repeat(&repeat,0,2701));assert(dnx_delete_repeat(&repeat,1,2800));
     puts("PASS phone keyboard: QWERTY order, separate number/symbol pages, large nonoverlapping touch keys and controller navigation");
 }

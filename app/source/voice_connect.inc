@@ -58,6 +58,6 @@ static void voice_control_preflight(const char *token,const char *guild,const ch
     snprintf(notice,160,*close_code==4017?"Discord requires DAVE encrypted voice. The voice engine is not installed.":"Voice signaling reached Discord. DAVE/Opus audio support is still missing.");
 done:
     if(joined&&dnx_voice_state_body(&credentials,1,body,sizeof(body))){Dnx2AuthCancel previous=active_cancel;voice_cleanup_deadline=dnx2MonotonicMs()+2000;active_cancel=voice_cleanup_cancel;(void)ws_text(&gateway,body);active_cancel=previous;}
-    FILE *report=fopen("sdmc:/kaihen/discordnx2-voice.txt","w");if(report){fprintf(report,"DiscordNX2 v0.41 voice signaling - no audio, credentials or channel IDs\nStage=%d close=%u joined_muted=%d leave_attempted=%d audio_active=0\n",*stage,*close_code,joined,joined);fclose(report);}
+    FILE *report=fopen("sdmc:/kaihen/discordnx2-voice.txt","w");if(report){fprintf(report,"DiscordNX2 v0.42 voice signaling - no audio, credentials or channel IDs\nStage=%d close=%u joined_muted=%d leave_attempted=%d audio_active=0\n",*stage,*close_code,joined,joined);fclose(report);}
     tls_close(&voice);tls_close(&gateway);if(rng)csrngExit();if(event){wipe(event,DNX2_WS_MAX+1);free(event);}wipe(body,sizeof(body));wipe(&credentials,sizeof(credentials));wipe(live_token,sizeof(live_token));wipe(&ws_reader,sizeof(ws_reader));
 }

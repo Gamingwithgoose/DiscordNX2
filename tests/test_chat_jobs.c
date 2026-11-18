@@ -27,7 +27,14 @@ static int threadCreate(Thread *t,void (*f)(void*),void *a,void *stack,size_t n,
 static int threadStart(Thread *t){(void)t;return 0;}
 static void threadWaitForExit(Thread *t){(void)t;}
 static void threadClose(Thread *t){(void)t;}
-void dnx2LiveStop(void){}
+static int live_stops;
+void dnx2LiveStop(void){live_stops++;}
+static Mutex live_mutex;static int live_accept_images;
+typedef uint64_t u64;
+static u64 dnx2MonotonicMs(void){return 1000;}
+static int live_cancel(void){return 0;}
+static void svcSleepThread(long long n){(void)n;}
+
 static void tls_close(TlsSession *s){(void)s;}
 static int http_request(TlsSession *s,const char *host,const char *method,const char *path,const char *body,const char *token,char *out,size_t cap){
     (void)s;last_http_status=http_fail?403:200;
@@ -42,6 +49,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,const 
 }
 static void voice_control_preflight(const char *t,const char *g,const char *c,const char *u,char notice[160],int *stage,unsigned *code){(void)t;(void)g;(void)c;(void)u;snprintf(notice,160,"Engine unavailable");*stage=0;*code=0;}
 #include "chat_jobs.inc"
+static void delegated_check(void){live_accept_images=1;int before=live_stops;assert(dnx2RequestImages(1,0,1));assert(chat_job.delegated&&delegated_images&&live_stops==before);live_image_step();assert(chat_job.done&&!delegated_images);assert(dnx2JobApply()==20);dnx2ChatReset();assert(dnx2RequestImages(1,0,1));__atomic_store_n(&chat_job.stop,1,__ATOMIC_RELEASE);live_image_step();assert(chat_job.done&&!delegated_images);dnx2JobStop();live_accept_images=0;}
 static int run(void){job_worker(NULL);assert(!services);return dnx2JobApply();}
 int main(int argc,char **argv){
     assert(argc==2);FILE *f=fopen(argv[1],"rb");assert(f);fseek(f,0,SEEK_END);png_size=(size_t)ftell(f);rewind(f);png=malloc(png_size);assert(png&&fread(png,1,png_size,f)==png_size);fclose(f);
@@ -61,6 +69,7 @@ int main(int argc,char **argv){
     char id[24],name[33];assert(dnx_custom_emoji("<a:goose:400000000000000001>",id,name)==28);assert(!strcmp(id,"400000000000000001")&&!strcmp(name,"goose"));
     assert(!dnx_custom_emoji("<:../bad:400000000000000001>",id,name));assert(!dnx_custom_emoji("<:goose:1>",id,name));assert(!dnx_custom_emoji("<",id,name));
     assert(dnx_asset_hash("a_0123456789abcdef0123456789abcdef"));assert(!dnx_asset_hash("../../not-a-hash"));
-    dnx2ChatReset();assert(!dnx2ChatImage(1,0)&&!dnx2MediaCatalog()->loaded);free(png);
+    dnx2ChatReset();assert(!dnx2ChatImage(1,0)&&!dnx2MediaCatalog()->loaded);
+    dnx2ChatReset();delegated_check();dnx2ChatReset();free(png);
     puts("PASS production chat jobs: deferred scoped results, single-send, failed-send preservation, empty history, emoji/sticker catalog, unauthenticated CDN, real PNG decode/bounds and cleanup");
 }

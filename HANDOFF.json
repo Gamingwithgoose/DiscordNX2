@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.41-avatars-media-unicode-phone-keyboard-voice-preflight",
+  "version": "0.42-inline-attachments-keyboard-send-fast-live-events",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -273,5 +273,12 @@
       "Unicode accented/styled names; complex scripts/RTL may remain unsupported.",
       "Voice connection test should report missing DAVE/Opus and leave; no audio expected."
     ]
+  },
+  "v042_implementation": {
+    "images": "Inline attachment rows reserve366px, 640x260 aspect-preserving display beneath captions, larger tap view. Source bound2048x2048/4MP, download<1MiB, still output<=640x360. CDN attachment rewrite to Discord media proxy with size and PNG request (GIF retains GIF). MIME-less attachments recognized by image extension. Unsupported/failed preview explicit. Long GIF/video/WebP limitations persist.",
+    "keyboard": "Blinking end caret, tail-scroll to keep end visible. Delete on initial hold,400ms delay,70ms repeat,35ms after1.6sec; grapheme safe. Done/R immediately starts existing single-send job; only confirmed sends clear. X/B/Plus cancel clears draft and selected sticker. Opening keyboard retains live networking.",
+    "latency": "Parse complete Gateway CREATE directly into scoped chronological latest30 snapshots; dedupe IDs. Delete by ID directly. Partial edits/bulk events retain REST resync. Keep Gateway open while the same worker services delegated artwork queue one item per idle receive iteration. Mutex/atomic lifecycle, cancellation, completion; no concurrent global HTTP/WS owner. Each live image fetch has2.5sec cancel deadline; queued dispatches prioritized. Poll fallback5sec and resync15sec unchanged.",
+    "validation": "Strict AArch64 syntax checks and host sanitizers pass for modified modules. Tests cover1200x900 actual PNG decode->480x360, aspect/layout/touch rows, repeat timers, direct CREATE without extra REST, delegated artwork without LiveStop plus cancellation, existing GIF/Unicode/voice/session. No NRO build. Hardware latency and visual behavior pending.",
+    "preserved": "Resident NSO, audio, loader, login/PIN encryption unchanged. DAVE/Opus voice blocker unchanged."
   }
 }

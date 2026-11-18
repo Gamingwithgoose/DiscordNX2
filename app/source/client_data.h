@@ -83,7 +83,7 @@ static inline void dnx_messages(Dnx2Account *a,const char *json){
         DnxJson attachments=dj_field(e,"attachments"),attachment;const char *media_cursor=NULL;
         while(dj_next(attachments,&media_cursor,&attachment)){
             char content_type[64]={0};dj_get(attachment,"content_type",content_type,sizeof(content_type));
-            if(strncmp(content_type,"image/",6))continue;
+            if(strncmp(content_type,"image/",6)){char filename[256]={0};dj_get(attachment,"filename",filename,sizeof(filename));const char *ext=strrchr(filename,'.');if(content_type[0]||!ext||(strcmp(ext,".png")&&strcmp(ext,".jpg")&&strcmp(ext,".jpeg")&&strcmp(ext,".gif")))continue;}
             if(dnx_message_media(attachment,m.media_url,sizeof(m.media_url))){dj_get(attachment,"id",m.media_id,sizeof(m.media_id));if(!dnx_id(m.media_id))snprintf(m.media_id,sizeof(m.media_id),"%s",m.id);break;}
         }
         if(!m.media_url[0]){DnxJson embeds=dj_field(e,"embeds"),embed;media_cursor=NULL;

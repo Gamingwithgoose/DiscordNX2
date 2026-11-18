@@ -4,7 +4,7 @@
 #define STBI_ONLY_JPEG
 #define STBI_ONLY_GIF
 #define STBI_NO_STDIO
-#define STBI_MAX_DIMENSIONS 512
+#define STBI_MAX_DIMENSIONS 2048
 #define STB_IMAGE_IMPLEMENTATION
 #include "vendor/stb_image.h"
 #include <string.h>
@@ -35,16 +35,16 @@ static int gif_frames(const unsigned char *p,size_t n){
 }
 void dnx2FreeMedia(Dnx2DecodedMedia *m){if(m){free(m->pixels);memset(m,0,sizeof(*m));}}
 int dnx2DecodeMedia(const unsigned char *bytes,size_t n,Dnx2DecodedMedia *out){
-    if(!bytes||!out||n<8||n>524288)return 0;
+    if(!bytes||!out||n<8||n>1048575)return 0;
     memset(out,0,sizeof(*out));
-    int w=0,h=0,c=0;if(!stbi_info_from_memory(bytes,(int)n,&w,&h,&c)||w<1||h<1||w>512||h>512)return 0;
+    int w=0,h=0,c=0;if(!stbi_info_from_memory(bytes,(int)n,&w,&h,&c)||w<1||h<1||w>2048||h>2048||(size_t)w*h>4194304)return 0;
     int frames=1,*delays=NULL,gif=!memcmp(bytes,"GIF8",4),count=gif?gif_frames(bytes,n):1;
     if(!count)return 0;
     unsigned char *decoded;
     if(gif&&count<=12&&w<=256&&h<=256)decoded=stbi_load_gif_from_memory(bytes,(int)n,&delays,&w,&h,&frames,&c,4);
     else decoded=stbi_load_from_memory(bytes,(int)n,&w,&h,&c,4);
     if(!decoded||frames<1||frames>12){stbi_image_free(decoded);stbi_image_free(delays);return 0;}
-    int width=w,height=h;if(width>256){height=height*256/width;width=256;}if(height>144){width=width*144/height;height=144;}if(width<1)width=1;if(height<1)height=1;
+    int width=w,height=h;int maxw=frames>1?256:640,maxh=frames>1?256:360;if(width>maxw){height=height*maxw/width;width=maxw;}if(height>maxh){width=width*maxh/height;height=maxh;}if(width<1)width=1;if(height<1)height=1;
     size_t size=(size_t)width*height*4*(size_t)frames;out->pixels=malloc(size);if(!out->pixels){stbi_image_free(decoded);stbi_image_free(delays);return 0;}
     for(int f=0;f<frames;f++){
         for(int y=0;y<height;y++)for(int x=0;x<width;x++)memcpy(out->pixels+4*((size_t)f*width*height+y*width+x),decoded+4*((size_t)f*w*h+(y*h/height)*w+x*w/width),4);

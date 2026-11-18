@@ -8,12 +8,13 @@ static unsigned image_age;
 static void image_clear(ChatImage *image){dnx2FreeMedia(&image->media);memset(image,0,sizeof(*image));}
 static Dnx2MediaCatalog media_catalog;
 typedef struct {
-    Thread thread;Mutex mutex;int running,stop,done,op,ok,post_confirmed,messages_loaded;
+    Thread thread;Mutex mutex;int running,stop,done,op,ok,post_confirmed,messages_loaded,delegated,image_next;
     char guild[24],channel[24],user[24],token[1024],text[513],sticker[24],notice[160];
     Dnx2Account *data;Dnx2MediaCatalog *media;
     ChatImage images[8];int image_count,image_ready,image_applied;
 } ChatJob;
 static ChatJob chat_job;
+static int delegated_images;
 int dnx2JobBusy(void){return chat_job.running;}
 int dnx2JobKind(void){return chat_job.running?chat_job.op:0;}
 const char *dnx2JobDraft(void){return chat_job.text;}
@@ -47,8 +48,8 @@ static int job_apply_images(void){
     }
     mutexUnlock(&chat_job.mutex);return changed;
 }
-static void job_images(void){
-    for(int i=0;i<chat_job.image_count&&!job_cancel();i++){
+static void job_image(int i){
+    {
         ChatImage *image=&chat_job.images[i];char path[1536];const char *host="cdn.discordapp.com";
         if(image->type==1)snprintf(path,sizeof(path),"/icons/%s/%s.png?size=64",image->id,image->hash);
         else if(image->type==2)snprintf(path,sizeof(path),"/emojis/%s.png?size=64",image->id);
@@ -56,12 +57,20 @@ static void job_images(void){
         else if(image->type==4)snprintf(path,sizeof(path),"/avatars/%s/%s.png?size=64",image->id,image->hash);
         else if(image->type==7||image->type==8)snprintf(path,sizeof(path),"%s",image->path);
         else {snprintf(path,sizeof(path),"%s",image->path);host=image->host;}
-        TlsSession https;int ok=http_request(&https,host,"GET",path,NULL,NULL,(char*)http_body,image->type==5?524288:131072);tls_close(&https);
-        if(job_cancel())break;
+        TlsSession https;int ok=http_request(&https,host,"GET",path,NULL,NULL,(char*)http_body,image->type==5?1048575:131072);tls_close(&https);
+        if(job_cancel())return;
         image->valid=ok&&(image->type==5?dnx2DecodeMedia(http_body,last_http_body_size,&image->media):dnx2DecodePng(http_body,last_http_body_size,image->rgba))?1:-1;wipe(http_body,131072);
         mutexLock(&chat_job.mutex);chat_job.image_ready=i+1;mutexUnlock(&chat_job.mutex);
     }
-    chat_job.ok=1;
+}
+static void job_images(void){for(int i=0;i<chat_job.image_count&&!job_cancel();i++)job_image(i);chat_job.ok=1;}
+static void live_images_finish(void){if(__atomic_load_n(&delegated_images,__ATOMIC_ACQUIRE)){__atomic_store_n(&delegated_images,0,__ATOMIC_RELEASE);__atomic_store_n(&chat_job.done,1,__ATOMIC_RELEASE);}}
+static u64 live_image_deadline;
+static int live_image_cancel(void){return live_cancel()||job_cancel()||dnx2MonotonicMs()>=live_image_deadline;}
+static void live_image_step(void){
+    if(!__atomic_load_n(&delegated_images,__ATOMIC_ACQUIRE))return;
+    if(!job_cancel()&&!live_cancel()&&chat_job.image_next<chat_job.image_count){int (*previous)(void)=active_cancel;live_image_deadline=dnx2MonotonicMs()+2500;active_cancel=live_image_cancel;job_image(chat_job.image_next++);active_cancel=previous;}
+    if(job_cancel()||live_cancel()||chat_job.image_next>=chat_job.image_count){chat_job.ok=1;live_images_finish();}
 }
 static void job_worker(void *unused){
     (void)unused;int sockets=0,ssl=0;char path[140];active_cancel=job_cancel;last_http_status=0;
@@ -107,20 +116,22 @@ static void job_worker(void *unused){
 done:
     if(chat_job.op!=20){
         FILE *report=fopen("sdmc:/kaihen/discordnx2-hardware.txt","w");
-        if(report){fprintf(report,"DiscordNX2 v0.41 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
+        if(report){fprintf(report,"DiscordNX2 v0.42 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
     }
     if(!chat_job.ok&&!chat_job.notice[0])snprintf(chat_job.notice,sizeof(chat_job.notice),"Network request could not finish.");
     wipe(http_body,sizeof(http_body));if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
     wipe(chat_job.token,sizeof(chat_job.token));__atomic_store_n(&chat_job.done,1,__ATOMIC_RELEASE);
 }
 static int job_launch(void){
+    if(chat_job.op==20){mutexLock(&live_mutex);if(live_accept_images){chat_job.delegated=1;chat_job.running=1;wipe(chat_job.token,sizeof(chat_job.token));__atomic_store_n(&delegated_images,1,__ATOMIC_RELEASE);mutexUnlock(&live_mutex);return 1;}mutexUnlock(&live_mutex);dnx2LiveStop();}
+
     if(R_SUCCEEDED(threadCreate(&chat_job.thread,job_worker,NULL,NULL,128*1024,0x3b,-2))){
         if(R_SUCCEEDED(threadStart(&chat_job.thread))){chat_job.running=1;return 1;}threadClose(&chat_job.thread);
     }
     free(chat_job.data);free(chat_job.media);chat_job.data=NULL;chat_job.media=NULL;wipe(chat_job.token,sizeof(chat_job.token));snprintf(account.notice,sizeof(account.notice),"Request could not start.");return 0;
 }
 void dnx2JobStop(void){
-    if(chat_job.running){__atomic_store_n(&chat_job.stop,1,__ATOMIC_RELEASE);threadWaitForExit(&chat_job.thread);threadClose(&chat_job.thread);if(chat_job.op==20)job_apply_images();chat_job.running=0;}
+    if(chat_job.running){__atomic_store_n(&chat_job.stop,1,__ATOMIC_RELEASE);if(chat_job.delegated){while(!__atomic_load_n(&chat_job.done,__ATOMIC_ACQUIRE))svcSleepThread(1000000LL);}else{threadWaitForExit(&chat_job.thread);threadClose(&chat_job.thread);}if(chat_job.op==20)job_apply_images();chat_job.running=0;}
     if(chat_job.data){wipe(chat_job.data,sizeof(*chat_job.data));free(chat_job.data);chat_job.data=NULL;}
     if(chat_job.media){wipe(chat_job.media,sizeof(*chat_job.media));free(chat_job.media);chat_job.media=NULL;}
     for(int i=0;i<8;i++)dnx2FreeMedia(&chat_job.images[i].media);
@@ -128,7 +139,7 @@ void dnx2JobStop(void){
 }
 static int job_begin(int op){
     if(!account.signed_in||account.server_count<=0||(chat_job.running&&chat_job.op==11))return 0;
-    dnx2JobStop();dnx2LiveStop();memset(&chat_job,0,sizeof(chat_job));chat_job.op=op;
+    dnx2JobStop();if(op!=20)dnx2LiveStop();memset(&chat_job,0,sizeof(chat_job));chat_job.op=op;
     snprintf(chat_job.guild,sizeof(chat_job.guild),"%s",account.servers[account.selected].id);
     if(account.selected_channel>=0)snprintf(chat_job.channel,sizeof(chat_job.channel),"%s",account.channels[account.selected_channel].id);
     snprintf(chat_job.token,sizeof(chat_job.token),"%s",session_token);snprintf(chat_job.user,sizeof(chat_job.user),"%s",account.user_id);return 1;
@@ -138,6 +149,7 @@ int dnx2JobStart(int op,const char *text,const char *sticker){
     if((op==10||op==11||op==16)&&account.selected_channel<0)return 0;
     if(op==11&&(!text||strlen(text)>512||((!sticker||!*sticker)&&!*text)))return 0;
     if(!job_begin(op))return 0;
+    if(op==10)for(int i=0;i<DNX_ASSET_CACHE;i++)if(image_cache[i].valid<0)image_clear(&image_cache[i]);
     if(text)snprintf(chat_job.text,sizeof(chat_job.text),"%s",text);
     if(sticker)snprintf(chat_job.sticker,sizeof(chat_job.sticker),"%s",sticker);
     if(op==15)chat_job.media=calloc(1,sizeof(*chat_job.media));else chat_job.data=calloc(1,sizeof(*chat_job.data));
@@ -163,6 +175,7 @@ const unsigned char *dnx2AuthorAvatar(const char *id,const char *avatar,const ch
     int type=dnx_asset_hash(guild_avatar)?7:dnx_asset_hash(avatar)?4:8;const char *hash=type==7?guild_avatar:type==4?avatar:fallback;
     int slot=image_slot(type,id,hash);if(slot<0)return NULL;image_cache[slot].age=++image_age;return image_cache[slot].valid>0?image_cache[slot].rgba:NULL;
 }
+int dnx2MessageMediaState(const char *id){int slot=image_slot(5,id,"");return slot<0?0:image_cache[slot].valid;}
 const Dnx2DecodedMedia *dnx2MessageMedia(const char *id){int slot=image_slot(5,id,"");if(slot<0)return NULL;image_cache[slot].age=++image_age;return image_cache[slot].valid>0?&image_cache[slot].media:NULL;}
 int dnx2RequestMessageImages(int first,int count){
     if(chat_job.running||!account.signed_in||account.selected_channel<0)return 0;
@@ -194,7 +207,7 @@ int dnx2JobApply(void){
     if(!chat_job.running)return 0;
     int images=chat_job.op==20?job_apply_images():0;
     if(!__atomic_load_n(&chat_job.done,__ATOMIC_ACQUIRE))return images?20:0;
-    threadWaitForExit(&chat_job.thread);threadClose(&chat_job.thread);chat_job.running=0;
+    if(chat_job.delegated){while(!__atomic_load_n(&chat_job.done,__ATOMIC_ACQUIRE))svcSleepThread(1000000LL);}else{threadWaitForExit(&chat_job.thread);threadClose(&chat_job.thread);}chat_job.running=0;
     int scoped=account.signed_in&&account.server_count&&!strcmp(account.servers[account.selected].id,chat_job.guild);
     if((chat_job.op==10||chat_job.op==11||chat_job.op==16)&&scoped)scoped=account.selected_channel>=0&&!strcmp(account.channels[account.selected_channel].id,chat_job.channel);
     if(scoped){
