@@ -133,15 +133,18 @@ fail:
     clear_volatile(encrypted,sizeof(encrypted));
     return 0;
 }
+/* Current v2 remote-auth field is "nonce": the decrypted RSA-OAEP
+ * nonce base64url-encoded. The 2021-era "proof" SHA-256 variant is not
+ * compatible with TriCord's newer v2 exchange. */
 int dnx2AuthCryptoNonceProof(const char *cipher,char *proof,size_t proof_cap) {
-    unsigned char nonce[256]={0},hash[32]={0};
+    unsigned char nonce[256]={0};
     size_t n=0;
     int ok=dnx2AuthCryptoDecrypt(cipher,nonce,sizeof(nonce),&n);
-    if(ok)ok=mbedtls_sha256_ret(nonce,n,hash,0)==0;
-    if(ok)ok=base64_url(hash,sizeof(hash),proof,proof_cap);
-    clear_volatile(nonce,sizeof(nonce));clear_volatile(hash,sizeof(hash));
+    if(ok)ok=base64_url(nonce,n,proof,proof_cap);
+    clear_volatile(nonce,sizeof(nonce));
     return ok;
 }
+
 #else
 int dnx2AuthCryptoAvailable(void){return 0;}
 int dnx2AuthCryptoOpen(void){return 0;}

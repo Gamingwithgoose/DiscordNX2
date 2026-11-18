@@ -297,10 +297,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     out[used-offset]=0;
     /* Discord responses typically include Content-Length. On chunked
      * transfers, decode hexadecimal chunks into one bounded JSON buffer. */
-    if(strstr(out,"Transfer-Encoding: chunked")) {
-        /* Header was already removed; this branch is intentionally inert.
-         * JSON parsing below will fail closed on unsupported chunk framing. */
-    }
+
     return 1;
 }
 static int parse_identity(const char *json){
@@ -375,8 +372,13 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
         if(cancel&&cancel()){status("LOGIN CANCELED",NULL);break;}
         int n=ws_receive(&remote,ws_payload,sizeof(ws_payload),osGetTime()+4500);
         if(n==-2)break;
-        if(n<0)continue;
-        if(n==0)continue;
+        if(n<=0) {
+            if(osGetTime()-last_heartbeat>(u64)heartbeat) {
+                if(!ws_text(&remote,"{\"op\":\"heartbeat\"}"))break;
+                last_heartbeat=osGetTime();
+            }
+            continue;
+        }
         const char *json=(const char*)ws_payload;
         if(json_operation(json,"hello")){
             unsigned ms=0,timeout=0;
