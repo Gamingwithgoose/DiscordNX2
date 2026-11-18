@@ -9,10 +9,12 @@
 #include "chat_assets.h"
 #include "chat_media_data.h"
 #include "voice_control.h"
+#include "channel_memory.h"
+#include <sys/stat.h>
 #include "session_store.h"
 #include "auth_crypto.h"
 #include "captcha.h"
-#define DNX2_WS_MAX (1024*1024)
+#define DNX2_WS_MAX (4*1024*1024)
 #include "native_ws.h"
 #include <switch.h>
 #include <switch/services/bsd.h>
@@ -46,6 +48,10 @@ static u64 dnx2MonotonicMs(void) {
 #define WS_BUF 8192
 #define HTTP_BUF 1048576
 static Dnx2Account account;
+static DnxChannelMemory channel_choices;static char choices_user[24],choices_path[240];
+static void choices_sync(void){if(!dnx_id(account.user_id))return;if(strcmp(choices_user,account.user_id)){snprintf(choices_user,24,"%s",account.user_id);snprintf(choices_path,sizeof(choices_path),"sdmc:/switch/DiscordNX2/channels-%s.txt",choices_user);dnx_choice_load(&channel_choices,choices_path);}}
+const char *dnx2LastChannel(void){choices_sync();if(!dnx_id(account.user_id))return "";return dnx_choice_get(&channel_choices,account.private_mode?"dm":account.server_count?account.servers[account.selected].id:"");}
+
 static char session_token[1024];
 static unsigned char http_body[HTTP_BUF];
 static char captcha_headers[8192];
@@ -61,9 +67,9 @@ static unsigned char ws_payload[WS_BUF+1];
 
 const Dnx2Account *dnx2Account(void){return &account;}
 void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.private_mode=0;account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
-void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;}}
+void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;choices_sync();if(dnx_id(account.user_id)){dnx_choice_set(&channel_choices,account.private_mode?"dm":account.servers[account.selected].id,account.channels[i].id);mkdir("sdmc:/switch",0777);mkdir("sdmc:/switch/DiscordNX2",0777);(void)dnx_choice_save(&channel_choices,choices_path);}}}
 static void wipe(void *p,size_t n){volatile unsigned char *c=(volatile unsigned char*)p;while(n--)*c++=0;}
-void dnx2AccountClearMemory(void){dnx2ChatReset();dnx2LiveReset();wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
+void dnx2AccountClearMemory(void){dnx2ChatReset();dnx2LiveReset();wipe(&account,sizeof(account));wipe(&channel_choices,sizeof(channel_choices));wipe(choices_user,sizeof(choices_user));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
 void dnx2AccountLogout(void){dnx2AccountClearMemory();dnx2SessionForget();}
 
 #ifdef DNX2_USE_MBEDTLS
@@ -451,11 +457,11 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
     char token[1024]={0};if(!dnx2SessionLoad(token,sizeof(token),pin)){status("Could not unlock saved login. Check your PIN.",NULL);return 0;}
     active_cancel=cancel;int ok=0;
     if(R_SUCCEEDED(socketInitialize(NULL))){if(R_SUCCEEDED(sslInitialize(1))){
-        wipe(&account,sizeof(account));account.selected_channel=-1;ok=fetch_profile(token,status);
+        wipe(&account,sizeof(account));wipe(&channel_choices,sizeof(channel_choices));wipe(choices_user,sizeof(choices_user));account.selected_channel=-1;ok=fetch_profile(token,status);
         if(!ok&&last_http_status==401)dnx2SessionForget();
         sslExit();}socketExit();}
     active_cancel=NULL;wipe(token,sizeof(token));wipe(http_body,sizeof(http_body));
-    if(!ok){wipe(session_token,sizeof(session_token));wipe(&account,sizeof(account));account.selected_channel=-1;status("Saved login could not be restored. Retry or use QR login.",NULL);}
+    if(!ok){wipe(session_token,sizeof(session_token));wipe(&account,sizeof(account));wipe(&channel_choices,sizeof(channel_choices));wipe(choices_user,sizeof(choices_user));account.selected_channel=-1;status("Saved login could not be restored. Retry or use QR login.",NULL);}
     else status("Saved login restored",NULL);
     return ok;
 }
@@ -665,6 +671,8 @@ int dnx2JobBusy(void){return 0;}int dnx2JobKind(void){return 0;}
 int dnx2JobStart(int op,const char *a,const char *b){(void)op;(void)a;(void)b;return 0;}
 int dnx2JobApply(void){return 0;}void dnx2JobStop(void){}void dnx2ChatReset(void){}
 const char *dnx2JobDraft(void){return "";}const char *dnx2JobSticker(void){return "";}
+int dnx2RequestDMImages(int first,int count){(void)first;(void)count;return 0;}
+const unsigned char *dnx2DMImage(int index){(void)index;return NULL;}
 int dnx2RequestImages(int t,int f,int n){(void)t;(void)f;(void)n;return 0;}
 const unsigned char *dnx2ChatImage(int t,int n){(void)t;(void)n;return NULL;}
 const Dnx2MediaCatalog *dnx2MediaCatalog(void){static Dnx2MediaCatalog m;return &m;}

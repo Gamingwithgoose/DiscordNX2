@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "voice_control.h"
+#include "gateway_session.h"
 #include <assert.h>
 #include <stdint.h>
 typedef uint64_t u64;
@@ -8,7 +9,7 @@ typedef struct {int kind,socket_fd,returned_fd;} TlsSession;
 #define R_FAILED(x) ((x)!=0)
 #define DNX2_WS_MAX 8192
 static struct {unsigned close_code;} ws_reader;
-static char live_token[1024],live_session[160]="main-session";
+static char live_token[1024],live_session[160]="main-session",live_resume_host[256]="gateway-region.discord.gg";
 static long long live_sequence=1;
 static Dnx2AuthCancel active_cancel;
 static u64 live_identify_after;
@@ -18,7 +19,7 @@ static u64 dnx2MonotonicMs(void){now+=10;return now;}
 static void wipe(void *p,size_t n){memset(p,0,n);}
 static int csrngInitialize(void){rng++;return 0;}
 static void csrngExit(void){rng--;}
-static int tls_open(TlsSession *s,const char *host){s->kind=!strcmp(host,"gateway.discord.gg")?1:2;if(s->kind==2)assert(!strcmp(host,"voice-test.discord.media"));return 1;}
+static int tls_open(TlsSession *s,const char *host){s->kind=strstr(host,"gateway")?1:2;if(s->kind==2)assert(!strcmp(host,"voice-test.discord.media"));return 1;}
 static int ws_connect_to(TlsSession *s,const char *host,const char *path){(void)host;assert(!strcmp(path,s->kind==1?"/?v=10&encoding=json":"/?v=8"));return 1;}
 static void tls_close(TlsSession *s){(void)s;}
 static int live_identify(TlsSession *s){(void)s;assert(!strcmp(live_token,"synthetic-account-token"));return 1;}

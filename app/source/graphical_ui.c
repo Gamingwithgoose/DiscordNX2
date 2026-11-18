@@ -16,6 +16,7 @@
 #include "mobile_keyboard.h"
 #include "unicode_text.h"
 #include "message_style.h"
+#include "phone_text.h"
 #include <stdlib.h>
 #include "native_font.h"
 #include "brand_icon.h"
@@ -333,7 +334,8 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         int active=index==a->selected_channel;
         if(active||(focus==1&&channel_cursor==index))rounded(96,y,252,40,8,active?C_CARD_HI:C_CARD);
         char label[440];snprintf(label,sizeof(label),"%s%s",c->type==4?"":c->type==2||c->type==13?"Voice  ":c->type==15||c->type==16?"Forum  ":a->private_mode?"":"# ",c->name);
-        text_line(c->type==4?104:112,y+12,label,c->type==4?C_MUTED:C_WHITE,2,30);
+        if(a->private_mode){const unsigned char *picture=dnx2DMImage(index);if(picture)image_draw(104,y+4,32,32,picture,16);else rounded(104,y+4,32,32,16,C_CARD_HI);}
+        text_line(a->private_mode?146:c->type==4?104:112,y+12,label,c->type==4?C_MUTED:C_WHITE,2,30);
     }
     rect(88,650,268,70,C_DARK);text_line(104,666,a->signed_in?a->display_name:"Signed out",C_WHITE,2,30);
 
@@ -430,11 +432,13 @@ static void draw_auth(const char *phase,const char *qr_url){
     rounded(64,630,240,54,12,C_CARD);text_line(84,648,"Cancel",C_WHITE,2,60);
 }
 static int fallback_keyboard(Framebuffer *fb,PadState *pad){
-    int cursor=10,page=0,upper=0,armed=0,delete_touch=0;DnxDeleteRepeat repeat={0};
+    int cursor=10,page=0,upper=dnx_keyboard_caps(draft),armed=0,delete_touch=0;DnxDeleteRepeat repeat={0};uint64_t previous_space=0;
     for(;;){
+        char suggestions[3][40];int suggestion_count=dnx_suggestions(draft,suggestions);
         DnxKey keys[40];int count=dnx_keys(keys,page,upper);if(cursor>=count)cursor=0;
         u32 pitch=0;pixels=(uint32_t*)framebufferBegin(fb,&pitch);if(!pixels)return 0;stride_pixels=(int)(pitch/4);
         draw(NULL,tab,sel,focus,0);rect(0,418,W,302,RGBA8_MAXALPHA(28,29,33));text_right=1244;
+        for(int i=0;i<suggestion_count;i++){rounded(372+i*280,314,268,32,7,C_CARD_HI);text_right=632+i*280;text_line(386+i*280,321,suggestions[i],C_WHITE,2,30);}
         rounded(372,354,820,56,12,C_CARD);text_right=1168;
         const char *tail=draft;int tail_width=dnx2FontWidth(tail,2);
         while(*tail&&tail_width>760){const char *end=dnx_grapheme_end(tail);char cluster[256];dnx_cluster_text(tail,end,cluster);tail_width-=dnx2FontWidth(cluster,2);tail=end;}
@@ -456,6 +460,7 @@ static int fallback_keyboard(Framebuffer *fb,PadState *pad){
         if(down&HidNpadButton_AnyRight)cursor=dnx_key_move(keys,count,cursor,1,0);
         if(down&HidNpadButton_AnyUp)cursor=dnx_key_move(keys,count,cursor,0,-1);
         if(down&HidNpadButton_AnyDown)cursor=dnx_key_move(keys,count,cursor,0,1);
+        int suggestion=tap==1?dnx_suggestion_hit(x,y,suggestion_count):-1;if(suggestion>=0){dnx_suggestion_pick(draft,suggestions[suggestion]);upper=dnx_keyboard_caps(draft);previous_space=0;svcSleepThread(16000000LL);continue;}
         int pressed=(down&HidNpadButton_A)?cursor:-1;
         if(tap==1)pressed=dnx_key_hit(keys,count,x,y);
         int action=pressed>=0?keys[pressed].action:-1;
@@ -474,9 +479,9 @@ static int fallback_keyboard(Framebuffer *fb,PadState *pad){
         if(action==DNX_KEY_SHIFT){if(page)page=page==1?2:1;else upper=!upper;}
         if(action==DNX_KEY_PAGE){page=page?0:1;cursor=0;}
         size_t n=strlen(draft);
-        if(action==DNX_KEY_DELETE&&n){n=dnx_grapheme_previous(draft);draft[n]=0;}
-        if(action==DNX_KEY_SPACE&&n<512){draft[n++]=' ';draft[n]=0;}
-        if(action==DNX_KEY_TEXT&&pressed>=0){size_t k=strlen(keys[pressed].label);if(n+k<=512){memcpy(draft+n,keys[pressed].label,k+1);if(!page)upper=0;}}
+        if(action==DNX_KEY_DELETE&&n){n=dnx_grapheme_previous(draft);draft[n]=0;upper=dnx_keyboard_caps(draft);previous_space=0;}
+        if(action==DNX_KEY_SPACE){dnx_keyboard_space(draft,ui_ms(),&previous_space);upper=dnx_keyboard_caps(draft);n=strlen(draft);}
+        if(action==DNX_KEY_TEXT&&pressed>=0){size_t k=strlen(keys[pressed].label);if(n+k<=512){memcpy(draft+n,keys[pressed].label,k+1);upper=dnx_keyboard_caps(draft);previous_space=0;}}
         svcSleepThread(16000000LL);
     }
 }
@@ -508,6 +513,7 @@ int dnx2GraphicalMenu(void){
         unsigned wait=dnx2VoiceWaitSeconds();if(wait!=voice_wait){voice_wait=wait;dirty=1;}
         int completed=dnx2JobApply();
         if(completed){
+            if(completed==9||completed==23){const char *last=dnx2LastChannel();for(int i=0;i<a->channel_count;i++)if(last[0]&&!strcmp(last,a->channels[i].id)){channel_first=i>5?i-5:0;open_channel(i);break;}}
             if(completed==11&&!strcmp(draft,dnx2JobDraft())&&!strcmp(pending_sticker,dnx2JobSticker()))dnx2GraphicalClearDraft();
             if((completed==10||completed==11)&&follow_latest)message_first=message_bottom();
             dirty=1;
@@ -515,6 +521,7 @@ int dnx2GraphicalMenu(void){
         if(!dnx2JobBusy()&&a->signed_in&&(a->server_count||a->private_mode)){
             if(tab==2&&selected_text())dnx2LiveStart();
             int requested=dnx2RequestImages(1,server_page*8,8);
+            if(!requested&&a->private_mode)requested=dnx2RequestDMImages(channel_first,12);
             if(!requested&&media_open&&media_tab)requested=dnx2RequestImages(media_tab==1?2:3,media_page*24,24);
             if(!requested&&tab==2&&selected_text())requested=dnx2RequestMessageImages(message_expanded?sel:message_first,message_expanded?1:4);
             if(!requested&&tab==2&&selected_text())requested=dnx2RequestProfiles(profile_open||message_expanded?sel:message_first,profile_open||message_expanded?1:4);

@@ -4,6 +4,7 @@
  * All other account requests run only after this worker has joined. */
 static void live_image_step(void);
 static void live_images_finish(void);
+#include "gateway_session.h"
 static Thread live_thread;
 static int live_accept_images;
 static Mutex live_mutex;
@@ -11,7 +12,7 @@ static int live_running,live_stop,live_mode;
 static unsigned live_generation,live_applied;
 static int live_count;
 static char live_channel[24],live_guild[24],live_token[1024];
-static char live_session[160];
+static char live_session[160],live_resume_host[256];
 static long long live_sequence=-1;
 static u64 live_identify_after;
 static Dnx2Message live_pending[DNX2_MAX_MESSAGES];
@@ -81,7 +82,8 @@ static void live_worker(void *unused){
     rng=1;active_cancel=live_cancel;last_http_status=0;
     memset(&ws_reader,0,sizeof(ws_reader));live_set_mode(1);
     mutexLock(&live_mutex);live_accept_images=1;mutexUnlock(&live_mutex);
-    if(tls_open(&gateway,"gateway.discord.gg")&&ws_connect_to(&gateway,"gateway.discord.gg","/?v=10&encoding=json")){
+    const char *gateway_host=live_session[0]&&live_resume_host[0]?live_resume_host:"gateway.discord.gg";
+    if(tls_open(&gateway,gateway_host)&&ws_connect_to(&gateway,gateway_host,"/?v=10&encoding=json")){
         connected=1;hello_deadline=dnx2MonotonicMs()+15000;
     }else {tls_close(&gateway);live_set_mode(3);}
     while(!live_cancel()){
@@ -98,10 +100,10 @@ static void live_worker(void *unused){
                 else if(op==11)awaiting=0;
                 else if(op==1){if(!live_heartbeat(&gateway))connected=0;last_beat=now;awaiting=1;}
                 else if(op==7)connected=0;
-                else if(op==9){wipe(live_session,sizeof(live_session));live_sequence=-1;connected=0;}
+                else if(op==9){wipe(live_session,sizeof(live_session));wipe(live_resume_host,sizeof(live_resume_host));live_sequence=-1;connected=0;}
                 else if(op==0){dispatches++;char kind[64]={0};dj_get(root,"t",kind,sizeof(kind));
                     if(!strcmp(kind,"READY")||!strcmp(kind,"RESUMED")){
-                        if(!strcmp(kind,"READY"))dj_get(data,"session_id",live_session,sizeof(live_session));
+                        if(!strcmp(kind,"READY")){dj_get(data,"session_id",live_session,sizeof(live_session));live_resume_host[0]=0;(void)dnx_gateway_host(data,live_resume_host);}
                         ready=1;live_set_mode(2);live_subscribe(&gateway);next_refresh=now;
                     }else if(!strcmp(kind,"MESSAGE_CREATE")||!strcmp(kind,"MESSAGE_UPDATE")||!strcmp(kind,"MESSAGE_DELETE")||!strcmp(kind,"MESSAGE_DELETE_BULK")){
                         char channel[24]={0};if(dj_get(data,"channel_id",channel,sizeof(channel))&&!strcmp(channel,live_channel)){
@@ -135,7 +137,7 @@ done:
     mutexLock(&live_mutex);live_accept_images=0;live_images_finish();mutexUnlock(&live_mutex);
     if(!live_cancel()&&__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE)==1)live_set_mode(4);
     FILE *report=fopen("sdmc:/kaihen/discordnx2-live.txt","w");
-    if(report){fprintf(report,"DiscordNX2 v0.43 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
+    if(report){fprintf(report,"DiscordNX2 v0.44 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
     tls_close(&gateway);if(rng)csrngExit();if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
     wipe(&ws_reader,sizeof(ws_reader));if(event){wipe(event,DNX2_WS_MAX+1);free(event);}if(result){wipe(result,sizeof(*result));free(result);}
 }
@@ -143,7 +145,7 @@ void dnx2LiveStop(void){
     if(live_running){__atomic_store_n(&live_stop,1,__ATOMIC_RELEASE);threadWaitForExit(&live_thread);threadClose(&live_thread);live_running=0;}
     wipe(live_token,sizeof(live_token));
 }
-void dnx2LiveReset(void){dnx2LiveStop();wipe(live_pending,sizeof(live_pending));wipe(live_channel,sizeof(live_channel));wipe(live_guild,sizeof(live_guild));live_count=0;live_generation=live_applied=0;wipe(live_session,sizeof(live_session));live_sequence=-1;live_identify_after=0;live_set_mode(0);}
+void dnx2LiveReset(void){dnx2LiveStop();wipe(live_pending,sizeof(live_pending));wipe(live_channel,sizeof(live_channel));wipe(live_guild,sizeof(live_guild));live_count=0;live_generation=live_applied=0;wipe(live_session,sizeof(live_session));wipe(live_resume_host,sizeof(live_resume_host));live_sequence=-1;live_identify_after=0;live_set_mode(0);}
 void dnx2LiveStart(void){
     if(dnx2JobBusy()||live_running||!account.signed_in||account.selected_channel<0)return;
     int type=account.channels[account.selected_channel].type;if(type!=0&&type!=5&&type!=1&&type!=3)return;

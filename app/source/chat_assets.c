@@ -34,21 +34,32 @@ static int gif_frames(const unsigned char *p,size_t n){
     }return 0;
 }
 void dnx2FreeMedia(Dnx2DecodedMedia *m){if(m){free(m->pixels);memset(m,0,sizeof(*m));}}
+static int gif_preview(const unsigned char *bytes,size_t n,int w,int h,int count,Dnx2DecodedMedia *out){
+    int width=w,height=h;if(width>256){height=height*256/width;width=256;}if(height>256){width=width*256/height;height=256;}if(width<1)width=1;if(height<1)height=1;
+    int step=(count+59)/60,frames=(count+step-1)/step;size_t stride=(size_t)width*height*4;
+    while(stride*(size_t)frames>4194304){step++;frames=(count+step-1)/step;}
+    out->pixels=calloc((size_t)frames,stride);stbi__gif *g=calloc(1,sizeof(*g));unsigned char *saved=malloc((size_t)w*h*4);int ok=0,c=0;
+    if(!out->pixels||!g||!saved)goto done;
+    memset(saved,0,(size_t)w*h*4);stbi__context input;stbi__start_mem(&input,bytes,(int)n);int have_saved=0;
+    for(int f=0;f<count;f++){
+        unsigned char *pixels=stbi__gif_load_next(&input,g,&c,4,have_saved?saved:NULL);if(!pixels||pixels==(unsigned char*)&input)goto done;
+        int index=f/step;if(f%step==0)for(int y=0;y<height;y++)for(int x=0;x<width;x++)memcpy(out->pixels+(size_t)index*stride+4*(y*width+x),pixels+4*((y*h/height)*w+x*w/width),4);
+        int delay=g->delay;out->delays[index]+=delay<20?20:delay>2000?2000:delay;
+        if((g->eflags&0x1c)!=0x0c){memcpy(saved,pixels,(size_t)w*h*4);have_saved=1;}
+    }
+    out->width=width;out->height=height;out->frames=frames;ok=1;
+ done:
+    if(g){free(g->out);free(g);}free(saved);if(!ok)dnx2FreeMedia(out);return ok;
+}
 int dnx2DecodeMedia(const unsigned char *bytes,size_t n,Dnx2DecodedMedia *out){
     if(!bytes||!out||n<8||n>1048575)return 0;
-    memset(out,0,sizeof(*out));
-    int w=0,h=0,c=0;if(!stbi_info_from_memory(bytes,(int)n,&w,&h,&c)||w<1||h<1||w>2048||h>2048||(size_t)w*h>4194304)return 0;
-    int frames=1,*delays=NULL,gif=!memcmp(bytes,"GIF8",4),count=gif?gif_frames(bytes,n):1;
-    if(!count)return 0;
-    unsigned char *decoded;
-    if(gif&&count<=12&&w<=256&&h<=256)decoded=stbi_load_gif_from_memory(bytes,(int)n,&delays,&w,&h,&frames,&c,4);
-    else decoded=stbi_load_from_memory(bytes,(int)n,&w,&h,&c,4);
-    if(!decoded||frames<1||frames>12){stbi_image_free(decoded);stbi_image_free(delays);return 0;}
-    int width=w,height=h;int maxw=frames>1?256:640,maxh=frames>1?256:360;if(width>maxw){height=height*maxw/width;width=maxw;}if(height>maxh){width=width*maxh/height;height=maxh;}if(width<1)width=1;if(height<1)height=1;
-    size_t size=(size_t)width*height*4*(size_t)frames;out->pixels=malloc(size);if(!out->pixels){stbi_image_free(decoded);stbi_image_free(delays);return 0;}
-    for(int f=0;f<frames;f++){
-        for(int y=0;y<height;y++)for(int x=0;x<width;x++)memcpy(out->pixels+4*((size_t)f*width*height+y*width+x),decoded+4*((size_t)f*w*h+(y*h/height)*w+x*w/width),4);
-        int delay=delays?delays[f]:100;out->delays[f]=delay<20?20:delay>2000?2000:delay;
-    }
-    out->width=width;out->height=height;out->frames=frames;stbi_image_free(decoded);stbi_image_free(delays);return 1;
+    memset(out,0,sizeof(*out));int w=0,h=0,c=0;
+    if(!stbi_info_from_memory(bytes,(int)n,&w,&h,&c)||w<1||h<1||w>2048||h>2048||(size_t)w*h>4194304)return 0;
+    int gif=!memcmp(bytes,"GIF8",4),count=gif?gif_frames(bytes,n):1;if(!count)return 0;
+    if(gif&&count>1&&count<=240&&(size_t)w*h*(size_t)count<=33554432)return gif_preview(bytes,n,w,h,count,out);
+    unsigned char *decoded=stbi_load_from_memory(bytes,(int)n,&w,&h,&c,4);if(!decoded)return 0;
+    int width=w,height=h;if(width>640){height=height*640/width;width=640;}if(height>360){width=width*360/height;height=360;}if(width<1)width=1;if(height<1)height=1;
+    out->pixels=malloc((size_t)width*height*4);if(!out->pixels){stbi_image_free(decoded);return 0;}
+    for(int y=0;y<height;y++)for(int x=0;x<width;x++)memcpy(out->pixels+4*(y*width+x),decoded+4*((y*h/height)*w+x*w/width),4);
+    out->width=width;out->height=height;out->frames=1;out->delays[0]=100;stbi_image_free(decoded);return 1;
 }

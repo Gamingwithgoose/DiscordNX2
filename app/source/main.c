@@ -962,7 +962,7 @@ static void wifi_browser_report(const char *stage,Result result) {
 static void run_gui_action(int action) {
     if(action==8) {
         diag_len=0;
-        diagf("DiscordNX2 v0.43 Wi-Fi browser launch test - no account data or network changes\n");
+        diagf("DiscordNX2 v0.44 Wi-Fi browser launch test - no account data or network changes\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalWifiBrowserStatus("Opening the system Wi-Fi browser...",0);
         dnx2GraphicalAuthEnd();
@@ -979,7 +979,7 @@ static void run_gui_action(int action) {
     }
     else if(action==7) {
         diag_len=0;
-        diagf("DiscordNX2 v0.43 executable memory check - no network or account data\n");
+        diagf("DiscordNX2 v0.44 executable memory check - no network or account data\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalBrowserCheckStatus("Checking executable memory...",0);
         int passed=dnx2BrowserMemoryCheck(browser_memory_report);
@@ -993,7 +993,7 @@ static void run_gui_action(int action) {
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.43 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.44 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();
@@ -1001,7 +1001,7 @@ static void run_gui_action(int action) {
         (void)write_diagnostics();
     }
     else if(action>=9&&action<=11){
-        diag_len=0;diagf("DiscordNX2 v0.43 channel/text operation=%d - no message content or credentials\n",action);
+        diag_len=0;diagf("DiscordNX2 v0.44 channel/text operation=%d - no message content or credentials\n",action);
         int ok=0;dnx2GraphicalAuthBegin();
         if(action==9)ok=dnx2LoadChannels(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         else if(action==10)ok=dnx2LoadMessages(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
@@ -1016,7 +1016,7 @@ static void run_gui_action(int action) {
         (void)write_diagnostics();
     }
     else if(action==12||action==13){
-        diag_len=0;diagf("DiscordNX2 v0.43 saved-login operation - no PIN or credentials\n");
+        diag_len=0;diagf("DiscordNX2 v0.44 saved-login operation - no PIN or credentials\n");
         char pin[9]={0},confirm[9]={0};
         if(dnx2GraphicalPin(action==12?"Choose a login PIN":"Unlock saved login",pin)){
             if(action==12){

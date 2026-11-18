@@ -68,6 +68,7 @@ static inline void dnx_private_channels(Dnx2Account *a,const char *json){
     a->channel_count=0;a->selected_channel=-1;a->message_count=0;DnxJson root=dj_root(json),e;const char *p=NULL;
     while(a->channel_count<DNX2_MAX_CHANNELS&&dj_next(root,&p,&e)){
         Dnx2Channel c={0};c.type=dj_int(e,"type",-1);if(c.type!=1&&c.type!=3)continue;if(!dj_get(e,"id",c.id,24)||!dnx_id(c.id))continue;
+        dj_get(e,"icon",c.icon,80);DnxJson recipient;const char *rc=NULL;if(dj_next(dj_field(e,"recipients"),&rc,&recipient)){dj_get(recipient,"id",c.recipient,24);dj_get(recipient,"avatar",c.avatar,80);char disc[8]={0};dj_get(recipient,"discriminator",disc,sizeof(disc));c.default_avatar=dnx_default_avatar(c.recipient,disc);}
         dj_get(e,"last_message_id",c.last_message,24);if(!dnx_id(c.last_message))c.last_message[0]=0;
         if(!dj_get(e,"name",c.name,sizeof(c.name))||!c.name[0]){DnxJson user;const char *q=NULL;while(dj_next(dj_field(e,"recipients"),&q,&user)){char name[321]={0};if(!dj_get(user,"global_name",name,sizeof(name))||!name[0])dj_get(user,"username",name,sizeof(name));size_t used=strlen(c.name),n=strlen(name);if(!n)continue;if(used+n+3>=sizeof(c.name))break;if(used)strcat(c.name,", ");strcat(c.name,name);}}
         if(!c.name[0])snprintf(c.name,sizeof(c.name),"Group conversation");

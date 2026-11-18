@@ -25,6 +25,12 @@
       "source": "https://raw.githubusercontent.com/google/fonts/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf",
       "sha256": "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551",
       "license": "emoji-OFL.txt"
+    },
+    {
+      "file": "NotoSansSymbols[wght].ttf",
+      "source": "https://raw.githubusercontent.com/google/fonts/7af0d90b4d532ffa4b041937b560c6df4e7b1e95/ofl/notosanssymbols/NotoSansSymbols%5Bwght%5D.ttf",
+      "sha256": "f7e7e04b4a24b6c78893d50cbfd2b2f6cae49617ab047bfef668d252adb128f7",
+      "license": "enclosed-OFL.txt"
     }
   ]
 }

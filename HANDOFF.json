@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.43-replies-profiles-nicknames-dms-proportional-media",
+  "version": "0.44-gif-font-channel-memory-dm-art-offline-prediction",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -295,5 +295,15 @@
       "Brand opens existing DMs; read/send a test DM, switch between guild/DM without cross-conversation results.",
       "Voice countdown then connection stages; B cancels; audio remains unavailable."
     ]
+  },
+  "v044_implementation": {
+    "hardware_feedback": "User reports voice stage1/code0, GIFs not working, enclosed-letter MODDER squares, missing last-channel memory and DM pictures. Do not mark voice connected.",
+    "voice": "Capture validated wss://*.discord.gg resume host from READY, reuse it for live/voice Resume instead of always global Gateway. Clear stale session after pre-Ready transport failure; preserve Identify cooldown. Increase native uncompressed WS bound1->4MiB. Stage report adds hello/identified/ready/receive_result counters only. Exact code0 hardware cause unconfirmed; no DAVE/Opus call audio.",
+    "gif": "Incremental composited decode using pinned stb private frame reader, separate disposal-reference buffer; no vendor modifications. <=240 source frames and32M source pixel-frames, <=60 sampled preview frames, <=4MiB retained per animation, <=256x256 preview; aggregate timings over skipped frames. 4 media entries. Larger/heavier GIFs static. MP4/WebM GIFv still thumbnails, video decoder absent.",
+    "font": "Add unmodified NotoSansSymbols[wght].ttf from existing pinned Google Fonts revision, OFL license and SHA256 manifest. Enlarge fallback array16; actual raster tests include all enclosed MODDER letters. No universal Unicode claim.",
+    "navigation": "Account-scoped last channel per guild and last DM; bounded201 ID-only records, atomic temp/rename file under sdmc:/switch/DiscordNX2/channels-userid.txt; validation rejects invalid keys/IDs. Reopen valid saved channel after list load; no voice autojoin. RAM fallback if write fails, preference files retained across logout.",
+    "dm_art": "Retain recipient id/avatar/default index and group icon hash from private-channel list. Queued unauthenticated CDN avatar/default/channel-icon downloads and circular sidebar artwork.",
+    "keyboard": "Offline English prefix completions and simple common next words, explicit tap only, no telemetry/autocorrect or send. Sentence-start capitals, double-space . +space within400ms, existing grapheme deletion and Done/send/cancel behavior preserved.",
+    "validation": "Host checks include exact new enclosed glyph rasterization, actual130-frame GIF sampled with duration preserved, preference write/replace/load and separate guild/DM choices, caps/double-space/completion geometry, DM avatar/group icon CDN, regional host validation and actual1.5MiB WS Ready parse/4MiB rejection. Strict source checks and existing regressions run before commit; no NRO build. Hardware/provider behavior pending."
   }
 }

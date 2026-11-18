@@ -350,3 +350,13 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add existing direct/group-DM list, history, send and live-update paths, separated from guild context. App icon opens DMs; sidebar account name opens settings. No new-DM creation or DM calling.
 - Correct voice test's misleading Gateway cooldown failure: cancellable wait with countdown before Identify; clearer resume/stage/code failures. Voice audio still requires DAVE/Opus.
 - Synthetic data/job/live/cooldown regression fixtures and strict source checks pass; hardware comparison remains pending. No NRO/dependency build, NSO/payload changes or real account messages sent by tests.
+
+## v0.44 — 2026-11-18
+
+- Extend actual GIF animation beyond12 small frames with bounded incremental compositing, <=60 sampled preview frames and preserved timing. MP4/WebM GIF-style embeds still require video support; oversized/work-heavy GIFs remain still previews.
+- Embed pinned OFL Noto Sans Symbols and test the exact enclosed MODDER letters; enlarge font fallback capacity.
+- Persist per-account/per-server last channel and last DM as bounded ID-only preferences; automatically reopen valid selections, without voice autojoin.
+- Load DM recipient/default avatars and group conversation icons in the sidebar.
+- Add sentence capitals, double-space punctuation and explicit offline English word/next-word suggestions, keeping messages local until Send/Done.
+- Use validated regional Gateway Resume hosts, raise uncompressed Ready capacity to4MiB and clear stale pre-Ready sessions. Expand safe voice diagnostics; stage1/code0 exact cause remains unconfirmed and voice audio remains unfinished.
+- Add synthetic GIF/font/preferences/DM-art/keyboard/Gateway regression checks. Source-only update: no NRO/dependency build, resident NSO or loader changes.

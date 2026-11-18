@@ -3,6 +3,9 @@
 #include "unicode_text.h"
 #include "profile_data.h"
 #include "message_style.h"
+#include "channel_memory.h"
+#include "phone_text.h"
+#include "gateway_session.h"
 #include <assert.h>
 static Dnx2Account account;
 int main(int argc,char **argv){
@@ -12,7 +15,7 @@ int main(int argc,char **argv){
     char text[100];snprintf(text,sizeof(text),"A%s",family);assert(dnx_grapheme_previous(text)==1);text[dnx_grapheme_previous(text)]=0;assert(!strcmp(text,"A"));
     char composed[256];dnx_cluster_text(accent,accent+strlen(accent),composed);assert(!strcmp(composed,"\xc3\xa9"));
     char decoded[100];assert(dj_get(dj_root("{\"text\":\"\\u00e9\\n\\ud83d\\ude00\"}"),"text",decoded,sizeof(decoded)));assert(!strcmp(decoded,"\xc3\xa9\n\xf0\x9f\x98\x80"));assert(!dj_get(dj_root("{\"text\":\"\\u0000\"}"),"text",decoded,sizeof(decoded)));
-    char host[48],path[1536];assert(dnx_media_url("https://media.discordapp.net/attachments/123/test.png?ex=1",host,path));
+    char host[256],path[1536];assert(dnx_media_url("https://media.discordapp.net/attachments/123/test.png?ex=1",host,path));
     assert(!dnx_media_url("https://media.discordapp.net.evil.example/x.png",host,path));assert(!dnx_media_url("http://cdn.discordapp.com/x.png",host,path));assert(!dnx_media_url("https://127.0.0.1/x.png",host,path));assert(!dnx_media_url("https://cdn.discordapp.com/x\r\nHeader: bad",host,path));
     dnx_messages(&account,"[{\"id\":\"900000000000000001\",\"timestamp\":\"2026-11-18T08:36:00Z\",\"author\":{\"id\":\"100000000000000001\",\"username\":\"global\",\"avatar\":\"0123456789abcdef0123456789abcdef\",\"discriminator\":\"1234\"},\"member\":{\"nick\":\"Server Nick\",\"avatar\":\"abcdef0123456789abcdef0123456789\"},\"content\":\"caption\",\"attachments\":[{\"id\":\"800000000000000001\",\"content_type\":\"image/gif\",\"proxy_url\":\"https://media.discordapp.net/attachments/123/test.gif?ex=1\"}]}]");
     assert(account.message_count==1);const Dnx2Message *m=&account.messages[0];assert(!strcmp(m->author,"Server Nick")&&!strcmp(m->author_id,"100000000000000001")&&m->default_avatar==4&&m->avatar[0]&&m->guild_avatar[0]&&strstr(m->media_url,"width=640")&&m->media_id[0]);
@@ -26,5 +29,9 @@ int main(int argc,char **argv){
     dnx_messages(&account,"[{\"message_reference\":{\"message_id\":\"900000000000000000\"},\"referenced_message\":null}]");assert(account.messages[0].reply_state==3);
     unsigned style=0;assert(dnx_message_style("**bold**",&style)==2&&style==1);assert(dnx_message_style("**",&style)==2&&!style);assert(!dnx_message_style("*unclosed",&style));assert(dnx_message_style("`code`",&style)==1&&style==16);assert(!dnx_message_style("**literal**",&style));assert(dnx_message_style("`",&style)==1&&!style);
     dnx_private_channels(&account,"[{\"id\":\"200000000000000001\",\"type\":1,\"last_message_id\":\"900000000000000001\",\"recipients\":[{\"username\":\"Older\"}]},{\"id\":\"200000000000000002\",\"type\":3,\"last_message_id\":\"900000000000000002\",\"recipients\":[{\"global_name\":\"Alice\"},{\"username\":\"Bob\"}]}]");assert(account.channel_count==2&&account.channels[0].type==3&&!strcmp(account.channels[0].name,"Alice, Bob"));
+    snprintf(file,sizeof(file),"%s.long.gif",argv[1]);f=fopen(file,"rb");assert(f);fseek(f,0,SEEK_END);n=(size_t)ftell(f);rewind(f);bytes=malloc(n);assert(bytes&&fread(bytes,1,n,f)==n);fclose(f);assert(dnx2DecodeMedia(bytes,n,&media)&&media.frames>12&&media.frames<=60);int duration=0;for(int i=0;i<media.frames;i++)duration+=media.delays[i];assert(duration==13000);dnx2FreeMedia(&media);free(bytes);
+    DnxChannelMemory choices={0},restored;dnx_choice_set(&choices,"100000000000000001","200000000000000001");dnx_choice_set(&choices,"100000000000000002","200000000000000002");dnx_choice_set(&choices,"dm","200000000000000003");snprintf(file,sizeof(file),"%s.preferences",argv[1]);assert(dnx_choice_save(&choices,file));dnx_choice_load(&restored,file);assert(!strcmp(dnx_choice_get(&restored,"100000000000000001"),"200000000000000001")&&!strcmp(dnx_choice_get(&restored,"dm"),"200000000000000003"));dnx_choice_set(&choices,"100000000000000001","200000000000000004");assert(dnx_choice_save(&choices,file));dnx_choice_load(&restored,file);assert(restored.count==3&&!strcmp(dnx_choice_get(&restored,"100000000000000001"),"200000000000000004"));remove(file);
+    char typing[513]="hello";uint64_t previous=0;dnx_keyboard_space(typing,1000,&previous);dnx_keyboard_space(typing,1200,&previous);assert(!strcmp(typing,"hello. ")&&dnx_keyboard_caps(typing));assert(dnx_keyboard_caps("")&&!dnx_keyboard_caps("Hello "));char suggestions[3][40];assert(dnx_suggestions("Hel",suggestions)>0&&!strcmp(suggestions[0],"Hello"));assert(dnx_suggestion_pick(typing,"Next")&&!strcmp(typing,"hello. Next "));assert(dnx_suggestions("thank ",suggestions)==3&&!strcmp(suggestions[0],"you"));assert(dnx_suggestion_hit(400,330,3)==0&&dnx_suggestion_hit(650,350,3)==-1);
+    assert(dnx_gateway_host(dj_root("{\"resume_gateway_url\":\"wss://gateway-region.discord.gg\"}"),host)&&!strcmp(host,"gateway-region.discord.gg"));assert(!dnx_gateway_host(dj_root("{\"resume_gateway_url\":\"wss://gateway.discord.gg.evil/x\"}"),host));
     puts("PASS Unicode grapheme editing/NFC/newlines, avatar/nickname metadata, approved image URLs and actual bounded animated GIF decoding");
 }

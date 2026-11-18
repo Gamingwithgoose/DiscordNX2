@@ -5,7 +5,7 @@
 #define DNX2_MAX_CHANNELS 512
 #define DNX2_MAX_MESSAGES 30
 typedef struct {char id[24];char name[401];char icon[80];} Dnx2Server;
-typedef struct {char id[24],parent[24],name[401],last_message[24];int type,position;} Dnx2Channel;
+typedef struct {char id[24],parent[24],name[401],last_message[24],icon[80],recipient[24],avatar[80];unsigned default_avatar;int type,position;} Dnx2Channel;
 typedef struct {char id[24],author[321],content[8193],sticker_id[24],sticker_name[129];int sticker_format;char author_id[24],avatar[80],guild_avatar[80],timestamp[40],media_id[24],media_url[1536];unsigned default_avatar;
     char username[129],discriminator[8],tag[25],tag_guild[24],tag_badge[80];int bot;
     char reply_id[24],reply_author_id[24],reply_author[321],reply_content[513];int reply_state;
@@ -36,6 +36,7 @@ int dnx2LiveApply(void);
 const char *dnx2LiveStatus(void);
 int dnx2LoadChannels(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
 void dnx2ChannelSelect(int index);
+const char *dnx2LastChannel(void);
 int dnx2LoadMessages(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
 int dnx2SendMessage(const char *text,Dnx2AuthStatus status,Dnx2AuthCancel cancel);
 int dnx2RememberSession(const char *pin);

@@ -17,4 +17,8 @@ dnx2_font_symbols:
 .global dnx2_font_emoji
 dnx2_font_emoji:
 .incbin "assets/fonts/NotoEmoji[wght].ttf"
+.balign 16
+.global dnx2_font_enclosed
+dnx2_font_enclosed:
+.incbin "assets/fonts/NotoSansSymbols[wght].ttf"
 .section .note.GNU-stack,"",%progbits

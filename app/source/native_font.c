@@ -19,10 +19,10 @@ typedef struct {
     int xoff,yoff,w,h,advance;
     uint32_t code;int ready;
 } CachedGlyph;
-extern const unsigned char dnx2_font_sans[],dnx2_font_math[],dnx2_font_symbols[],dnx2_font_emoji[];
+extern const unsigned char dnx2_font_sans[],dnx2_font_math[],dnx2_font_symbols[],dnx2_font_emoji[],dnx2_font_enclosed[];
 static struct {
     stbtt_fontinfo info;
-    stbtt_fontinfo fallback[10];
+    stbtt_fontinfo fallback[16];
     int fallback_count;
     CachedGlyph glyphs[3][256];
     int initialized,pl_live;
@@ -52,8 +52,8 @@ int dnx2FontInit(void) {
         int offset=stbtt_GetFontOffsetForIndex(shared.address,0);
         if(offset>=0&&stbtt_InitFont(&font_state.fallback[font_state.fallback_count],shared.address,offset))font_state.fallback_count++;
     }
-    const unsigned char *bundled[]={dnx2_font_sans,dnx2_font_math,dnx2_font_symbols,dnx2_font_emoji};
-    for(int i=0;i<4;i++){
+    const unsigned char *bundled[]={dnx2_font_sans,dnx2_font_math,dnx2_font_symbols,dnx2_font_emoji,dnx2_font_enclosed};
+    for(int i=0;i<5;i++){
         int offset=stbtt_GetFontOffsetForIndex(bundled[i],0);
         if(offset>=0&&stbtt_InitFont(&font_state.fallback[font_state.fallback_count],bundled[i],offset))font_state.fallback_count++;
     }
