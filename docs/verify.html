@@ -4,7 +4,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://*.hcaptcha.com https://hcaptcha.com; frame-src https://*.hcaptcha.com https://hcaptcha.com; style-src 'unsafe-inline' https://*.hcaptcha.com https://hcaptcha.com; connect-src https://*.hcaptcha.com https://hcaptcha.com; img-src data: https://*.hcaptcha.com https://hcaptcha.com; base-uri 'none'; form-action http:">
 <title>DiscordNX2 phone verification</title>
 <style>body{margin:0;background:#17191f;color:#eef0fa;font:17px system-ui;line-height:1.5}main{max-width:520px;margin:32px auto;padding:24px;background:#242731;border-radius:24px}h1{font-size:25px;margin-top:0}p{color:#c8cbd6}button{border:0;border-radius:14px;background:#5865f2;color:white;font:inherit;padding:14px 24px;margin-top:24px}button:disabled{opacity:.5}#challenge{margin-top:24px}</style></head>
-<body><main><h1>Verify your Discord login</h1><p id="status">Keep your Switch open and connect this phone to the same Wi-Fi. Complete the challenge yourself below.</p><div id="challenge"></div><button id="send" type="button" disabled>Send to Switch</button><p>The result is encrypted for your Switch. No Discord account token or login ticket enters this page. Your browser may ask you to continue to a local address when you send it.</p></main>
+<body><main><h1>Verify your Discord login</h1><p id="status">Keep your Switch open and connect this phone to the same Wi-Fi. Complete the challenge yourself below.</p><div id="challenge"></div><button id="send" type="button" disabled>Send to Switch</button><p>The result is encrypted for your Switch. No Discord account token or login ticket enters this page. Your browser may ask you to continue to a local address when you send it.</p><aside style="margin-top:24px;font-size:14px;color:#b4b7c5"><strong>Temporary service.</strong> Hosting may stop at any time, without notice. This page is provided only until proper browser support is available on Switch 2. <a href="./" style="color:#aab3ff">About this service</a></aside></main>
 <script>
 'use strict';
 const params=new URLSearchParams(location.hash.slice(1));
@@ -29,11 +29,11 @@ function encode64(bytes){return btoa(String.fromCharCode(...bytes)).replace(/\+/
 async function seal(token){
  if(!valid||finished||busy||sealed)return;
  if(typeof token!=='string'||!token){message('The CAPTCHA has not returned a completed result yet. Finish the challenge on this page.');return;}
- if(token.length>tokenLimit){message('The verification result exceeds this Switch app version’s limit ('+token.length+' characters; maximum '+tokenLimit+'). Update DiscordNX2, then start a new login.');return;}
+ if(token.length>tokenLimit){message('The verification result exceeds the limit for this Switch app version ('+token.length+' characters; maximum '+tokenLimit+'). Update DiscordNX2, then start a new login.');return;}
  if(!/^[\x21-\x7e]+$/.test(token)){message('The CAPTCHA returned an unsupported result. Start a new login on the Switch.');return;}
  busy=true;const serial=++generation;
  let step='starting encryption';
- message('Verification received. Encrypting the result for your Switch…');
+ message('Verification received. Encrypting the result for your Switch...');
  try{
   const key=crypto.getRandomValues(new Uint8Array(32)),iv=crypto.getRandomValues(new Uint8Array(12));
   const aes=await crypto.subtle.importKey('raw',key,'AES-GCM',false,['encrypt']);

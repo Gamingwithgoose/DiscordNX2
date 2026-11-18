@@ -279,3 +279,15 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add opt-in Dashboard R+Y test using public webWifiCreate/webWifiShow, fixed Example Domain HTTPS URL and no connection-test override. Release and restore framebuffer, persist each stage, log API status separately from user confirmation that the actual page appeared.
 - Default phone handoff is disabled while the on-console route is tested; pending phone-page/button fixes remain local and are not deployed to the personal website. No real login/CAPTCHA is attempted by this test.
 - Source checks only, no NRO/browser/dependency build. No DNS, loader, payload, NSO or audio/network implementation changes. Hardware availability and hCaptcha compatibility remain unverified.
+
+
+## v0.37 - temporary verification site in this repository
+
+- User authorized GitHub Pages in DiscordNX2 while proper Switch 2 browser support is developed. Add buildless docs/index.html and canonical docs/verify.html, published from main:/docs with .nojekyll.
+- README and both site pages explicitly state hosting may stop at any time, without notice, with no uptime guarantee. CAPTCHA logins may stop if hosting stops; self-hosting via configurable HTTPS URL remains available.
+- Re-enable the temporary phone fallback and change the default from the separate community website to https://gamingwithgoose.github.io/DiscordNX2/verify.html. Include prepared result-size, callback fallback and visible-error fixes; tests now exercise the published source.
+- v0.36 direct Wi-Fi browser test returned applet reply 0016a86e and no actual test page; no browser success claimed. Normal public jailbreak, DNS, resident NSO and local-only NRO builds remain unchanged.
+- No custom Actions workflow, Docker or NRO cloud build. GitHub Pages uses its managed deployment infrastructure. No custom domain or Cloudflare change is required.
+
+- Repository cleanup: replace the accumulated README test history with a complete current guide and a prominent incomplete-functionality disclaimer. Document supported menus, controls, setup, NRO-only transfers, two QR steps, known blockers, privacy, self-hosting and developer checks; retain history in Git/CHANGELOG. Setup now directs users to Build-NRO.bat.
+- User made the repository public; GitHub Pages main:/docs enabled successfully with HTTPS and no custom domain. NACP metadata now depends on its Makefile so version changes are rebuilt.

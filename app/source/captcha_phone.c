@@ -16,11 +16,11 @@
 #include <time.h>
 
 #ifndef DNX2_PHONE_CAPTCHA_PAGE_URL
-#define DNX2_PHONE_CAPTCHA_PAGE_URL "https://mmonsterpatch.gamingwithgoose.com/discordnx2-phone.html"
+#define DNX2_PHONE_CAPTCHA_PAGE_URL "https://gamingwithgoose.github.io/DiscordNX2/verify.html"
 #endif
-// Opt-in only while the normal public-jailbreak, on-console route is tested.
+// Temporary fallback until proper on-console browser support is available.
 #ifndef DNX2_ENABLE_PHONE_HANDOFF
-#define DNX2_ENABLE_PHONE_HANDOFF 0
+#define DNX2_ENABLE_PHONE_HANDOFF 1
 #endif
 static const char *failure="Verification was not completed.";
 static unsigned phone_error;
@@ -101,7 +101,7 @@ int dnx2CaptchaShow(const Dnx2Captcha *c,char *solution,size_t cap,unsigned loca
     if(!dnx2AuthCryptoPublicKey(s->pubkey,sizeof(s->pubkey))||
        !encode(c->sitekey,s->site,sizeof(s->site))||!encode(c->rqdata,s->data,sizeof(s->data))||
        !encode(s->pubkey,s->pub,sizeof(s->pub))||!encode(destination,s->back,sizeof(s->back))){failure="Phone verification request could not be encoded.";goto done;}
-    int count=snprintf(s->url,sizeof(s->url),"%s?page=35#v=1&limit=4095&state=%s&sitekey=%s&rqdata=%s&pub=%s&return=%s",
+    int count=snprintf(s->url,sizeof(s->url),"%s?page=37#v=1&limit=4095&state=%s&sitekey=%s&rqdata=%s&pub=%s&return=%s",
         DNX2_PHONE_CAPTCHA_PAGE_URL,s->state,s->site,s->data,s->pub,s->back);
     if(count<=0||(size_t)count>=sizeof(s->url)||count>2200) {
         failure="Challenge too large for a phone QR. No data was truncated.";goto done;

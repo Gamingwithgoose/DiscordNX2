@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 set "DISCORDNX2_ROOT=%CD%"
 echo DiscordNX2 NRO-only local build
-echo System Wi-Fi browser test: hold R and press Y on Dashboard.
+echo Temporary phone verification uses the DiscordNX2 GitHub Pages site.
 set "BASH=C:\devkitPro\msys2\usr\bin\bash.exe"
 if not exist "%BASH%" goto fail
 echo Checking secure QR-login cryptography dependency...

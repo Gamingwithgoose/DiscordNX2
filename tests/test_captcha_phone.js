@@ -1,14 +1,14 @@
 // Synthetic messages only. No real CAPTCHA is solved or submitted.
 const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
 const {webcrypto}=require('crypto'),{spawn}=require('child_process');
-const html=fs.readFileSync(path.join(__dirname,'../app/assets/captcha-phone.html'),'utf8');
+const html=fs.readFileSync(path.join(__dirname,'../docs/verify.html'),'utf8');
 const script=html.match(/<script>\s*([\s\S]*?)<\/script>/)[1];
 const state='a'.repeat(64),token='synthetic/solution+';
 function page(pub,back='http://192.168.1.2:12345/captcha-return',extra={}){
  let callback,clicked,form,cleared=false,notice='',poll,response='';
  const button={disabled:true,addEventListener:(event,fn)=>clicked=fn};
  const c={URL,URLSearchParams,Uint8Array,TextEncoder,atob,btoa,crypto:webcrypto,setInterval:fn=>{poll=fn;return 1;},clearInterval:()=>{poll=null;},
-  location:{hash:'#'+new URLSearchParams({v:'1',limit:'4095',state,sitekey:'test-site',rqdata:'test+data',pub,return:back,...extra}),pathname:'/discordnx2-phone.html'},
+  location:{hash:'#'+new URLSearchParams({v:'1',limit:'4095',state,sitekey:'test-site',rqdata:'test+data',pub,return:back,...extra}),pathname:'/DiscordNX2/verify.html'},
   history:{replaceState:()=>cleared=true},document:{getElementById:id=>id==='send'?button:{set textContent(v){notice=v;}},
    createElement:tag=>({tag,children:[],appendChild(x){this.children.push(x);},submit(){form=this;}}),body:{appendChild(){}}},
   hcaptcha:{getResponse:()=>response,render:(id,o)=>{callback=o.callback;return 7;},setData:(id,data)=>assert.equal(data.rqdata,'test+data')}};

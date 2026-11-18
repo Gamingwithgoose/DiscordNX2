@@ -23,7 +23,7 @@ if not defined BASH (
 "%BASH%" -lc "cd \"$(cygpath -u \"$DISCORDNX2_ROOT\")\" && sh ./setup-toolchain.sh"
 if errorlevel 1 goto fail
 echo.
-echo Setup complete. You can run Build.bat now.
+echo Setup complete. Run Build-NRO.bat for the current NRO-only update.
 pause
 exit /b 0
 :fail
