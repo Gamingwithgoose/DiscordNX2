@@ -120,8 +120,8 @@ int dnx2FontFit(const char *text,int width,int size,int maxchars){
         used+=advance;fit=end;p=end;
     }return (int)(fit-text);
 }
-int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
-                int x,int y,const char *str,uint32_t color,int size,int maxchars) {
+int dnx2FontDrawStyled(uint32_t *pixels,int stride,int width,int height,
+                int x,int y,const char *str,uint32_t color,int size,int maxchars,unsigned style) {
     if(!font_state.initialized||!pixels||!str)return 0;
     const int sz=size<=2?0:size==3?1:2,baseline=y+heights[sz]-2;int cursor=x;const char *p=str;
     for(int i=0;*p&&i<maxchars;i++){
@@ -130,8 +130,10 @@ int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
         while(*q){uint32_t cp=dnx_utf8_next(&q);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;if(cp<32)cp=' ';CachedGlyph *g=glyph(sz,cp);
             if(g->bitmap)for(int gy=0;gy<g->h;gy++){
                 int py=baseline+g->yoff+gy;if(py<0||py>=height)continue;
-                for(int gx=0;gx<g->w;gx++){int px=pen+g->xoff+gx;if(px<0||px>=width)continue;unsigned a=g->bitmap[gy*g->w+gx];if(a)pixels[py*stride+px]=blend(pixels[py*stride+px],color,a);}
+                for(int gx=0;gx<g->w;gx++){int px=pen+g->xoff+gx+((style&2)?(g->h-gy)/5:0);if(px<0||px>=width)continue;unsigned a=g->bitmap[gy*g->w+gx];if(a){pixels[py*stride+px]=blend(pixels[py*stride+px],color,a);if((style&1)&&px+1<width)pixels[py*stride+px+1]=blend(pixels[py*stride+px+1],color,a);}}
             }pen+=g->advance;
         }cursor+=advance;p=end;
     }return 1;
 }
+
+int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,int x,int y,const char *str,uint32_t color,int size,int maxchars){return dnx2FontDrawStyled(pixels,stride,width,height,x,y,str,color,size,maxchars,0);}

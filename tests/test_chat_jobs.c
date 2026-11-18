@@ -9,7 +9,7 @@ typedef struct {int unused;} TlsSession;
 #define R_FAILED(x) ((x)!=0)
 #define API_HOST "discord.com"
 static Dnx2Account account;
-static char session_token[1024]="synthetic-token";
+static char session_token[1024]="synthetic-token",live_token[1024]="synthetic-token";
 static unsigned char http_body[1048576];
 static unsigned last_http_status;
 static size_t last_http_body_size;
@@ -38,12 +38,15 @@ static void svcSleepThread(long long n){(void)n;}
 static void tls_close(TlsSession *s){(void)s;}
 static int http_request(TlsSession *s,const char *host,const char *method,const char *path,const char *body,const char *token,char *out,size_t cap){
     (void)s;last_http_status=http_fail?403:200;
-    if(!strcmp(host,"cdn.discordapp.com")){assert(!token&&!strcmp(method,"GET"));assert(!strncmp(path,"/icons/",7)||!strncmp(path,"/emojis/",8)||!strncmp(path,"/stickers/",10));assert(png_size<cap);memcpy(out,png,png_size);last_http_body_size=png_size;cdn_calls++;return !http_fail;}
+    if(!strcmp(host,"cdn.discordapp.com")){assert(!token&&!strcmp(method,"GET"));assert(!strncmp(path,"/icons/",7)||!strncmp(path,"/emojis/",8)||!strncmp(path,"/stickers/",10)||!strncmp(path,"/guild-tag-badges/",18));assert(png_size<cap);memcpy(out,png,png_size);last_http_body_size=png_size;cdn_calls++;return !http_fail;}
     assert(!strcmp(host,API_HOST)&&!strcmp(token,"synthetic-token"));
     if(!strcmp(method,"POST")){
         post_calls++;char text[200];assert(dj_get(dj_root(body),"content",text,sizeof(text)));assert(!strcmp(text,"hello"));
         DnxJson ids=dj_field(dj_root(body),"sticker_ids");if(ids.p)assert(strstr(body,"300000000000000001"));strcpy(out,"{}");return !http_fail;
     }
+    if(strstr(path,"/roles")){snprintf(out,cap,"[{\"id\":\"600000000000000001\",\"name\":\"Regular\",\"position\":1,\"color\":65280},{\"id\":\"600000000000000002\",\"name\":\"Moderator\",\"position\":2,\"colors\":{\"primary_color\":16711680}}]");last_http_body_size=strlen(out);return !http_fail;}
+    if(strstr(path,"/members/")){snprintf(out,cap,"{\"nick\":\"Server nickname\",\"roles\":[\"600000000000000001\",\"600000000000000002\"],\"joined_at\":\"2020-01-01T00:00:00Z\"}");last_http_body_size=strlen(out);return !http_fail;}
+    if(!strcmp(path,"/api/v10/users/@me/channels")){snprintf(out,cap,"[{\"id\":\"200000000000000001\",\"type\":1,\"recipients\":[{\"id\":\"300000000000000001\",\"global_name\":\"DM friend\"}]}]");last_http_body_size=strlen(out);return !http_fail;}
     const char *response=strstr(path,"/emojis")?"[{\"id\":\"400000000000000001\",\"name\":\"goose\",\"animated\":true}]":strstr(path,"/stickers")?"[{\"id\":\"300000000000000001\",\"name\":\"Wave\",\"format_type\":1}]":strstr(path,"/guilds/")?"[{\"id\":\"200000000000000001\",\"name\":\"general\",\"type\":0,\"position\":1}]":empty_history?"[]":"[{\"id\":\"900000000000000001\",\"author\":{\"username\":\"fixture\"},\"content\":\"fresh\"}]";
     snprintf(out,cap,"%s",response);last_http_body_size=strlen(out);return !http_fail;
 }
@@ -70,6 +73,10 @@ int main(int argc,char **argv){
     assert(!dnx_custom_emoji("<:../bad:400000000000000001>",id,name));assert(!dnx_custom_emoji("<:goose:1>",id,name));assert(!dnx_custom_emoji("<",id,name));
     assert(dnx_asset_hash("a_0123456789abcdef0123456789abcdef"));assert(!dnx_asset_hash("../../not-a-hash"));
     dnx2ChatReset();assert(!dnx2ChatImage(1,0)&&!dnx2MediaCatalog()->loaded);
-    dnx2ChatReset();delegated_check();dnx2ChatReset();free(png);
+    dnx2ChatReset();delegated_check();dnx2ChatReset();
+    account.message_count=1;account.messages[0].author_id[0]=0;snprintf(account.messages[0].tag_guild,24,"100000000000000001");snprintf(account.messages[0].tag_badge,80,"0123456789abcdef0123456789abcdef");assert(dnx2RequestMessageImages(0,1)&&run()==20);assert(dnx2TagBadge(account.messages[0].tag_guild,account.messages[0].tag_badge));
+    account.message_count=1;snprintf(account.messages[0].author_id,24,"300000000000000001");assert(dnx2RequestProfiles(0,1)&&run()==20);const Dnx2Member *member=dnx2Member("300000000000000001");assert(member&&!strcmp(member->nick,"Server nickname")&&member->count==2);assert(dnx2GuildRoles()->count==2&&dnx_role_color(dnx2GuildRoles(),member->roles,member->count)==16711680);assert(!dnx2RequestProfiles(0,1));strcpy(account.servers[0].id,"100000000000000002");assert(!dnx2Member("300000000000000001"));strcpy(account.servers[0].id,"100000000000000001");
+    assert(dnx2OpenDMList()&&account.private_mode&&run()==23);assert(account.channel_count==1&&account.channels[0].type==1&&!strcmp(account.channels[0].name,"DM friend"));account.selected_channel=0;assert(dnx2JobStart(10,NULL,NULL)&&run()==10);assert(dnx2JobStart(11,"hello",NULL)&&run()==11);assert(!dnx2RequestProfiles(0,1)&&!dnx2Member("300000000000000001"));
+    assert(dnx2JobStart(10,NULL,NULL));account.private_mode=0;assert(run()==0);account.private_mode=1;dnx2ChatReset();free(png);
     puts("PASS production chat jobs: deferred scoped results, single-send, failed-send preservation, empty history, emoji/sticker catalog, unauthenticated CDN, real PNG decode/bounds and cleanup");
 }

@@ -63,6 +63,17 @@ static inline void dnx_channels(Dnx2Account *a,const char *json){
     for(int i=0;i<a->channel_count;i++)if(!used[i])sorted[n++]=a->channels[i];
     memcpy(a->channels,sorted,(size_t)n*sizeof(*sorted));free(sorted);
 }
+static inline int dnx_private_compare(const void *a,const void *b){const Dnx2Channel *x=a,*y=b;unsigned long long first=strtoull(x->last_message,NULL,10),second=strtoull(y->last_message,NULL,10);return first==second?strcmp(y->id,x->id):first>second?-1:1;}
+static inline void dnx_private_channels(Dnx2Account *a,const char *json){
+    a->channel_count=0;a->selected_channel=-1;a->message_count=0;DnxJson root=dj_root(json),e;const char *p=NULL;
+    while(a->channel_count<DNX2_MAX_CHANNELS&&dj_next(root,&p,&e)){
+        Dnx2Channel c={0};c.type=dj_int(e,"type",-1);if(c.type!=1&&c.type!=3)continue;if(!dj_get(e,"id",c.id,24)||!dnx_id(c.id))continue;
+        dj_get(e,"last_message_id",c.last_message,24);if(!dnx_id(c.last_message))c.last_message[0]=0;
+        if(!dj_get(e,"name",c.name,sizeof(c.name))||!c.name[0]){DnxJson user;const char *q=NULL;while(dj_next(dj_field(e,"recipients"),&q,&user)){char name[321]={0};if(!dj_get(user,"global_name",name,sizeof(name))||!name[0])dj_get(user,"username",name,sizeof(name));size_t used=strlen(c.name),n=strlen(name);if(!n)continue;if(used+n+3>=sizeof(c.name))break;if(used)strcat(c.name,", ");strcat(c.name,name);}}
+        if(!c.name[0])snprintf(c.name,sizeof(c.name),"Group conversation");
+        a->channels[a->channel_count++]=c;
+    }qsort(a->channels,(size_t)a->channel_count,sizeof(Dnx2Channel),dnx_private_compare);
+}
 static inline int dnx_message_body(const char *text,char *body,size_t cap){
     if(!text||!*text||strlen(text)>512||cap<3200)return 0;
     size_t at=0;memcpy(body,"{\"content\":\"",12);at=12;
@@ -79,6 +90,21 @@ static inline void dnx_messages(Dnx2Account *a,const char *json){
         DnxJson member=dj_field(e,"member");
         if(!dj_get(member,"nick",m.author,sizeof(m.author))||!m.author[0])if(!dj_get(author,"global_name",m.author,sizeof(m.author))||!m.author[0])dj_get(author,"username",m.author,sizeof(m.author));
         dj_get(author,"id",m.author_id,sizeof(m.author_id));dj_get(author,"avatar",m.avatar,sizeof(m.avatar));dj_get(member,"avatar",m.guild_avatar,sizeof(m.guild_avatar));dj_get(e,"timestamp",m.timestamp,sizeof(m.timestamp));
+        dj_get(author,"username",m.username,sizeof(m.username));dj_get(author,"discriminator",m.discriminator,sizeof(m.discriminator));DnxJson bot=dj_field(author,"bot");m.bot=bot.p&&bot.end-bot.p==4&&!strncmp(bot.p,"true",4);
+        DnxJson identity=dj_field(author,"primary_guild"),enabled=dj_field(identity,"identity_enabled");
+        if(enabled.p&&!strncmp(enabled.p,"true",4)){dj_get(identity,"tag",m.tag,sizeof(m.tag));dj_get(identity,"identity_guild_id",m.tag_guild,sizeof(m.tag_guild));dj_get(identity,"badge",m.tag_badge,sizeof(m.tag_badge));}
+        DnxJson role_array=dj_field(member,"roles"),role;const char *role_cursor=NULL;
+        while(m.role_count<32&&dj_next(role_array,&role_cursor,&role))if(dj_string(role,m.roles[m.role_count],24)&&dnx_id(m.roles[m.role_count]))m.role_count++;
+        DnxJson mentions=dj_field(e,"mentions"),mention;const char *mention_cursor=NULL;
+        while(m.mention_count<12&&dj_next(mentions,&mention_cursor,&mention)){int i=m.mention_count;if(!dj_get(mention,"id",m.mentions[i].id,24)||!dnx_id(m.mentions[i].id))continue;DnxJson mm=dj_field(mention,"member");if(!dj_get(mm,"nick",m.mentions[i].name,321)||!m.mentions[i].name[0])if(!dj_get(mention,"global_name",m.mentions[i].name,321)||!m.mentions[i].name[0])dj_get(mention,"username",m.mentions[i].name,321);m.mention_count++;}
+        DnxJson reference=dj_field(e,"message_reference"),replied=dj_field(e,"referenced_message");
+        if(dj_int(reference,"type",0)==0&&dj_get(reference,"message_id",m.reply_id,24)&&dnx_id(m.reply_id)){
+            m.reply_state=1;
+            if(replied.p&&*replied.p=='{'){m.reply_state=2;DnxJson ra=dj_field(replied,"author"),rm=dj_field(replied,"member");dj_get(ra,"id",m.reply_author_id,24);if(!dj_get(rm,"nick",m.reply_author,321)||!m.reply_author[0])if(!dj_get(ra,"global_name",m.reply_author,321)||!m.reply_author[0])dj_get(ra,"username",m.reply_author,321);
+                if(!dj_get(replied,"content",m.reply_content,sizeof(m.reply_content)))snprintf(m.reply_content,sizeof(m.reply_content),"Message preview unavailable");
+                if(!m.reply_content[0])snprintf(m.reply_content,sizeof(m.reply_content),"[Attachment]");
+            }else if(replied.p&&*replied.p=='n')m.reply_state=3;
+        }
         char discriminator[8]={0};dj_get(author,"discriminator",discriminator,sizeof(discriminator));m.default_avatar=dnx_default_avatar(m.author_id,discriminator);
         DnxJson attachments=dj_field(e,"attachments"),attachment;const char *media_cursor=NULL;
         while(dj_next(attachments,&media_cursor,&attachment)){

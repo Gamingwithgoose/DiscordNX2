@@ -69,5 +69,6 @@ int main(void){
     http_code=403;assert(!live_refresh(result,&retry)&&!strcmp(dnx2LiveStatus(),"Channel access unavailable"));free(result);
     strcpy(account.channels[0].id,"300000000000000001");live_generation++;assert(!dnx2LiveApply());
     dnx2LiveReset();assert(!live_session[0]&&!live_token[0]&&!live_count);
+    dnx2LiveReset();account.private_mode=1;account.server_count=0;account.channels[0].type=1;account.selected_channel=0;strcpy(account.channels[0].id,"200000000000000001");now=0;frames=0;http_code=200;fail_gateway=0;int subscriptions=subscription_sent;dnx2LiveStart();live_worker(NULL);assert(subscription_sent==subscriptions&&service_count==0);dnx2LiveStop();
     puts("PASS production live worker: Hello/Identify/Ready, subscriptions, message refresh, heartbeat, Resume, rate limit, permission failure, channel binding and cleanup");
 }

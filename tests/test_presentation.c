@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "chat_media_data.h"
 #include "unicode_text.h"
+#include "profile_data.h"
+#include "message_style.h"
 #include <assert.h>
 static Dnx2Account account;
 int main(int argc,char **argv){
@@ -18,5 +20,11 @@ int main(int argc,char **argv){
     Dnx2DecodedMedia media={0};assert(dnx2DecodeMedia(bytes,n,&media));assert(media.frames==2&&media.width==1&&media.height==1);assert(media.pixels[0]==255&&media.pixels[2]==0&&media.pixels[4]==0&&media.pixels[6]==255);assert(media.delays[0]==100);dnx2FreeMedia(&media);assert(!media.pixels);
     assert(!dnx2DecodeMedia(bytes,20,&media));free(bytes);
     char file[2000];snprintf(file,sizeof(file),"%s.png",argv[1]);f=fopen(file,"rb");assert(f);fseek(f,0,SEEK_END);n=(size_t)ftell(f);rewind(f);bytes=malloc(n);assert(bytes&&fread(bytes,1,n,f)==n);fclose(f);assert(dnx2DecodeMedia(bytes,n,&media));assert(media.width==480&&media.height==360&&media.frames==1);assert(media.pixels[0]==32&&media.pixels[1]==96&&media.pixels[2]==160);dnx2FreeMedia(&media);free(bytes);
+    char url[1536];DnxJson image=dj_root("{\"proxy_url\":\"https://media.discordapp.net/attachments/123/picture.gif?ex=secret&width=640&height=360&format=webp&fit=cover\",\"width\":256,\"height\":350}");assert(dnx_message_media(image,url,sizeof(url)));assert(strstr(url,"ex=secret&width=256&height=350&fit=contain")&&!strstr(url,"width=640")&&!strstr(url,"format=webp"));
+    assert(dnx_message_media(dj_root("{\"url\":\"https://cdn.discordapp.com/attachments/123/photo.png?hm=keep\",\"width\":1200,\"height\":900}"),url,sizeof(url)));assert(strstr(url,"width=480&height=360")&&strstr(url,"hm=keep")&&strstr(url,"format=png"));
+    dnx_messages(&account,"[{\"id\":\"900000000000000001\",\"content\":\"hello <@300000000000000001>\",\"author\":{\"username\":\"realuser\",\"primary_guild\":{\"identity_enabled\":true,\"tag\":\"GWS\",\"identity_guild_id\":\"100000000000000001\",\"badge\":\"abcdef\"}},\"message_reference\":{\"message_id\":\"900000000000000000\"},\"referenced_message\":{\"author\":{\"global_name\":\"Original author\"},\"content\":\"original message\"},\"mentions\":[{\"id\":\"300000000000000001\",\"username\":\"friend\",\"member\":{\"nick\":\"Server friend\"}}]}]");assert(!strcmp(account.messages[0].username,"realuser")&&!strcmp(account.messages[0].tag,"GWS")&&account.messages[0].reply_state==2&&!strcmp(account.messages[0].reply_author,"Original author")&&!strcmp(account.messages[0].reply_content,"original message")&&!strcmp(account.messages[0].mentions[0].name,"Server friend"));
+    dnx_messages(&account,"[{\"message_reference\":{\"message_id\":\"900000000000000000\"},\"referenced_message\":null}]");assert(account.messages[0].reply_state==3);
+    unsigned style=0;assert(dnx_message_style("**bold**",&style)==2&&style==1);assert(dnx_message_style("**",&style)==2&&!style);assert(!dnx_message_style("*unclosed",&style));assert(dnx_message_style("`code`",&style)==1&&style==16);assert(!dnx_message_style("**literal**",&style));assert(dnx_message_style("`",&style)==1&&!style);
+    dnx_private_channels(&account,"[{\"id\":\"200000000000000001\",\"type\":1,\"last_message_id\":\"900000000000000001\",\"recipients\":[{\"username\":\"Older\"}]},{\"id\":\"200000000000000002\",\"type\":3,\"last_message_id\":\"900000000000000002\",\"recipients\":[{\"global_name\":\"Alice\"},{\"username\":\"Bob\"}]}]");assert(account.channel_count==2&&account.channels[0].type==3&&!strcmp(account.channels[0].name,"Alice, Bob"));
     puts("PASS Unicode grapheme editing/NFC/newlines, avatar/nickname metadata, approved image URLs and actual bounded animated GIF decoding");
 }

@@ -341,3 +341,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add blinking end caret and scrolling draft tail; hold Backspace to repeat/accelerate by whole graphemes. Done sends through the existing guarded send job. New x/B/Plus cancel clears the draft and selected sticker.
 - Apply complete Gateway incoming messages and deletions directly, avoiding an extra history request. Keep Gateway open during artwork downloads and keyboard entry; same network owner services one bounded image request between pending Gateway events.
 - Add real1200x900 image, variable attachment geometry, held-delete timing, direct-event delivery and delegated artwork cancellation tests. Source and host tests pass; no NRO built and console verification pending.
+
+## v0.43 — 2026-11-18
+
+- Request portrait/media previews with original proportions; replace stale transform parameters while retaining signed query values, rather than forcing landscape dimensions.
+- Show reply author/snippet/deleted state. Avatar/name opens a read-only profile card; body tap retains message reading. Add actual server nickname/member-role lookups, primary role name colors, guild tags/badges, APP labels and named mentions.
+- Add basic inline bold/italic/underline/strike/code. Full Discord Markdown, profile effects/actions and reactions remain unfinished.
+- Add existing direct/group-DM list, history, send and live-update paths, separated from guild context. App icon opens DMs; sidebar account name opens settings. No new-DM creation or DM calling.
+- Correct voice test's misleading Gateway cooldown failure: cancellable wait with countdown before Identify; clearer resume/stage/code failures. Voice audio still requires DAVE/Opus.
+- Synthetic data/job/live/cooldown regression fixtures and strict source checks pass; hardware comparison remains pending. No NRO/dependency build, NSO/payload changes or real account messages sent by tests.

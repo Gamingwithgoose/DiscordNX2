@@ -11,6 +11,8 @@ static struct {unsigned close_code;} ws_reader;
 static char live_token[1024],live_session[160]="main-session";
 static long long live_sequence=1;
 static Dnx2AuthCancel active_cancel;
+static u64 live_identify_after;
+static void svcSleepThread(long long n){(void)n;}
 static u64 now;static int rng,main_frame,voice_frame,joins,leaves,voice_identifies,cancelled,invalid_endpoint;
 static u64 dnx2MonotonicMs(void){now+=10;return now;}
 static void wipe(void *p,size_t n){memset(p,0,n);}
@@ -48,5 +50,8 @@ int main(void){
     assert(stage==4&&close_code==4017&&joins==1&&leaves==1&&voice_identifies==1&&!rng);assert(strstr(notice,"DAVE")&&!live_token[0]);
     main_frame=voice_frame=joins=leaves=voice_identifies=0;invalid_endpoint=1;
     voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(stage==2&&joins==1&&leaves==1&&voice_identifies==0&&!rng);
+    main_frame=voice_frame=joins=leaves=voice_identifies=0;invalid_endpoint=0;live_session[0]=0;live_sequence=-1;u64 allowed=now+1000;live_identify_after=allowed;
+    voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(now>=allowed&&joins==1&&leaves==1);
+    main_frame=voice_frame=joins=leaves=0;live_session[0]=0;live_identify_after=now+1000;cancelled=1;voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(!joins&&!leaves&&!rng&&strstr(notice,"cancelled"));
     puts("PASS production voice signaling: scoped session/server events, approved TLS endpoint, muted join, honest no-DAVE identify, 4017 handling, guaranteed leave attempt and credential cleanup; no audio path");
 }

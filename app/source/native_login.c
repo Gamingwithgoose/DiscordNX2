@@ -60,7 +60,7 @@ static Dnx2AuthCancel active_cancel;
 static unsigned char ws_payload[WS_BUF+1];
 
 const Dnx2Account *dnx2Account(void){return &account;}
-void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
+void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.private_mode=0;account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
 void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;}}
 static void wipe(void *p,size_t n){volatile unsigned char *c=(volatile unsigned char*)p;while(n--)*c++=0;}
 void dnx2AccountClearMemory(void){dnx2ChatReset();dnx2LiveReset();wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
@@ -655,6 +655,12 @@ fail:
     return 0;
 }
 #else
+unsigned dnx2VoiceWaitSeconds(void){return 0;}
+int dnx2OpenDMList(void){return 0;}
+int dnx2MemberState(const char *id){(void)id;return 0;}
+const Dnx2Member *dnx2Member(const char *id){(void)id;return NULL;}
+const Dnx2GuildRoles *dnx2GuildRoles(void){static Dnx2GuildRoles roles;return &roles;}
+int dnx2RequestProfiles(int first,int count){(void)first;(void)count;return 0;}
 int dnx2JobBusy(void){return 0;}int dnx2JobKind(void){return 0;}
 int dnx2JobStart(int op,const char *a,const char *b){(void)op;(void)a;(void)b;return 0;}
 int dnx2JobApply(void){return 0;}void dnx2JobStop(void){}void dnx2ChatReset(void){}
@@ -663,6 +669,7 @@ int dnx2RequestImages(int t,int f,int n){(void)t;(void)f;(void)n;return 0;}
 const unsigned char *dnx2ChatImage(int t,int n){(void)t;(void)n;return NULL;}
 const Dnx2MediaCatalog *dnx2MediaCatalog(void){static Dnx2MediaCatalog m;return &m;}
 int dnx2RequestMessageImages(int f,int n){(void)f;(void)n;return 0;}
+const unsigned char *dnx2TagBadge(const char *guild,const char *hash){(void)guild;(void)hash;return NULL;}
 int dnx2MessageMediaState(const char *id){(void)id;return 0;}
 const Dnx2DecodedMedia *dnx2MessageMedia(const char *id){(void)id;return NULL;}
 const unsigned char *dnx2AuthorAvatar(const char *i,const char *a,const char *g,unsigned d){(void)i;(void)a;(void)g;(void)d;return NULL;}const unsigned char *dnx2MessageImage(int t,const char *p){(void)t;(void)p;return NULL;}

@@ -15,6 +15,7 @@
 #include "chat_media_data.h"
 #include "mobile_keyboard.h"
 #include "unicode_text.h"
+#include "message_style.h"
 #include <stdlib.h>
 #include "native_font.h"
 #include "brand_icon.h"
@@ -47,7 +48,9 @@ static int stride_pixels;
 static int text_right=1240;
 static char auth_notice[128];
 static int tab=0,sel=0,focus=0;
-static int message_expanded=0,message_offset=0;
+static int message_expanded=0,message_offset=0,profile_open=0;
+static Dnx2Message profile_message;
+static const Dnx2Message *render_message;
 static char draft[513];
 static char pending_sticker[24],pending_sticker_name[129];
 const char *dnx2GraphicalDraft(void){return draft;}
@@ -177,10 +180,10 @@ static int touch_event(int *x,int *y,int *scroll){
     }
     return 0;
 }
-static int selected_text(void){const Dnx2Account *a=dnx2Account();return a->signed_in&&a->selected_channel>=0&&(a->channels[a->selected_channel].type==0||a->channels[a->selected_channel].type==5);}
+static int selected_text(void){const Dnx2Account *a=dnx2Account();return a->signed_in&&a->selected_channel>=0&&(a->channels[a->selected_channel].type==0||a->channels[a->selected_channel].type==5||a->channels[a->selected_channel].type==1||a->channels[a->selected_channel].type==3);}
 static int media_open,media_tab,media_page,media_cursor;
 static const char *common_emoji[]={"\xf0\x9f\x98\x80","\xf0\x9f\x98\x82","\xf0\x9f\x98\x8a","\xf0\x9f\x98\x8d","\xf0\x9f\x98\x8e","\xf0\x9f\xa4\x94","\xf0\x9f\x98\xad","\xf0\x9f\x98\xa1","\xf0\x9f\x91\x8d","\xf0\x9f\x91\x8e","\xf0\x9f\x91\x8f","\xf0\x9f\x99\x8f","\xe2\x9d\xa4","\xf0\x9f\x94\xa5","\xf0\x9f\x8e\x89","\xf0\x9f\x92\xaf","\xf0\x9f\x90\xa5","\xf0\x9f\xa6\x86","\xf0\x9f\xaa\xbf","\xf0\x9f\x91\x80","\xf0\x9f\x8e\xae","\xe2\x9c\x85","\xe2\x9c\xa8","\xf0\x9f\x9a\x80"};
-static int media_count(void){const Dnx2MediaCatalog *m=dnx2MediaCatalog();const Dnx2Account *a=dnx2Account();if(media_tab&&(!m->loaded||!a->server_count||strcmp(m->guild,a->servers[a->selected].id)))return 0;return media_tab==0?24:media_tab==1?m->emoji_count:m->sticker_count;}
+static int media_count(void){const Dnx2MediaCatalog *m=dnx2MediaCatalog();const Dnx2Account *a=dnx2Account();if(media_tab&&(dnx2Account()->private_mode||!m->loaded||!a->server_count||strcmp(m->guild,a->servers[a->selected].id)))return 0;return media_tab==0?24:media_tab==1?m->emoji_count:m->sticker_count;}
 static void image_draw(int x,int y,int w,int h,const unsigned char *rgba,int radius){
     if(!rgba)return;
     for(int j=0;j<h;j++)for(int i=0;i<w;i++){
@@ -205,19 +208,51 @@ static int media_draw_image(int x,int y,int maxw,int maxh,const Dnx2DecodedMedia
         *d=v|0xff000000u;
     }return h;
 }
+static const char *author_name(const Dnx2Message *m){const Dnx2Member *member=dnx2Member(m->author_id);return member&&member->nick[0]?member->nick:m->author;}
+static uint32_t author_color(const Dnx2Message *m){const Dnx2Account *a=dnx2Account();if(a->private_mode||!a->server_count)return C_WHITE;const Dnx2GuildRoles *roles=dnx2GuildRoles();if(strcmp(roles->guild,a->servers[a->selected].id))return C_WHITE;const Dnx2Member *member=dnx2Member(m->author_id);unsigned color=member?dnx_role_color(roles,member->roles,member->count):dnx_role_color(roles,m->roles,m->role_count);return color?RGBA8_MAXALPHA((color>>16)&255,(color>>8)&255,color&255):(uint32_t)C_WHITE;}
+static void reply_draw(int y,const Dnx2Message *m){
+    if(!m->reply_state)return;
+    line(401,y+10,22,C_MUTED);rect(400,y+10,1,18,C_MUTED);text_right=1234;
+    const Dnx2Member *member=dnx2Member(m->reply_author_id);const char *name=member&&member->nick[0]?member->nick:m->reply_author[0]?m->reply_author:m->reply_state==3?"Original message deleted":"Reply";
+    unsigned color=member?dnx_role_color(dnx2GuildRoles(),member->roles,member->count):0;uint32_t ink=color?RGBA8_MAXALPHA((color>>16)&255,(color>>8)&255,color&255):(uint32_t)C_MUTED;
+    text_right=800;text_line(432,y+2,name,ink,1,50);int next=432+dnx2FontWidth(name,1)+12;if(next>810)next=810;
+    char preview[513];snprintf(preview,sizeof(preview),"%s",m->reply_content);for(char *p=preview;*p;p++)if(*p=='\n'||*p=='\r')*p=' ';text_right=1234;text_line(next,y+2,preview,C_MUTED,1,100);text_right=1256;
+}
+static int author_hit(int x,int y,int top,const Dnx2Message *m){int width=dnx2FontWidth(author_name(m),2);if(width>600)width=600;return y>=top+4&&y<top+46&&((x>=380&&x<420)||(x>=432&&x<432+width));}
+static void profile_draw(void){
+    const Dnx2Message *m=&profile_message;const Dnx2Member *member=dnx2Member(m->author_id);rounded(560,108,640,478,16,C_DARK);rounded(560,108,640,90,16,C_CARD_HI);rounded(1144,118,40,38,10,C_DARK);text_right=1180;text_line(1156,128,"x",C_WHITE,2,1);
+    const unsigned char *avatar=dnx2AuthorAvatar(m->author_id,m->avatar,member&&member->avatar[0]?member->avatar:m->guild_avatar,m->default_avatar);if(avatar)image_draw(584,156,80,80,avatar,40);else rounded(584,156,80,80,40,C_PRIMARY);
+    text_line(584,254,author_name(m),author_color(m),3,44);char username[180];snprintf(username,sizeof(username),"%s%s%s",m->username,m->discriminator[0]&&strcmp(m->discriminator,"0")?"#":"",m->discriminator[0]&&strcmp(m->discriminator,"0")?m->discriminator:"");text_line(584,296,username,C_MUTED,2,48);
+    if(m->tag[0]){rounded(584,334,160,30,7,C_CARD_HI);text_line(596,341,m->tag,C_WHITE,2,12);}if(m->bot)text_line(780,341,"APP",C_PRIMARY,2,5);
+    if(!dnx2Account()->private_mode){const Dnx2GuildRoles *roles=dnx2GuildRoles();text_line(584,384,"Roles",C_MUTED,2,10);int x=584,y=416,shown=0;
+        for(int i=0;member&&i<roles->count;i++){const Dnx2Role *role=&roles->roles[i];int has=0;for(int j=0;j<member->count;j++)if(!strcmp(role->id,member->roles[j]))has=1;if(!has)continue;int width=dnx2FontWidth(role->name,1)+30;if(width>260)width=260;if(x+width>1168){x=584;y+=34;}if(y>510)break;rounded(x,y,width,28,7,C_CARD);unsigned c=role->color;rounded(x+7,y+9,8,8,4,c?RGBA8_MAXALPHA((c>>16)&255,(c>>8)&255,c&255):(uint32_t)C_MUTED);text_right=x+width-6;text_line(x+22,y+7,role->name,C_WHITE,1,48);x+=width+8;shown++;}
+        text_right=1180;if(!shown)text_line(584,420,member?"No displayed roles":dnx2MemberState(m->author_id)<0?"Server profile unavailable":"Loading server profile...",C_MUTED,2,45);
+        if(member&&strlen(member->joined)>=10){char joined[60];snprintf(joined,sizeof(joined),"Member since %.10s",member->joined);text_line(584,548,joined,C_MUTED,1,60);}
+    }text_right=1256;
+}
 static void author_draw(int y,const Dnx2Message *m){
-    const unsigned char *avatar=dnx2AuthorAvatar(m->author_id,m->avatar,m->guild_avatar,m->default_avatar);
+    const Dnx2Member *member=dnx2Member(m->author_id);const unsigned char *avatar=dnx2AuthorAvatar(m->author_id,m->avatar,member&&member->avatar[0]?member->avatar:m->guild_avatar,m->default_avatar);
     if(avatar)image_draw(380,y+8,40,40,avatar,20);
     else {rounded(380,y+8,40,40,20,C_PRIMARY);const char *end=m->author;dnx_utf8_next(&end);char letter[5]={0};size_t n=(size_t)(end-m->author);if(n<sizeof(letter))memcpy(letter,m->author,n);text_line(391,y+17,letter,C_WHITE,2,1);}
-    text_right=1090;text_line(432,y+8,m->author,C_WHITE,2,72);text_right=1256;
-    if(strlen(m->timestamp)>=16){char when[16];snprintf(when,sizeof(when),"%.5s UTC",m->timestamp+11);text_line(1136,y+9,when,C_MUTED,1,12);}
+    text_right=1010;text_line(432,y+8,author_name(m),author_color(m),2,60);int after=432+dnx2FontWidth(author_name(m),2)+10;if(after>1010)after=1010;text_right=1120;
+    if(m->tag[0]){int width=dnx2FontWidth(m->tag,1)+36;rounded(after,y+7,width,22,5,C_CARD_HI);const unsigned char *badge=dnx2TagBadge(m->tag_guild,m->tag_badge);if(badge)image_draw(after+4,y+9,18,18,badge,0);text_line(after+28,y+12,m->tag,C_WHITE,1,16);after+=width+8;}if(m->bot){text_line(after,y+12,"APP",C_PRIMARY,1,5);after+=32;}text_right=1256;
+    if(strlen(m->timestamp)>=16){char when[16];snprintf(when,sizeof(when),"%.5s UTC",m->timestamp+11);text_line(after+8,y+12,when,C_MUTED,1,12);}
+}
+static size_t mention_label(const char *p,char label[380]){if(p[0]!='<'||(p[1]!='@'&&p[1]!='#'))return 0;int kind=p[1];const char *start=p+2;if(*start=='!'||*start=='&')start++;const char *end=start;while(*end>='0'&&*end<='9')end++;size_t n=(size_t)(end-start);if(*end!='>'||n<15||n>22)return 0;char id[24];memcpy(id,start,n);id[n]=0;const char *name=NULL;
+    if(kind=='#'){const Dnx2Account *a=dnx2Account();for(int i=0;i<a->channel_count;i++)if(!strcmp(a->channels[i].id,id))name=a->channels[i].name;}
+    else if(p[2]=='&'){const Dnx2GuildRoles *roles=dnx2GuildRoles();for(int i=0;i<roles->count;i++)if(!strcmp(roles->roles[i].id,id))name=roles->roles[i].name;}
+    else if(render_message){for(int i=0;i<render_message->mention_count;i++)if(!strcmp(render_message->mentions[i].id,id))name=render_message->mentions[i].name;const Dnx2Account *a=dnx2Account();for(int i=0;!name&&i<a->message_count;i++)if(!strcmp(a->messages[i].author_id,id))name=author_name(&a->messages[i]);}
+    snprintf(label,380,"%c%s",kind=='#'?'#':'@',name?name:kind=='#'?"unknown-channel":"unknown-user");return (size_t)(end-p+1);
 }
 static void message_wrap(int x,int y,const char *text,int lines,int columns){
-    const char *p=text;
+    const char *p=text;unsigned style=0;
     for(int row=0;row<lines&&*p;row++){
         int cursor=x;
         for(int col=0;col<columns&&*p;col++){
-            char id[24],name[33];size_t token=dnx_custom_emoji(p,id,name);
+            int marker=dnx_message_style(p,&style);if(marker){p+=marker;continue;}
+            if(!(style&16)&&*p=='\\'&&p[1]&&strchr("*_~`<>\\",p[1]))p++;
+            char mention[380];size_t consumed=style&16?0:mention_label(p,mention);if(consumed){int width=dnx2FontWidth(mention,2);if(width>text_right-cursor&&cursor>x)break;if(width>text_right-cursor)width=text_right-cursor;rounded(cursor,y+row*23,width,22,4,C_CARD_HI);int old_right=text_right;text_right=cursor+width;text_line(cursor,y+row*23,mention,RGBA8_MAXALPHA(201,205,251),2,60);text_right=old_right;cursor+=width;p+=consumed;continue;}
+            char id[24],name[33];size_t token=style&16?0:dnx_custom_emoji(p,id,name);
             if(token){
                 const unsigned char *image=dnx2MessageImage(2,id);char fallback[36];snprintf(fallback,sizeof(fallback),":%s:",name);
                 int width=image?24:dnx2FontWidth(fallback,2);if(cursor+width>text_right)break;
@@ -225,14 +260,19 @@ static void message_wrap(int x,int y,const char *text,int lines,int columns){
                 cursor+=width;p+=token;continue;
             }
             const char *start=p;p=dnx_grapheme_end(p);char value[256];dnx_cluster_text(start,p,value);if(value[0]=='\n'||value[0]=='\r')break;int width=dnx2FontWidth(value,2);
-            if(cursor+width>text_right){p=start;break;}text_line(cursor,y+row*23,value,C_WHITE,2,1);cursor+=width;
+            if(cursor+width>text_right){p=start;break;}if(style&16)rounded(cursor,y+row*23,width,22,3,C_DARK);
+            if(!dnx2FontDrawStyled(pixels,stride_pixels,text_right,H,cursor,y+row*23,value,C_WHITE,2,1,style))text_line(cursor,y+row*23,value,C_WHITE,2,1);
+            if(style&4)rect(cursor,y+row*23+20,width,1,C_WHITE);
+            if(style&8)rect(cursor,y+row*23+10,width,1,C_WHITE);
+            cursor+=width;
         }
     }
 }
 static void media_begin(void){
     if(dnx2JobKind()==11)return;
     media_open=!media_open;media_page=media_cursor=0;
-    if(media_open){const Dnx2MediaCatalog *m=dnx2MediaCatalog();const Dnx2Account *a=dnx2Account();if(!m->loaded||strcmp(m->guild,a->servers[a->selected].id))dnx2JobStart(15,NULL,NULL);}
+    if(media_open&&dnx2Account()->private_mode){media_tab=0;}
+    else if(media_open){const Dnx2MediaCatalog *m=dnx2MediaCatalog();const Dnx2Account *a=dnx2Account();if(!m->loaded||strcmp(m->guild,a->servers[a->selected].id))dnx2JobStart(15,NULL,NULL);}
 }
 static void media_choose(int index){
     const Dnx2MediaCatalog *m=dnx2MediaCatalog();if(index<0||index>=media_count())return;
@@ -273,7 +313,7 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     brand(12,10);text_right=82;
     for(int row=0;row<8;row++){
         int index=server_page*8+row;if(index>=a->server_count)break;int y=98+row*62;
-        int active=!home&&index==a->selected;
+        int active=!home&&!a->private_mode&&index==a->selected;
         rounded(18,y,52,52,active?15:26,active?C_PRIMARY:C_CARD);
         if(focus==0&&server_cursor==index)rounded(3,y+12,4,28,2,C_WHITE);
         char label[16]={0};const char *p=a->servers[index].name;size_t n=0;
@@ -285,14 +325,14 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     rounded(8,602,32,34,8,C_CARD);rounded(48,602,32,34,8,C_CARD);text_line(18,610,"<",C_WHITE,2,1);text_line(58,610,">",C_WHITE,2,1);
     text_line(12,670,"Exit",C_MUTED,2,5);
     text_right=344;
-    text_line(104,26,home?"DiscordNX2":a->server_count?a->servers[a->selected].name:"Select a server",C_WHITE,3,28);
+    text_line(104,26,home?"DiscordNX2":a->private_mode?"Direct messages":a->server_count?a->servers[a->selected].name:"Select a server",C_WHITE,3,28);
     line(88,76,268,C_LINE);
     if(home){text_line(106,112,"Your Discord on Switch 2",C_MUTED,2,26);text_line(106,158,"Tap a server to browse.",C_MUTED,2,26);}
     else for(int row=0;row<12;row++){
         int index=channel_first+row;if(index>=a->channel_count)break;const Dnx2Channel *c=&a->channels[index];int y=100+44*row;
         int active=index==a->selected_channel;
         if(active||(focus==1&&channel_cursor==index))rounded(96,y,252,40,8,active?C_CARD_HI:C_CARD);
-        char label[440];snprintf(label,sizeof(label),"%s%s",c->type==4?"":c->type==2||c->type==13?"Voice  ":c->type==15||c->type==16?"Forum  ":"# ",c->name);
+        char label[440];snprintf(label,sizeof(label),"%s%s",c->type==4?"":c->type==2||c->type==13?"Voice  ":c->type==15||c->type==16?"Forum  ":a->private_mode?"":"# ",c->name);
         text_line(c->type==4?104:112,y+12,label,c->type==4?C_MUTED:C_WHITE,2,30);
     }
     rect(88,650,268,70,C_DARK);text_line(104,666,a->signed_in?a->display_name:"Signed out",C_WHITE,2,30);
@@ -307,21 +347,21 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         server_tooltip();return;
     }
     if(!a->signed_in){text_line(392,100,"Open Home to sign in.",C_MUTED,3,60);return;}
-    if(a->selected_channel<0){text_line(392,32,"Choose a channel",C_WHITE,3,60);if(a->notice[0])text_wrap(392,158,a->notice,4,70);server_tooltip();return;}
-    const Dnx2Channel *c=&a->channels[a->selected_channel];char heading[440];snprintf(heading,sizeof(heading),"%s%s",selected_text()?"# ":"Voice  ",c->name);
+    if(a->selected_channel<0){text_line(392,32,a->private_mode?"Choose a conversation":"Choose a channel",C_WHITE,3,60);if(a->notice[0])text_wrap(392,158,a->notice,4,70);server_tooltip();return;}
+    const Dnx2Channel *c=&a->channels[a->selected_channel];char heading[440];snprintf(heading,sizeof(heading),"%s%s",a->private_mode?"":selected_text()?"# ":"Voice  ",c->name);
     text_line(380,26,heading,C_WHITE,3,72);line(356,76,924,C_LINE);
     if(selected_text()){
         rounded(1234,30,8,8,4,dnx2JobBusy()?C_MUTED:!strcmp(dnx2LiveStatus(),"Live updates")?C_GREEN:C_WARN);
         if(message_expanded&&sel<a->message_count){
-            const Dnx2Message *m=&a->messages[sel];author_draw(104,m);
+            const Dnx2Message *m=&a->messages[sel];render_message=m;reply_draw(100,m);int reply=m->reply_state?24:0;author_draw(104+reply,m);
             const char *text=m->content;for(int i=0;i<message_offset&&*text;i++)text=dnx_grapheme_end(text);
-            const Dnx2DecodedMedia *media=dnx2MessageMedia(m->media_id);int height=media_draw_image(432,158,760,330,media);
-            message_wrap(432,height?height+174:158,text,height?4:19,74);
+            const Dnx2DecodedMedia *media=dnx2MessageMedia(m->media_id);int height=media_draw_image(432,158+reply,760,330-reply,media);
+            message_wrap(432,height?height+174+reply:158+reply,text,height?3:18,74);
         }else for(int index=message_first,y=100;index<a->message_count&&y<588;index++){
             const Dnx2Message *m=&a->messages[index];
             if(y+dnx_message_row_height(m->media_id[0]!=0)>588)break;
             if(focus==2&&sel==index)rounded(366,y,900,dnx_message_row_height(m->media_id[0]!=0)-6,8,C_CARD);
-            author_draw(y,m);
+            render_message=m;reply_draw(y,m);int reply=m->reply_state?24:0;author_draw(y+reply,m);
             if(m->sticker_id[0]){
                 const unsigned char *image=dnx2MessageImage(3,m->sticker_id);
                 if(image)image_draw(1170,y+30,64,64,image,0);
@@ -329,9 +369,9 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
                 text_right=1136;
             }
             const Dnx2DecodedMedia *media=dnx2MessageMedia(m->media_id);
-            message_wrap(432,y+36,m->content,m->media_id[0]?2:3,74);text_right=1256;
-            if(media)media_draw_image(432,y+88,640,260,media);
-            else if(m->media_id[0]){rounded(432,y+88,284,260,8,C_CARD_HI);text_line(452,y+194,dnx2MessageMediaState(m->media_id)<0?"Image unavailable":"Loading image...",C_MUTED,2,28);}
+            message_wrap(432,y+36+reply,m->content,m->media_id[0]||reply?2:3,74);text_right=1256;
+            if(media)media_draw_image(432,y+88+reply,640,260-reply,media);
+            else if(m->media_id[0]){rounded(432,y+88+reply,284,260-reply,8,C_CARD_HI);text_line(452,y+194,dnx2MessageMediaState(m->media_id)<0?"Image unavailable":"Loading image...",C_MUTED,2,28);}
             y+=dnx_message_row_height(m->media_id[0]!=0);
         }
         if(!a->message_count){
@@ -348,9 +388,10 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         if(a->notice[0])text_line(380,600,a->notice,C_WARN,1,90);
         text_right=1256;rounded(1080,590,180,30,8,C_CARD);text_line(1154,594,"\xe2\x8c\xa8",C_MUTED,3,2);
         if(media_open)media_draw();
+        if(profile_open)profile_draw();
     }else{
         text_line(392,150,"Voice channel",C_WHITE,3,60);
-        item(392,220,500,90,dnx2JobKind()==16?"Connecting...":"Check voice connection","",focus==2);
+        unsigned wait=dnx2VoiceWaitSeconds();char status[80];snprintf(status,sizeof(status),wait?"Waiting to reconnect (%u s)":"Connecting...",wait);item(392,220,650,90,dnx2JobKind()==16?status:"Check voice connection","",focus==2);
         text_wrap(392,352,a->notice[0]?a->notice:"Encrypted voice audio is not available yet. This checks the Discord connection and then disconnects.",4,72);
         text_line(392,480,"Microphone and voice audio are inactive.",C_MUTED,2,72);
     }
@@ -448,9 +489,10 @@ static void scroll_messages(int delta){
 static int open_channel(int index){
     const Dnx2Account *a=dnx2Account();if(index<0||index>=a->channel_count)return 0;
     int type=a->channels[index].type;if(type==4)return 0;
-    if(type!=0&&type!=5&&type!=2&&type!=13){snprintf(keyboard_notice,sizeof(keyboard_notice),"Forum threads are not available yet.");return 0;}
+    if(type!=0&&type!=5&&type!=1&&type!=3&&type!=2&&type!=13){snprintf(keyboard_notice,sizeof(keyboard_notice),"Forum threads are not available yet.");return 0;}
+    profile_open=0;
     if(index!=a->selected_channel)dnx2GraphicalClearDraft();
-    dnx2JobStop();dnx2LiveStop();dnx2ChannelSelect(index);channel_cursor=index;tab=(type==0||type==5)?2:3;focus=2;message_expanded=0;message_offset=0;follow_latest=1;sel=0;keyboard_notice[0]=0;
+    dnx2JobStop();dnx2LiveStop();dnx2ChannelSelect(index);channel_cursor=index;tab=(type==0||type==5||type==1||type==3)?2:3;focus=2;message_expanded=0;message_offset=0;follow_latest=1;sel=0;keyboard_notice[0]=0;
     if(tab==2)dnx2JobStart(10,NULL,NULL);
     return 0;
 }
@@ -458,27 +500,29 @@ int dnx2GraphicalMenu(void){
     Result rc=hidInitialize();if(R_FAILED(rc))return -1;padConfigureInput(1,HidNpadStyleSet_NpadStandard);touch_init();
     Framebuffer fb={0};rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc)){hidExit();return -1;}rc=framebufferMakeLinear(&fb);if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
-    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;
+    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;unsigned voice_wait=0;
     if(!dnx2Account()->signed_in)tab=0;
     if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=message_bottom();}
     while(1){
         const Dnx2Account *a=dnx2Account();
+        unsigned wait=dnx2VoiceWaitSeconds();if(wait!=voice_wait){voice_wait=wait;dirty=1;}
         int completed=dnx2JobApply();
         if(completed){
             if(completed==11&&!strcmp(draft,dnx2JobDraft())&&!strcmp(pending_sticker,dnx2JobSticker()))dnx2GraphicalClearDraft();
             if((completed==10||completed==11)&&follow_latest)message_first=message_bottom();
             dirty=1;
         }
-        if(!dnx2JobBusy()&&a->signed_in&&a->server_count){
+        if(!dnx2JobBusy()&&a->signed_in&&(a->server_count||a->private_mode)){
             if(tab==2&&selected_text())dnx2LiveStart();
             int requested=dnx2RequestImages(1,server_page*8,8);
             if(!requested&&media_open&&media_tab)requested=dnx2RequestImages(media_tab==1?2:3,media_page*24,24);
             if(!requested&&tab==2&&selected_text())requested=dnx2RequestMessageImages(message_expanded?sel:message_first,message_expanded?1:4);
+            if(!requested&&tab==2&&selected_text())requested=dnx2RequestProfiles(profile_open||message_expanded?sel:message_first,profile_open||message_expanded?1:4);
             if(!requested&&tab==2&&selected_text())dnx2LiveStart();
         }
         if(tab==2&&selected_text()){
             char anchor[24]={0};if(message_first<a->message_count)snprintf(anchor,sizeof(anchor),"%s",a->messages[message_first].id);
-            if(!message_expanded&&dnx2LiveApply()){
+            if(!message_expanded&&!profile_open&&dnx2LiveApply()){
                 if(follow_latest)message_first=message_bottom();
                 else for(int i=0;i<a->message_count;i++)if(anchor[0]&&!strcmp(a->messages[i].id,anchor)){message_first=i;break;}
                 if(message_first>=a->message_count)message_first=message_bottom();
@@ -500,6 +544,8 @@ int dnx2GraphicalMenu(void){
         if(down&HidNpadButton_Plus)break;
         if(tab==0&&(padGetButtons(&pad)&HidNpadButton_R)&&(down&HidNpadButton_X)){action=7;break;}
         if(tab==0&&(padGetButtons(&pad)&HidNpadButton_R)&&(down&HidNpadButton_Y)){action=8;break;}
+        if(profile_open){if((down&(HidNpadButton_B|HidNpadButton_Plus))||(touch==1&&(x<560||x>=1200||y<108||y>=586||(x>=1144&&y<158)))){profile_open=0;dirty=1;}down=0;touch=0;}
+        if((down&HidNpadButton_L)&&selected_text()&&a->message_count&&focus==2){profile_message=a->messages[message_expanded?sel:message_first];profile_open=1;dirty=1;down=0;}
         int choose_server=-2,choose_channel=-1,keyboard=0,send=0,account_action=-1;
         if(media_open){
             if(touch==2&&x>=372&&y>=292){int max=(media_count()-1)/24;media_page+=scroll;if(media_page<0)media_page=0;if(media_page>max)media_page=max;touch=0;dirty=1;}
@@ -523,7 +569,8 @@ int dnx2GraphicalMenu(void){
         }
         if(touch==1){DnxHit hit=dnx_chat_hit(x,y,server_page,channel_first,message_first,tab==0,selected_text());
             if(hit.kind==DNX_MESSAGE){message_geometry();hit.index=message_expanded?sel:dnx_message_hit(message_images,a->message_count,message_first,y);if(hit.index<0)hit.kind=0;}
-            if(hit.kind==DNX_HOME){dnx2JobStop();dnx2LiveStop();media_open=0;tab=0;focus=2;sel=0;dirty=1;}
+            if(hit.kind==DNX_HOME){profile_open=0;media_open=0;dnx2GraphicalClearDraft();if(a->signed_in){dnx2OpenDMList();tab=4;focus=1;channel_first=channel_cursor=0;message_expanded=0;}else{tab=0;focus=2;}sel=0;dirty=1;}
+            else if(hit.kind==DNX_ACCOUNT){dnx2JobStop();dnx2LiveStop();profile_open=media_open=0;tab=0;focus=2;sel=0;dirty=1;}
             else if(hit.kind==DNX_SERVER)choose_server=hit.index;
             else if(hit.kind==DNX_CHANNEL){choose_channel=hit.index;focus=1;}
             else if(hit.kind==DNX_INPUT)keyboard=1;
@@ -531,7 +578,9 @@ int dnx2GraphicalMenu(void){
             else if(hit.kind==DNX_CLEAR_STICKER&&dnx2JobKind()!=11){if(pending_sticker[0])pending_sticker[0]=pending_sticker_name[0]=0;else keyboard=1;dirty=1;}
             else if(hit.kind==DNX_FALLBACK)keyboard=2;
             else if(hit.kind==DNX_SEND)send=1;
-            else if(hit.kind==DNX_MESSAGE&&hit.index<a->message_count){if(!message_expanded)sel=hit.index;message_expanded=!message_expanded;message_offset=0;focus=2;dirty=1;}
+            else if(hit.kind==DNX_MESSAGE&&hit.index>=0&&hit.index<a->message_count){int top=message_expanded?104:100;for(int i=message_first;!message_expanded&&i<hit.index;i++)top+=dnx_message_row_height(message_images[i]);const Dnx2Message *m=&a->messages[hit.index];int inset=m->reply_state?24:0;if(author_hit(x,y,top+inset,m)){profile_message=*m;profile_open=1;sel=hit.index;}
+                else if(m->reply_state&&y<top+24){for(int i=0;i<a->message_count;i++)if(!strcmp(a->messages[i].id,m->reply_id)){sel=i;message_expanded=1;message_offset=0;break;}}
+                else {if(!message_expanded)sel=hit.index;message_expanded=!message_expanded;message_offset=0;}focus=2;dirty=1;}
             else if(hit.kind==DNX_PREVIOUS||hit.kind==DNX_NEXT){server_page+=hit.kind==DNX_NEXT?1:-1;if(server_page<0)server_page=0;int max=(a->server_count-1)/8;if(server_page>max)server_page=max;dirty=1;}
             else if(hit.kind==DNX_LOGIN)account_action=0;
             else if(hit.kind==DNX_REMEMBER)account_action=1;
@@ -551,7 +600,7 @@ int dnx2GraphicalMenu(void){
             dirty=1;
         }
         if(down&HidNpadButton_A){
-            if(focus==0){if(server_cursor<0){dnx2LiveStop();tab=0;focus=2;sel=0;dirty=1;}else choose_server=server_cursor;}
+            if(focus==0){if(server_cursor<0){if(a->signed_in){dnx2OpenDMList();tab=4;focus=1;channel_first=channel_cursor=0;}else{dnx2LiveStop();tab=0;focus=2;}sel=0;dirty=1;}else choose_server=server_cursor;}
             else if(tab==0)account_action=sel;
             else if(focus==1)choose_channel=channel_cursor;
             else if(focus==3)keyboard=1;
@@ -560,11 +609,11 @@ int dnx2GraphicalMenu(void){
         }
         if(account_action>=0){dnx2JobStop();dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}
             if(a->signed_in){dnx2AccountLogout();dnx2GraphicalClearDraft();tab=0;focus=2;dirty=1;}else{action=6;break;}}
-        if(choose_server>=0&&choose_server<a->server_count&&dnx2JobKind()!=11){dnx2JobStop();dnx2LiveStop();media_open=0;dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;message_expanded=0;dnx2JobStart(9,NULL,NULL);dirty=1;}
+        if(choose_server>=0&&choose_server<a->server_count&&dnx2JobKind()!=11){dnx2JobStop();dnx2LiveStop();media_open=0;dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;profile_open=0;message_expanded=0;dnx2JobStart(9,NULL,NULL);dirty=1;}
         if(choose_channel>=0&&dnx2JobKind()!=11){int next=open_channel(choose_channel);dirty=1;if(next){action=next;break;}}
         if((down&HidNpadButton_X)&&tab!=0&&selected_text())keyboard=1;
         if((down&HidNpadButton_R)&&tab!=0&&selected_text())send=1;
-        if((down&HidNpadButton_Y)&&tab!=0&&dnx2JobKind()!=11){dnx2JobStart(selected_text()?10:9,NULL,NULL);dirty=1;}
+        if((down&HidNpadButton_Y)&&tab!=0&&dnx2JobKind()!=11){dnx2JobStart(selected_text()?10:a->private_mode?23:9,NULL,NULL);dirty=1;}
         if(keyboard&&selected_text()&&dnx2JobKind()!=11){
             dnx2JobStop();focus=3;
             int result=fallback_keyboard(&fb,&pad);if(result==2)media_begin();if(result==1)send=1;dirty=1;

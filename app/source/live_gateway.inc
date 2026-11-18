@@ -63,6 +63,7 @@ static int live_identify(TlsSession *socket){
     int ok=n>0&&(size_t)n<sizeof(body)&&ws_text(socket,body);wipe(body,sizeof(body));return ok;
 }
 static void live_subscribe(TlsSession *socket){
+    if(!live_guild[0])return;
     char body[300];snprintf(body,sizeof(body),"{\"op\":14,\"d\":{\"guild_id\":\"%s\",\"typing\":false,\"activities\":false,\"threads\":false,\"channels\":{\"%s\":[[0,99]]}}}",live_guild,live_channel);(void)ws_text(socket,body);
 }
 static void live_worker(void *unused){
@@ -134,7 +135,7 @@ done:
     mutexLock(&live_mutex);live_accept_images=0;live_images_finish();mutexUnlock(&live_mutex);
     if(!live_cancel()&&__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE)==1)live_set_mode(4);
     FILE *report=fopen("sdmc:/kaihen/discordnx2-live.txt","w");
-    if(report){fprintf(report,"DiscordNX2 v0.42 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
+    if(report){fprintf(report,"DiscordNX2 v0.43 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
     tls_close(&gateway);if(rng)csrngExit();if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
     wipe(&ws_reader,sizeof(ws_reader));if(event){wipe(event,DNX2_WS_MAX+1);free(event);}if(result){wipe(result,sizeof(*result));free(result);}
 }
@@ -145,9 +146,9 @@ void dnx2LiveStop(void){
 void dnx2LiveReset(void){dnx2LiveStop();wipe(live_pending,sizeof(live_pending));wipe(live_channel,sizeof(live_channel));wipe(live_guild,sizeof(live_guild));live_count=0;live_generation=live_applied=0;wipe(live_session,sizeof(live_session));live_sequence=-1;live_identify_after=0;live_set_mode(0);}
 void dnx2LiveStart(void){
     if(dnx2JobBusy()||live_running||!account.signed_in||account.selected_channel<0)return;
-    int type=account.channels[account.selected_channel].type;if(type!=0&&type!=5)return;
+    int type=account.channels[account.selected_channel].type;if(type!=0&&type!=5&&type!=1&&type!=3)return;
     snprintf(live_channel,sizeof(live_channel),"%s",account.channels[account.selected_channel].id);
-    snprintf(live_guild,sizeof(live_guild),"%s",account.servers[account.selected].id);snprintf(live_token,sizeof(live_token),"%s",session_token);
+    live_guild[0]=0;if(!account.private_mode)snprintf(live_guild,sizeof(live_guild),"%s",account.servers[account.selected].id);snprintf(live_token,sizeof(live_token),"%s",session_token);
     live_count=account.message_count;memcpy(live_pending,account.messages,(size_t)live_count*sizeof(Dnx2Message));live_generation=live_applied=0;
     __atomic_store_n(&live_stop,0,__ATOMIC_RELEASE);
     mutexLock(&live_mutex);live_accept_images=1;mutexUnlock(&live_mutex);

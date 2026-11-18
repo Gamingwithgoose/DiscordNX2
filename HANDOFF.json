@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.42-inline-attachments-keyboard-send-fast-live-events",
+  "version": "0.43-replies-profiles-nicknames-dms-proportional-media",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -280,5 +280,20 @@
     "latency": "Parse complete Gateway CREATE directly into scoped chronological latest30 snapshots; dedupe IDs. Delete by ID directly. Partial edits/bulk events retain REST resync. Keep Gateway open while the same worker services delegated artwork queue one item per idle receive iteration. Mutex/atomic lifecycle, cancellation, completion; no concurrent global HTTP/WS owner. Each live image fetch has2.5sec cancel deadline; queued dispatches prioritized. Poll fallback5sec and resync15sec unchanged.",
     "validation": "Strict AArch64 syntax checks and host sanitizers pass for modified modules. Tests cover1200x900 actual PNG decode->480x360, aspect/layout/touch rows, repeat timers, direct CREATE without extra REST, delegated artwork without LiveStop plus cancellation, existing GIF/Unicode/voice/session. No NRO build. Hardware latency and visual behavior pending.",
     "preserved": "Resident NSO, audio, loader, login/PIN encryption unchanged. DAVE/Opus voice blocker unchanged."
+  },
+  "v043_implementation": {
+    "media": "Preserve signed query parameters, remove stale width/height/fit/format, preserve source ratio <=640x360 using metadata, one-axis request without metadata; contain intent. Prior forced landscape transform could crop portrait content upstream. GIFs still bounded/first-frame where needed. Hardware not verified.",
+    "identity": "Dnx2Message retains username/discriminator, primary_guild tag/badge, bot flag, member role IDs, up to12 named mentions, referenced message author ID/name/content and deleted/missing state. Server member/roles read-only requests share delegated artwork queue, no concurrent global network owner; main thread applies results. Scoped guild cache supplies actual nicknames/server avatars/highest primary role color. API denial stays fallback, 429 backs off60s.",
+    "interaction": "Reply header above author, tap original only if loaded latest30. Avatar/name opens read-only card (portrait, identity, roles/join date) rather than full-message expansion; x/outside/B closes, L opens with controller. User/channel/role mention labels, APP/guild tag/badge; inline bold/italic/underline/strike/code; full rich text/effects/reactions not complete.",
+    "direct_messages": "Brand icon signed-in opens GET users/@me/channels, existing type1/type3 conversations. Sidebar footer account name returns settings. Channel selection history/send and live worker accept DMs, no guild subscription for private channels; private context scopes results, no guild profile lookup. No new-DM creation/friend management/DM calls.",
+    "voice": "User clarified could NOT connect, then Gateway session not ready. Do not mark voice hardware pass. Preflight now waits for Identify cooldown BEFORE opening WSS, shows countdown, cancellable; invalid resume and other stage/code failures distinct. No DAVE/Opus audio.",
+    "validation": "All host sanitizer/regression suites pass: proportional portrait/signed transforms, replies/deleted originals/tags/mentions/styles, actual PNG/GIF decode, role/member job results and cross-context isolation, unauthenticated badge fetch, existing DM list/history/send and no-guild private live worker, cooldown wait/cancel. HTTP/WS/CAPTCHA/session and font/layout/keyboard suites pass. Changed native modules pass strict AArch64 syntax; main has only pre-existing audio signedness warning. NRO not built, runtime/provider behavior requires user hardware test.",
+    "hardware_next": [
+      "Build-NRO.bat; transfer only NRO, NSO unchanged.",
+      "Compare same portrait GIF with desktop: entire frame and source aspect, no forced landscape crop.",
+      "Verify nickname/role colors/tags after metadata load; profile tap versus message body tap; reply preview and loaded-original navigation.",
+      "Brand opens existing DMs; read/send a test DM, switch between guild/DM without cross-conversation results.",
+      "Voice countdown then connection stages; B cancels; audio remains unavailable."
+    ]
   }
 }
