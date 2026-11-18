@@ -183,3 +183,10 @@ The first user build installed switch-mbedtls successfully but failed to compile
 ### v0.22 native QR nonce fix investigation
 
 Actual Switch 2 test reached `GENERATING SECURE RSA-2048 SESSION`, `CONNECTING TO DISCORD QR LOGIN`, then `FAILED TO VERIFY ENCRYPTED NONCE`; no QR generated. A follow-up revision adds a local RSA-OAEP round-trip self-test and static stage-specific nonce failure labels, so the next attempt distinguishes malformed challenge, base64 decode, ciphertext size, RSA private decrypt, and proof encoding. No secret values are logged. Pull main, rebuild NRO only, and share the stage-only report if it still fails. This does NOT yet claim working QR sign-in.
+
+
+### v0.23 native QR and appearance update
+
+Pull main with GitHub Desktop, run `Build-NRO.bat`, then FTP **only `dist/DiscordNX2.nro`**. Keep the installed resident NSO. This update fixes nonce-proof serialization capacity, adds Base64URL boundary selftests, packages your numeral-2 icon, and rounds the native menus. No PC companion or raw token is needed.
+
+Local NRO compilation and packet/nonce host tests passed. Open Servers > Sign in with QR code, scan with Discord mobile and approve using a test account. Confirm the real profile/server list. Live login and console appearance require hardware verification. Authentication remains unofficial; Discord voice is not implemented. If login fails, share only the stage-only hardware log, never QR URLs or credentials.

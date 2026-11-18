@@ -258,7 +258,8 @@ static int json_string(const char *body,const char *key,char *out,size_t cap){
             else if(ch=='n'||ch=='r'||ch=='t')ch=' ';
         }
         if(ch<32||ch>126)ch='?';
-        if(j+1<cap)out[j++]=(char)ch;
+        if(j+1>=cap){out[0]=0;return 0;}
+        out[j++]=(char)ch;
     }
     out[j]=0;return *p=='"';
 }
@@ -408,23 +409,23 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     char fingerprint[80]={0},pubkey[900]={0};
     if(!dnx2AuthCryptoSelfTest()){
         char self_error[90];
-        snprintf(self_error,sizeof(self_error),"LOCAL RSA SELFTEST FAILED MBEDTLS %d",dnx2AuthCryptoMbedError());
+        snprintf(self_error,sizeof(self_error),"LOCAL CRYPTO SELFTEST FAILED MBEDTLS %d",dnx2AuthCryptoMbedError());
         status(self_error,NULL);goto fail;
     }
-    status("LOCAL RSA OAEP SELFTEST PASSED",NULL);
+    status("LOCAL RSA OAEP AND BASE64 SELFTEST PASSED",NULL);
     if(!dnx2AuthCryptoPublicKey(pubkey,sizeof(pubkey)) ||
        !dnx2AuthCryptoFingerprint(fingerprint,sizeof(fingerprint)))goto fail;
     if(R_FAILED(socketInitialize(NULL)))goto fail;
     if(R_FAILED(sslInitialize(1))){socketExit();goto fail;}
     int success=0,network_ready=1;
+    int qr_shown=0;
+    char ticket[700]={0};
     TlsSession remote;
     status("CONNECTING TO DISCORD QR LOGIN",NULL);
     if(!tls_open(&remote,REMOTE_HOST))goto network_cleanup;
     if(!ws_connect(&remote)) {status("REMOTE AUTH WEBSOCKET REJECTED",NULL);goto remote_cleanup;}
     unsigned heartbeat=41250;u64 last_heartbeat=dnx2MonotonicMs();
     u64 expire=dnx2MonotonicMs()+120000;
-    int qr_shown=0;
-    char ticket[700]={0};
     for(unsigned attempts=0;attempts<180 && dnx2MonotonicMs()<expire;attempts++){
         if(cancel&&cancel()){status("LOGIN CANCELED",NULL);break;}
         int n=ws_receive(&remote,ws_payload,sizeof(ws_payload),dnx2MonotonicMs()+4500);
@@ -450,7 +451,7 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
             if(len<=0||(size_t)len>=sizeof(init)||!ws_text(&remote,init))break;
             wipe(init,sizeof(init));
         }else if(json_operation(json,"nonce_proof")){
-            char encrypted[700]={0},proof[100]={0};
+            char encrypted[700]={0},proof[DNX2_AUTH_PROOF_CAP]={0};
             if(!json_string(json,"encrypted_nonce",encrypted,sizeof(encrypted))){
                 status("NONCE FIELD MISSING OR INVALID",NULL);break;
             }
@@ -468,12 +469,14 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
                 wipe(encrypted,sizeof(encrypted));
                 break;
             }
-            char response[220];
+            char response[DNX2_AUTH_PROOF_CAP+64];
             int len=snprintf(response,sizeof(response),
                    "{\"op\":\"nonce_proof\",\"nonce\":\"%s\"}",proof);
-            if(len<=0||(size_t)len>=sizeof(response)||
-               !ws_text(&remote,response))break;
+            int sent=len>0 && (size_t)len<sizeof(response) && ws_text(&remote,response);
+            wipe(response,sizeof(response));
             wipe(encrypted,sizeof(encrypted));wipe(proof,sizeof(proof));
+            if(!sent){status("NONCE RESPONSE SEND FAILED",NULL);break;}
+            status("NONCE PROOF SENT - WAITING FOR QR",NULL);
         }else if(json_operation(json,"pending_remote_init")){
             char received[80]={0};
             if(!json_string(json,"fingerprint",received,sizeof(received)) ||
@@ -502,7 +505,7 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
 remote_cleanup:
     tls_close(&remote);
     if(ticket[0]&&qr_shown){
-        TlsSession https;
+        TlsSession https={.socket_fd=-1,.returned_fd=-1};
         char json[1000];
         int len=snprintf(json,sizeof(json),"{\"ticket\":\"%s\"}",ticket);
         wipe(ticket,sizeof(ticket));

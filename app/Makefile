@@ -31,7 +31,7 @@ $(BUILD)/voice_packet.o: source/voice_packet.c source/voice_packet.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/discord_gateway_probe.o: source/discord_gateway_probe.c source/discord_gateway_probe.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/graphical_ui.o: source/graphical_ui.c source/graphical_ui.h | $(BUILD)
+$(BUILD)/graphical_ui.o: source/graphical_ui.c source/graphical_ui.h source/brand_icon.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/discord_remote_probe.o: source/discord_remote_probe.c source/discord_gateway_probe.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
@@ -45,8 +45,10 @@ $(BUILD)/native_font.o: source/native_font.c source/native_font.h source/vendor/
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
-$(TARGET).nro: $(BUILD)/$(TARGET).elf
-	$(DEVKITPRO)/tools/bin/elf2nro $< $@
+$(BUILD)/$(TARGET).nacp: | $(BUILD)
+	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.23" $@
+$(TARGET).nro: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).nacp assets/icon.jpg
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --icon=assets/icon.jpg --nacp=$(BUILD)/$(TARGET).nacp
 clean:
 	rm -rf $(BUILD) $(TARGET).nro
 .PHONY: all clean

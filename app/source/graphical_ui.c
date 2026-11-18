@@ -9,6 +9,8 @@
 #include "vendor/qrcodegen.h"
 #include "native_login.h"
 #include "native_font.h"
+#include "brand_icon.h"
+#include <math.h>
 #include "vendor/font8x8_basic.h"
 #include <switch.h>
 #include <switch/display/framebuffer.h>
@@ -44,6 +46,28 @@ static void rect(int x,int y,int width,int height,uint32_t color) {
         for(int px=0;px<width;px++)dst[px]=color;
     }
 }
+/* Scanline rounded panels: all writes pass through framebuffer clipping. */
+static void rounded(int x,int y,int w,int h,int radius,uint32_t color) {
+    if(w<=0||h<=0)return;
+    if(radius>w/2)radius=w/2;
+    if(radius>h/2)radius=h/2;
+    if(radius<1){rect(x,y,w,h,color);return;}
+    for(int row=0;row<h;row++){
+        int dy=row<radius?radius-1-row:row>=h-radius?row-(h-radius):0;
+        int inset=dy?radius-(int)sqrtf((float)(radius*radius-dy*dy)):0;
+        rect(x+inset,y+row,w-2*inset,1,color);
+    }
+}
+static void brand(int x,int y) {
+    for(int j=0;j<64;j++)for(int i=0;i<64;i++){
+        int px=x+i,py=y+j;
+        if(px<0||py<0||px>=W||py>=H)continue;
+        const unsigned char *s=brand_icon+4*(j*64+i);
+        uint32_t *d=pixels+py*stride_pixels+px,old=*d,v=0;
+        for(int c=0;c<3;c++)v|=((s[c]*s[3]+((old>>(8*c))&255)*(255-s[3])+127)/255)<<(8*c);
+        *d=v|0xff000000u;
+    }
+}
 /* Public-domain 8x8 IBM VGA glyphs: cleaner shapes and visibly distinct
  * punctuation/numerals than the original handmade 5x7 alphabet.
  * Independent horizontal metrics preserve sidebar and card layout widths. */
@@ -67,19 +91,19 @@ static void text_line(int x,int y,const char *s,uint32_t color,int scale,int max
 }
 static void line(int x,int y,int width,uint32_t color){rect(x,y,width,2,color);}
 static void block(int x,int y,int w,int h,uint32_t color) {
-    rect(x,y,w,h,color);
-    rect(x+1,y+1,w-2,2,C_LINE);
+    rounded(x,y,w,h,18,C_LINE);
+    rounded(x+1,y+1,w-2,h-2,17,color);
 }
 static void pill(int x,int y,int w,const char *label,uint32_t color) {
-    rect(x,y,w,35,color);
+    rounded(x,y,w,35,11,color);
     text_line(x+15,y+9,label,C_WHITE,2,28);
 }
 static void item(int x,int y,int w,int h,const char *name,
                  const char *hint,int active) {
     block(x,y,w,h,active?C_CARD_HI:C_CARD);
-    if(active)rect(x,y,7,h,C_PRIMARY);
+    if(active)rounded(x+7,y+12,4,h-24,2,C_PRIMARY);
     text_line(x+24,y+15,name,C_WHITE,3,30);
-    text_line(x+24,y+53,hint,C_MUTED,2,44);
+    if(h>=90)text_line(x+24,y+53,hint,C_MUTED,2,44);
 }
 /* Reusable native QR renderer; only encode URLs provided by a validated
  * future authentication session. No static "login" QR is displayed. */
@@ -104,20 +128,20 @@ static int qr_render_url(int x,int y,int area,const char *url) {
 static void draw(const char *feedback,int tab,int selection,int focus,int qr_preview) {
     rect(0,0,W,H,C_BG);
     (void)qr_preview; /* QR URLs only shown by an authenticated live session. */
-    rect(0,0,268,H,C_SIDEBAR);
-    rect(0,0,268,9,C_PRIMARY);
-    text_line(28,42,"DISCORDNX2",C_WHITE,3,18);
+    rounded(10,14,258,H-28,22,C_SIDEBAR);
+    brand(27,33);
+    text_line(102,54,"DISCORDNX2",C_WHITE,2,18);
     text_line(29,88,"SWITCH 2 NATIVE",C_MUTED,2,22);
     line(23,135,218,C_LINE);
     const char *tabs[4]={"DASHBOARD","SERVERS","VOICE CHAT","DIAGNOSTICS"};
     for(int t=0;t<4;t++) {
         int y=175+t*86;
-        if(tab==t)rect(12,y-9,240,65,focus==0?C_CARD_HI:C_CARD);
-        if(tab==t)rect(12,y-9,5,65,focus==0?C_GREEN:C_PRIMARY);
+        if(tab==t)rounded(20,y-9,232,65,14,focus==0?C_CARD_HI:C_CARD);
+        if(tab==t)rounded(20,y+7,4,33,2,focus==0?C_GREEN:C_PRIMARY);
         text_line(34,y+7,tabs[t],tab==t?C_WHITE:C_MUTED,3,18);
     }
-    rect(19,635,231,54,C_CARD);
-    text_line(31,652,"LOCAL BUILD 0.22",C_MUTED,2,23);
+    rounded(23,635,227,54,14,C_CARD);
+    text_line(31,652,"LOCAL BUILD 0.23",C_MUTED,2,23);
 
     const Dnx2Account *profile=dnx2Account();
     pill(1080,36,160,profile->signed_in?"SIGNED IN":"NO LOGIN",profile->signed_in?C_GREEN:C_CARD_HI);
@@ -143,8 +167,8 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
                 text_line(315,292,"YOUR ACCOUNT HAS NO SERVERS",C_MUTED,3,40);
             for(int i=0;i<7&&start+i<profile->server_count;i++){
                 int index=start+i,y=262+i*46;
-                rect(310,y,925,40,index==profile->selected?C_CARD_HI:C_CARD);
-                if(focus==1&&selection==index)rect(310,y,7,40,C_GREEN);
+                rounded(310,y,925,40,12,index==profile->selected?C_CARD_HI:C_CARD);
+                if(focus==1&&selection==index)rounded(316,y+8,4,24,2,C_GREEN);
                 text_line(333,y+8,profile->servers[index].name,C_WHITE,2,54);
             }
             if(selection>=profile->server_count || profile->server_count<7)
@@ -176,11 +200,11 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
         item(310,513,930,75,"SUSTAINED MICROPHONE","BOUNDED CAPTURE STABILITY",focus==1&&selection==3);
         item(310,590,930,48,"REMOTE AUTH GATEWAY","SECURE QR LOGIN NETWORK FOUNDATION",focus==1&&selection==4);
     }
-    rect(294,641,963,58,C_SIDEBAR);
-    text_line(315,657,"LEFT: MENU   RIGHT: CONTENT   UP/DOWN: MOVE   A: OPEN",C_MUTED,2,68);
-    text_line(311,615,feedback?feedback:"READY",C_GREEN,2,63);
-    if(focus==0)text_line(311,590,"SIDEBAR FOCUS - PRESS RIGHT FOR CONTENT",C_WARN,2,52);
-    else text_line(311,590,"CONTENT FOCUS - PRESS LEFT FOR SIDEBAR",C_WARN,2,52);
+    rounded(294,655,963,49,14,C_SIDEBAR);
+    text_line(315,670,"LEFT: MENU   RIGHT: CONTENT   UP/DOWN: MOVE   A: OPEN",C_MUTED,2,68);
+    if(tab!=1 && tab!=3)text_line(311,615,feedback?feedback:"READY",C_GREEN,2,63);
+    if(tab==0 && focus==0)text_line(311,630,"SIDEBAR FOCUS - PRESS RIGHT FOR CONTENT",C_WARN,2,52);
+    else if(tab==0)text_line(311,630,"CONTENT FOCUS - PRESS LEFT FOR SIDEBAR",C_WARN,2,52);
 }
 static int options_for(int tab){const Dnx2Account *p=dnx2Account();return tab==0?2:tab==1?(p->signed_in?p->server_count+1:1):tab==3?5:0;}
 static int action_for(int tab,int selection) {
@@ -306,7 +330,8 @@ void dnx2GraphicalAuthStatus(const char *phase,const char *qr_url) {
     stride_pixels=(int)(stride/4);
     rect(0,0,W,H,C_BG);
     rect(0,0,W,13,C_PRIMARY);
-    text_line(65,60,"DISCORDNX2",C_WHITE,4,35);
+    brand(65,40);
+    text_line(150,60,"DISCORDNX2",C_WHITE,4,35);
     text_line(65,119,"NATIVE DISCORD ACCOUNT LOGIN",C_MUTED,2,55);
     block(60,175,1160,444,C_SIDEBAR);
     if(qr_url && strncmp(qr_url,"https://discord.com/ra/",23)==0) {

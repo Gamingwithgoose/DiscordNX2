@@ -2,6 +2,8 @@
 #ifndef DNX2_AUTH_CRYPTO_H
 #define DNX2_AUTH_CRYPTO_H
 #include <stddef.h>
+#define DNX2_AUTH_NONCE_MAX 190u
+#define DNX2_AUTH_PROOF_CAP (4u*((DNX2_AUTH_NONCE_MAX+2u)/3u)+1u)
 /* Security boundary: no private key or token is serialized to the SD card.
  * mbedTLS 2.28 / Switch portlib supplies vetted RSA-2048/OAEP and SHA-256. */
 int dnx2AuthCryptoOpen(void);

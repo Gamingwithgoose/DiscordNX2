@@ -169,6 +169,23 @@ int dnx2AuthCryptoSelfTest(void) {
             NULL,0,&n,cipher,result,sizeof(result));
         ok=ret==0&&n==sizeof(sample)-1&&memcmp(sample,result,n)==0;
     }
+    static const size_t lengths[]={32,64,96,128,DNX2_AUTH_NONCE_MAX};
+    unsigned char sample_bytes[DNX2_AUTH_NONCE_MAX],decoded[192];
+    char encoded[DNX2_AUTH_PROOF_CAP];
+    for(size_t i=0;i<sizeof(sample_bytes);i++)sample_bytes[i]=(unsigned char)(i*73u+19u);
+    for(size_t i=0;ok && i<sizeof(lengths)/sizeof(lengths[0]);i++){
+        size_t length=lengths[i],used=0;
+        ok=base64_url(sample_bytes,length,encoded,sizeof(encoded)) &&
+           strlen(encoded)==(length*8+5)/6 && !strpbrk(encoded,"=+/") &&
+           decode_base64(encoded,decoded,sizeof(decoded),&used) &&
+           used==length && memcmp(sample_bytes,decoded,length)==0;
+        /* Exact required capacity succeeds; one byte less fails safely. */
+        size_t capacity=4*((length+2)/3)+1;
+        if(ok)ok=base64_url(sample_bytes,length,encoded,capacity) &&
+                 !base64_url(sample_bytes,length,encoded,capacity-1);
+    }
+    clear_volatile(sample_bytes,sizeof(sample_bytes));clear_volatile(decoded,sizeof(decoded));
+    clear_volatile(encoded,sizeof(encoded));
     clear_volatile(cipher,sizeof(cipher));
     clear_volatile(result,sizeof(result));
     auth_crypto_error=ok?0:4;
@@ -182,7 +199,7 @@ int dnx2AuthCryptoNonceProof(const char *cipher,char *proof,size_t proof_cap) {
     unsigned char nonce[256]={0};
     size_t n=0;
     int ok=dnx2AuthCryptoDecrypt(cipher,nonce,sizeof(nonce),&n);
-    if(ok){ok=base64_url(nonce,n,proof,proof_cap);
+    if(ok){ok=n>0 && n<=DNX2_AUTH_NONCE_MAX && base64_url(nonce,n,proof,proof_cap);
         if(!ok)auth_crypto_error=5;}
     clear_volatile(nonce,sizeof(nonce));
     return ok;

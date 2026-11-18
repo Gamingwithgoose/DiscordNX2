@@ -141,3 +141,13 @@ User's first v0.22 Build-NRO.bat installed switch-mbedtls-2.28.10-1 successfully
 ## November 17, 2026 - v0.22 native QR nonce challenge diagnostics
 
 Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA session creation, remote-auth connection, then FAILED TO VERIFY ENCRYPTED NONCE before QR was generated. Added local RSA-2048 OAEP encrypt/decrypt self-test before connecting and replaced ambiguous nonce failure with stage-specific messages for absent/invalid encrypted_nonce, base64 decoding, ciphertext size mismatch, OAEP decrypt failure, and proof encoding failure. These statuses contain no nonce, keys, fingerprint or tokens. Build and actual QR login not yet verified after this fix. Existing font, audio and resident NSO unchanged.
+
+
+## v0.23 — native nonce capacity, custom icon and rounded menus (2026-11-17)
+
+- Based on verified main 5c39f8c8d46ce262f3b277eb3536e400d3b61313. Fix latest proof-encoding failure by sizing nonce proof for the full 190-byte RSA-2048/OAEP-SHA256 plaintext bound, including mbedTLS padding/terminator. Enlarge and wipe outgoing JSON.
+- Add deterministic Base64URL boundary/roundtrip checks to local crypto selftest; reject truncated JSON fields and initialize cleanup state before early TLS/WS failures.
+- Embed user-supplied numeral-2 artwork in the native UI and actual NRO icon; NACP version 0.23. Use clipped rounded panels, rows, buttons, focus markers and sidebar; prevent short-row hint overflow.
+- Preserve audio, Gateway diagnostics, controls, system font/fallback and resident NSO. Build-NRO.bat still builds NRO only.
+- Validation: clean native NRO compile/link/package passed; existing voice-packet host tests passed; production encoder host tests with mbedTLS 2.28.10 passed at 32/64/96/128/190 bytes, including exact/insufficient capacities and old failure reproduction. NRO icon and NACP verified. Hardware login and UI pending.
+- Pull main, Build-NRO.bat, FTP only dist/DiscordNX2.nro, inspect menus and run Servers > QR sign-in once. Phone approval, ticket exchange and real guilds remain unverified until console testing; no claim of successful login or Discord voice.
