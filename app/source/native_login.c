@@ -59,6 +59,7 @@ static void tls_close(TlsSession *s){
     if(s->returned_fd>=0)close(s->returned_fd);
     if(s->socket_fd>=0)close(s->socket_fd);
     memset(s,0,sizeof(*s));
+    s->socket_fd=-1;s->returned_fd=-1; /* make repeat cleanup safe */
 }
 static int tls_open(TlsSession *s,const char *host) {
     memset(s,0,sizeof(*s));s->socket_fd=-1;s->returned_fd=-1;
@@ -263,12 +264,14 @@ static int json_operation(const char *json,const char *op){
     char v[64];
     return json_string(json,"op",v,sizeof(v))&&strcmp(v,op)==0;
 }
+/* Never log requests or API response bodies (they can carry access tokens). */
 static int http_request(TlsSession *s,const char *host,const char *method,
                         const char *path,const char *body,const char *token,
                         char *out,size_t cap){
     if(!tls_open(s,host))return 0;
     size_t bodylen=body?strlen(body):0;
-    char req[4096];int len=snprintf(req,sizeof(req),
+    char req[4096];
+    int len=snprintf(req,sizeof(req),
       "%s %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
       "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.22\r\n"
       "Connection: close\r\n%s%s%s"
@@ -289,15 +292,55 @@ static int http_request(TlsSession *s,const char *host,const char *method,
         used+=got;
     }
     out[used]=0;
-    if(used<16||strncmp(out,"HTTP/1.1 200 ",13)!=0)return 0;
+    if(used<16 || !(strncmp(out,"HTTP/1.1 200 ",13)==0 ||
+                     strncmp(out,"HTTP/1.0 200 ",13)==0))return 0;
     char *split=strstr(out,"\r\n\r\n");
     if(!split)return 0;
     size_t offset=(size_t)(split-out)+4;
-    memmove(out,out+offset,used-offset);
-    out[used-offset]=0;
-    /* Discord responses typically include Content-Length. On chunked
-     * transfers, decode hexadecimal chunks into one bounded JSON buffer. */
-
+    /* The header ends exactly at offset. We must check framing BEFORE
+     * memmove removes the header, or incomplete HTTP bodies look valid. */
+    int chunked=0,has_length=0;
+    size_t expected_length=0;
+    const char *p=out;
+    while(p<out+offset){
+        const char *end=strstr(p,"\r\n");
+        if(!end || end>out+offset)break;
+        if(starts_ci(p,"transfer-encoding:")){
+            const char *v=p+18;
+            while(v<end && (*v==' '||*v=='\t'))v++;
+            if(end-v>=7 && starts_ci(v,"chunked"))chunked=1;
+        }
+        if(starts_ci(p,"content-length:")){
+            char *after=NULL;
+            unsigned long value=strtoul(p+15,&after,10);
+            if(after!=p+15 && value<cap) {
+                expected_length=(size_t)value;has_length=1;
+            }
+        }
+        p=end+2;
+    }
+    size_t payload=used-offset;
+    memmove(out,out+offset,payload);
+    out[payload]=0;
+    if(chunked){
+        size_t read_at=0,write_at=0;
+        while(read_at<payload){
+            char *line_end=strstr(out+read_at,"\r\n");
+            if(!line_end)return 0;
+            unsigned long count=strtoul(out+read_at,NULL,16);
+            if(count>cap || count>payload)return 0;
+            read_at=(size_t)(line_end-out)+2;
+            if(count==0){out[write_at]=0;return 1;}
+            if(read_at+count+2>payload ||
+               out[read_at+count]!='\r'||out[read_at+count+1]!='\n')return 0;
+            memmove(out+write_at,out+read_at,count);
+            write_at+=count;
+            read_at+=count+2;
+        }
+        return 0;
+    }
+    if(has_length && payload<expected_length)return 0;
+    if(payload==0)return 0;
     return 1;
 }
 static int parse_identity(const char *json){
