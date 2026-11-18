@@ -954,7 +954,7 @@ static void run_gui_action(int action) {
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.28 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.29 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();

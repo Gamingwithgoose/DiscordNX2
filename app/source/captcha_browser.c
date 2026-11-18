@@ -11,6 +11,8 @@
 #define DNX2_CAPTCHA_PAGE_URL "https://mmonsterpatch.gamingwithgoose.com/discordnx2-captcha.html"
 #endif
 static unsigned browser_error;
+static unsigned browser_exit=~0u;
+unsigned dnx2CaptchaBrowserExit(void){return browser_exit;}
 unsigned dnx2CaptchaBrowserError(void){return browser_error;}
 static int encode(const char *s,char *out,size_t cap){
  const char *hex="0123456789ABCDEF";size_t j=0;
@@ -23,7 +25,7 @@ static int encode(const char *s,char *out,size_t cap){
  out[j]=0;return 1;
 }
 int dnx2CaptchaShow(const Dnx2Captcha *c,char *solution,size_t cap){
- browser_error=0;
+ browser_error=0;browser_exit=~0u;
  if(!c||strcmp(c->service,"hcaptcha") || !dnx2CaptchaPageUrl(DNX2_CAPTCHA_PAGE_URL))return 0;
  /* Web applet URL slots are bounded: reject, never truncate enterprise data. */
  unsigned char random[32];char state[65],site[288],data[2048],url[3072],last[4096];
@@ -44,9 +46,16 @@ int dnx2CaptchaShow(const Dnx2Captcha *c,char *solution,size_t cap){
  if(R_SUCCEEDED(rc))rc=webConfigSetCallbackUrl(&config,"https://discordnx2.invalid/captcha-return");
  if(R_SUCCEEDED(rc))rc=webConfigShow(&config,&reply);
  if(R_SUCCEEDED(rc)){
+  WebExitReason reason;
+  Result exit_rc=webReplyGetExitReason(&reply,&reason);
+  if(R_SUCCEEDED(exit_rc))browser_exit=(unsigned)reason;
+  /* Applet API success is not page navigation success. Do not interpret an
+   * error dialog or ordinary B/X close as a completed verification. */
+  if(R_FAILED(exit_rc)||reason!=WebExitReason_LastUrl)goto browser_closed;
   size_t size=0;rc=webReplyGetLastUrl(&reply,last,sizeof(last),&size);
   if(R_SUCCEEDED(rc)&&size<sizeof(last))ok=dnx2CaptchaReturn(last,state,solution,cap);
  }
+browser_closed:
  if(R_FAILED(rc))browser_error=rc;
  if(applet_live)appletExit();
  dnx2GraphicalAuthBegin();

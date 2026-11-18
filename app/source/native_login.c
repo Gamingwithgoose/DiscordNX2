@@ -527,7 +527,7 @@ remote_cleanup:
         char json[1000];
         int len=snprintf(json,sizeof(json),"{\"ticket\":\"%s\"}",ticket);
         wipe(ticket,sizeof(ticket));
-        int exchange_ok=0;
+        int exchange_ok=0,browser_unavailable=0;
         if(len>0&&(size_t)len<sizeof(json)){
             exchange_ok=http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
                                     json,NULL,(char*)http_body,sizeof(http_body));
@@ -549,7 +549,8 @@ remote_cleanup:
                                             json,NULL,(char*)http_body,sizeof(http_body));
                 }else {
                     char browser_stage[100];
-                    snprintf(browser_stage,sizeof(browser_stage),"CAPTCHA BROWSER CLOSED OR UNAVAILABLE RESULT %08x",dnx2CaptchaBrowserError());
+                    snprintf(browser_stage,sizeof(browser_stage),"CAPTCHA BROWSER RESULT %08x EXIT %08x",dnx2CaptchaBrowserError(),dnx2CaptchaBrowserExit());
+                    browser_unavailable=dnx2CaptchaBrowserError()!=0 || dnx2CaptchaBrowserExit()==7;
                     status(browser_stage,NULL);
                 }
                 wipe(captcha_headers,sizeof(captcha_headers));wipe(captcha_solution,sizeof(captcha_solution));
@@ -568,7 +569,9 @@ remote_cleanup:
             wipe(encrypted,sizeof(encrypted));wipe(access,sizeof(access));
         }else {
             char reason[96];
-            if(last_captcha_required){
+            if(browser_unavailable){
+                snprintf(failure_reason,sizeof(failure_reason),"System browser unavailable. CAPTCHA could not open.");
+            }else if(last_captcha_required){
                 snprintf(failure_reason,sizeof(failure_reason),"CAPTCHA was not completed or accepted. Check the login log.");
             }else if(last_http_status==429){
                 snprintf(failure_reason,sizeof(failure_reason),"Discord rate limited login. Please try again later.");

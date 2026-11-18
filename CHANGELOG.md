@@ -197,3 +197,11 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Hosted isolated page on user-supplied https://mmonsterpatch.gamingwithgoose.com/discordnx2-captcha.html via community repo commit 74feae5; HTTP200 verified. Existing site pages unchanged.
 - Native build/link, HTTP/WS/CAPTCHA regression tests and synthetic frontend tests pass. Browser-enabled compilation was checked too. Real Switch browser launch, provider domain/browser acceptance, callback and complete login still require hardware testing. No claim of successful CAPTCHA or login.
 - Pull main, Build-NRO.bat, FTP only NRO. Approve QR login, complete browser CAPTCHA yourself if it opens, then verify real account/servers or send stage-only report. NSO unchanged.
+
+
+## v0.29 - distinguish unavailable system browser
+
+- User reports This feature is not available; v0.28 browser API returned zero without a callback. Read the applet exit reason separately and accept only LastUrl callback exits.
+- Log both Result and exit reason. Error-dialog exit 7/API failure keeps an explicit browser-unavailable explanation on Dashboard.
+- Embedded-browser assessment: no ready compatible engine installed; lightweight HTML rendering alone does not establish hCaptcha compatibility. No browser-engine port or phone relay is claimed.
+- NRO build and HTTP/WS/CAPTCHA regressions passed. Actual system-browser availability and successful login remain blocked/unverified. Resident NSO unchanged.

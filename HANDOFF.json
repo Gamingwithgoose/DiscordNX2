@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.28-user-completed-captcha-browser",
+  "version": "0.29-browser-exit-reason",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -97,7 +97,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "Clean NRO build with real URL passed. Separate browser-enabled compilation passed. HTTP/WS regression tests and CAPTCHA headers/callback/overflow/injection/wipe tests passed; frontend synthetic callback/enterprise-data tests passed. No real CAPTCHA solved by automation.",
+  "build_validation": "Native NRO build and existing HTTP/WS/CAPTCHA unit tests passed. Actual WebExitReason and browser compatibility still require console verification; no need to repeat login just to reconfirm the known unavailable browser.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -178,5 +178,12 @@
     "default_url": "https://mmonsterpatch.gamingwithgoose.com/discordnx2-captcha.html",
     "tests": "Clean NRO build with real URL passed. Separate browser-enabled compilation passed. HTTP/WS regression tests and CAPTCHA headers/callback/overflow/injection/wipe tests passed; frontend synthetic callback/enterprise-data tests passed. No real CAPTCHA solved by automation.",
     "remaining_blockers": "Switch2/kaiHEN browser applet invocation, URL callback behavior, hCaptcha engine compatibility, Discord dynamic sitekey domain acceptance and ticket lifetime during challenge require console testing. Provider domain restrictions are honored; no host spoof, solver service, CAPTCHA bypass or automatic retry loop. Full Discord login not confirmed."
+  },
+  "v029_implementation": {
+    "evidence": "User sees system This feature is not available. v0.28 log reports browser Result 00000000 with no CAPTCHA callback; applet API success was conflated with successful page launch.",
+    "change": "Read WebExitReason, accept only LastUrl callback exit, report numeric exit reason separately from Result. ErrorDialog exit 7 or API failure preserves a specific system-browser-unavailable message on Dashboard.",
+    "embedded_browser_assessment": "Installed switch2 portlibs contain graphics/kaihen libraries, no ready browser engine. litehtml is an HTML/CSS renderer, not a full web platform. hCaptcha documents modern desktop/mobile browser support; a compatible embedded engine needs a separate port and compatibility validation. No embedded browser implemented or claimed.",
+    "next_decision": "Asked user whether to explore phone-based verification handoff (no PC, but cross-device acceptance unverified) or maintain entirely-on-Switch CAPTCHA scope. No backend relay deployed without that direction.",
+    "validation": "Native NRO build and existing HTTP/WS/CAPTCHA unit tests passed. Actual WebExitReason and browser compatibility still require console verification; no need to repeat login just to reconfirm the known unavailable browser."
   }
 }

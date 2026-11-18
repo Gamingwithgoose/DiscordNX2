@@ -12,5 +12,7 @@ int dnx2CaptchaPageUrl(const char *base);
 void dnx2CaptchaWipe(void *ptr,size_t size);
 /* Returns 1 only for a user-completed browser result, 0 canceled/unavailable. */
 unsigned dnx2CaptchaBrowserError(void);
+/* ~0u if applet never supplied an exit reason; 7 is its error dialog. */
+unsigned dnx2CaptchaBrowserExit(void);
 int dnx2CaptchaShow(const Dnx2Captcha *challenge,char *solution,size_t cap);
 #endif
