@@ -360,3 +360,11 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add sentence capitals, double-space punctuation and explicit offline English word/next-word suggestions, keeping messages local until Send/Done.
 - Use validated regional Gateway Resume hosts, raise uncompressed Ready capacity to4MiB and clear stale pre-Ready sessions. Expand safe voice diagnostics; stage1/code0 exact cause remains unconfirmed and voice audio remains unfinished.
 - Add synthetic GIF/font/preferences/DM-art/keyboard/Gateway regression checks. Source-only update: no NRO/dependency build, resident NSO or loader changes.
+
+## v0.45 — 2026-11-18
+
+- Follow up hardware stage2 report: Gateway Ready and sent join are confirmed; missing voice event and permissions are not yet established.
+- Subscribe selected guild before voice request, explicitly disable video, scope guild-less voice states by exact account/channel, and accept valid endpoint ports with verified TLS and matching Host header. Legacy :80 uses TLS443.
+- Begin a full confirmation wait after join; avoid duplicate Ready/Resume join requests. Distinguish absent/state-only/server-only/pending allocation/invalid endpoint/self-disconnected outcomes and log fixed event/leave counters without private data.
+- Replace verbose voice warning/footer with a concise, accurate unavailable-calls message. DAVE/Opus audio is still unfinished; this is not a working call implementation.
+- Extend synthetic voice fixtures for scope, missing events and port handling; preserve cancellation and automatic leave. No NRO, NSO, dependency or loader build.

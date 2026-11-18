@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.44-gif-font-channel-memory-dm-art-offline-prediction",
+  "version": "0.45-voice-confirmation-scope-ports-status",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -74,7 +74,10 @@
       "remote-auth WebSocket HTTP 403; no HELLO; user/account not involved"
     ],
     "v037_login": "User confirmed: account connected and real server list displayed using the project-hosted phone CAPTCHA handoff. Names had question marks; ordering differed from Discord. Channel/text and persistence changes in v0.38 await hardware testing.",
-    "v039_ui": "User confirmed touch works. Photos show channel navigation and account name; selecting channels/sending switches to full loading/auth overlay and flashes. User rejects unreadable two-character server initials and oversized labeled/symbol-heavy fallback keyboard. Supplied Discord server-icon rail as appearance reference."
+    "v039_ui": "User confirmed touch works. Photos show channel navigation and account name; selecting channels/sending switches to full loading/auth overlay and flashes. User rejects unreadable two-character server initials and oversized labeled/symbol-heavy fallback keyboard. Supplied Discord server-icon rail as appearance reference.",
+    "v044_voice_report": [
+      "User-provided desktop report: Stage2 close0 hello1 identified1 ready1, join request sent, leave attempted, audio_active0. This is Gateway Ready plus locally sent join; NOT voice-channel confirmation or a working call."
+    ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
@@ -305,5 +308,13 @@
     "dm_art": "Retain recipient id/avatar/default index and group icon hash from private-channel list. Queued unauthenticated CDN avatar/default/channel-icon downloads and circular sidebar artwork.",
     "keyboard": "Offline English prefix completions and simple common next words, explicit tap only, no telemetry/autocorrect or send. Sentence-start capitals, double-space . +space within400ms, existing grapheme deletion and Done/send/cancel behavior preserved.",
     "validation": "Host checks include exact new enclosed glyph rasterization, actual130-frame GIF sampled with duration preserved, preference write/replace/load and separate guild/DM choices, caps/double-space/completion geometry, DM avatar/group icon CDN, regional host validation and actual1.5MiB WS Ready parse/4MiB rejection. Strict source checks and existing regressions run before commit; no NRO build. Hardware/provider behavior pending."
+  },
+  "v045_implementation": {
+    "evidence": "Read complete user discordnx2-voice.txt: Gateway works past prior stage1 issue. Neither have_state nor have_server counters existed in v044 report, so missing event and actual permission failure cannot be inferred. Do not claim permission denial or hardware call success.",
+    "changes": "Subscribe selected guild using existing user-client Opcode14 subscription shape before Opcode4 join; explicitly self_video:false, mute/deaf true. Allow optional guild_id on VoiceState only if user AND globally unique selected channel match, reject explicit mismatched guild. VoiceServer still requires exact guild. Accept validated Discord media/gg endpoint numeric TCP ports via verified TLS and HTTP Host including non-default port; legacy :80 normalized to TLS443, never plaintext. Reset confirmation timer after join, ignore duplicate Ready/Resumed join triggers.",
+    "diagnostics": "Distinct none/state-only/server-only/null-allocation/unsupported-endpoint/self-disconnected statuses. Fixed counters for seen/matched events, null/invalid endpoint, join_sent and leave_sent; no IDs/host/token/session/provider text. Best-effort leave retained, no media/mic/audio starts.",
+    "ui": "Remove long encrypted-voice/test-then-disconnect paragraph and duplicated inactive-audio footer. Keep concise Voice calls are not supported in this version and accurate Check voice connection button; do not misrepresent unfinished DAVE/Opus.",
+    "validation": "Synthetic production preflight fixtures cover omitted guild state, default and non-default endpoint ports, neither confirmation, state-only, invalid endpoint, cooldown/cancel, scoped rejection, cleanup and4017 handling. Strict AArch64 syntax plus HTTP/WS regressions checked before commit; NRO/hardware not built/tested.",
+    "remaining": "DAVE/MLS crypto and Opus port remain absent; no actual call support. Selected-guild subscription/provider response and port allocation must be verified on hardware; next voice report identifies missing stage2 events."
   }
 }

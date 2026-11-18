@@ -133,7 +133,7 @@ static void job_worker(void *unused){
 done:
     if(chat_job.op!=20){
         FILE *report=fopen("sdmc:/kaihen/discordnx2-hardware.txt","w");
-        if(report){fprintf(report,"DiscordNX2 v0.44 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
+        if(report){fprintf(report,"DiscordNX2 v0.45 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
     }
     if(!chat_job.ok&&!chat_job.notice[0])snprintf(chat_job.notice,sizeof(chat_job.notice),"Network request could not finish.");
     wipe(http_body,sizeof(http_body));if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;

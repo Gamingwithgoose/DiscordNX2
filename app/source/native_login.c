@@ -95,11 +95,12 @@ static void tls_close(TlsSession *s){
     memset(s,0,sizeof(*s));
     s->socket_fd=-1;s->returned_fd=-1; /* make repeat cleanup safe */
 }
-static int tls_open(TlsSession *s,const char *host) {
+static int tls_open_port(TlsSession *s,const char *host,unsigned port) {
     memset(s,0,sizeof(*s));s->socket_fd=-1;s->returned_fd=-1;
     struct addrinfo hints={0},*list=NULL;
     hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
-    if(getaddrinfo(host,"443",&hints,&list)!=0||!list)return 0;
+    char service[6];if(!port||port>65535)return 0;snprintf(service,sizeof(service),"%u",port);
+    if(getaddrinfo(host,service,&hints,&list)!=0||!list)return 0;
     for(struct addrinfo *p=list;p;p=p->ai_next) {
         int fd=socket(p->ai_family,p->ai_socktype,p->ai_protocol);
         if(fd<0)continue;
@@ -130,6 +131,7 @@ static int tls_open(TlsSession *s,const char *host) {
 fail:
     tls_close(s);return 0;
 }
+static int tls_open(TlsSession *s,const char *host){return tls_open_port(s,host,443);}
 static int tls_send(TlsSession *s,const void *data,size_t n){
     const unsigned char *p=(const unsigned char*)data;
     size_t at=0;u64 deadline=dnx2MonotonicMs()+5000;
@@ -165,7 +167,8 @@ static int b64(const unsigned char *in,size_t n,char *out,size_t cap){
     size_t result=0;
     return mbedtls_base64_encode((unsigned char*)out,cap,&result,in,n)==0;
 }
-static int ws_connect_to(TlsSession *s,const char *host,const char *path){
+static int ws_connect_to_port(TlsSession *s,const char *host,unsigned port,const char *path){
+    char authority[300];if(port==443)snprintf(authority,sizeof(authority),"%s",host);else snprintf(authority,sizeof(authority),"%s:%u",host,port);
     unsigned char rnd[16];
     if(!random_bytes(rnd,sizeof(rnd)))return 0;
     char key[32]={0};
@@ -176,7 +179,7 @@ static int ws_connect_to(TlsSession *s,const char *host,const char *path){
         "Upgrade: websocket\r\nConnection: Upgrade\r\n"
         "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n"
         "Origin: https://discord.com\r\n"
-        "User-Agent: DiscordNX2-native/0.40\r\n\r\n",path,host,key);
+        "User-Agent: DiscordNX2-native/0.45\r\n\r\n",path,authority,key);
     if(len<=0||(size_t)len>=sizeof(req)||!tls_send(s,req,(size_t)len))return 0;
     unsigned char hdr[4096]={0};
     size_t length=0,where=0;
@@ -222,6 +225,7 @@ static int ws_connect_to(TlsSession *s,const char *host,const char *path){
     wipe(hdr,sizeof(hdr));wipe(concat,sizeof(concat));
     return 1;
 }
+static int ws_connect_to(TlsSession *s,const char *host,const char *path){return ws_connect_to_port(s,host,443,path);}
 static int ws_connect(TlsSession *s){return ws_connect_to(s,REMOTE_HOST,"/?v=2");}
 static int ws_send(TlsSession *s,unsigned opcode,const char *data,size_t len){
     if(len>4096)return 0;
@@ -277,7 +281,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     char req[12288];
     int len=snprintf(req,sizeof(req),
       "%s %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
-      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.40\r\n"
+      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.45\r\n"
       "Origin: https://discord.com\r\nReferer: https://discord.com/login\r\n"
       "Connection: close\r\n%s%s%s"
       "%sContent-Type: application/json\r\nContent-Length: %u\r\n\r\n",

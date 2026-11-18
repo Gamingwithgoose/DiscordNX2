@@ -137,7 +137,7 @@ done:
     mutexLock(&live_mutex);live_accept_images=0;live_images_finish();mutexUnlock(&live_mutex);
     if(!live_cancel()&&__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE)==1)live_set_mode(4);
     FILE *report=fopen("sdmc:/kaihen/discordnx2-live.txt","w");
-    if(report){fprintf(report,"DiscordNX2 v0.44 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
+    if(report){fprintf(report,"DiscordNX2 v0.45 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
     tls_close(&gateway);if(rng)csrngExit();if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
     wipe(&ws_reader,sizeof(ws_reader));if(event){wipe(event,DNX2_WS_MAX+1);free(event);}if(result){wipe(result,sizeof(*result));free(result);}
 }

@@ -2,7 +2,7 @@
 
 > **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented. Full official-client parity is not available.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.44 source adds reply context, author profile cards, server nickname/role-color lookups, guild tags and resolved mentions, basic inline text styles, and existing direct/group-DM conversations. Image-preview requests now preserve source proportions instead of forcing portrait media into landscape dimensions. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.45 source adds reply context, author profile cards, server nickname/role-color lookups, guild tags and resolved mentions, basic inline text styles, and existing direct/group-DM conversations. Image-preview requests now preserve source proportions instead of forcing portrait media into landscape dimensions. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
@@ -245,3 +245,13 @@ Each account remembers its last selected channel separately for each server and 
 DM rows now request recipient avatars/default avatars and actual group-DM icons. The bundled OFL Noto Sans Symbols font adds enclosed-letter coverage, including `🅜🅞🅓🅓🅔🅡`; its pinned revision and SHA-256 are in the font manifest. It does not make font coverage universal.
 
 For stage-1 voice failures, the client now retains Discord's validated `resume_gateway_url` host and uses it when resuming, as required by the [Gateway protocol](https://docs.discord.com/developers/events/gateway#resuming). The uncompressed WebSocket bound is now 4 MiB instead of 1 MiB to accommodate larger Ready payloads. A session that ends before Ready is cleared so the next attempt can identify again, subject to the existing cooldown. The voice report adds fixed Hello/Identify/Ready and receive-result fields; it never logs session/token/host or message data. These changes address plausible causes of stage 1 / code 0, but do not establish the exact hardware cause or enable voice audio. If it still fails, share the updated `/kaihen/discordnx2-voice.txt` stage report.
+
+### v0.45 voice confirmation
+
+The supplied v0.44 report reached Gateway Ready and sent a join request, then timed out at stage 2. That report did not say which confirmation event was missing; it did not establish a permission problem or a successful voice join.
+
+This revision subscribes to the selected guild before the muted/deafened join request, accepts an omitted guild ID on the voice-state object only when both the account and selected channel match, and supports valid non-default numeric endpoint ports over verified TLS. The legacy `:80` endpoint suffix maps to TLS443; there is no plaintext fallback. The confirmation wait begins after sending the join request. Voice-server credentials always require the exact selected guild.
+
+The report now distinguishes state/server events seen and matched, null allocation endpoints, rejected endpoints, disconnected self state and whether the leave request was sent. No identifying payloads or credentials are logged. If the check still stops, share the updated `/kaihen/discordnx2-voice.txt`.
+
+The screen now states the limitation briefly: voice calls are not supported in this version. The button still checks signaling and leaves. DAVE/Opus call audio remains unimplemented. The [voice connection protocol](https://docs.discord.com/developers/topics/voice-connections#retrieving-voice-server-information) requires both confirmation events, and the [voice-state object](https://docs.discord.com/developers/resources/voice#voice-state-object) marks guild ID optional. Runtime acceptance in this unofficial client remains unverified for these changes.

@@ -394,8 +394,7 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     }else{
         text_line(392,150,"Voice channel",C_WHITE,3,60);
         unsigned wait=dnx2VoiceWaitSeconds();char status[80];snprintf(status,sizeof(status),wait?"Waiting to reconnect (%u s)":"Connecting...",wait);item(392,220,650,90,dnx2JobKind()==16?status:"Check voice connection","",focus==2);
-        text_wrap(392,352,a->notice[0]?a->notice:"Encrypted voice audio is not available yet. This checks the Discord connection and then disconnects.",4,72);
-        text_line(392,480,"Microphone and voice audio are inactive.",C_MUTED,2,72);
+        text_wrap(392,352,a->notice[0]?a->notice:"Voice calls are not supported in this version.",4,72);
     }
     server_tooltip();
 }
