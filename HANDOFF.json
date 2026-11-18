@@ -123,10 +123,9 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Pull DiscordNX2 main, Build-NRO.bat, FTP ONLY dist/DiscordNX2.nro; no NSO changes or separate SD assets.",
-    "Dashboard > Log in with QR code; approve on phone. If CAPTCHA appears, complete it yourself in the Switch browser and let it return to the app.",
-    "Success must show actual profile and servers. If browser cannot open, closes, challenge is rejected, or login fails, send only stage-only hardware log (browser Result code now included).",
-    "Never share browser callback URL, challenge fields, CAPTCHA solution, QR URL, tickets or tokens."
+    "Do not rebuild/retest the existing Discord NRO to reconfirm CAPTCHA; Build-NRO.bat still uses unavailable system browser.",
+    "Optional browser-runtime gate: run separate DiscordNX2-Runtime-Test.nro alongside existing Discord app, then inspect sdmc:/discordnx2-browser-runtime.log. This is not a login fix.",
+    "No NSO replacement, kaiHEN restart, relay deployment, Docker or Actions."
   ],
   "next_developer_work": [
     "Continue browser-port engine integration and dependency build using local devkitPro/libounce; no hosted relay.",
@@ -184,10 +183,16 @@
     "validation": "Native NRO build and existing HTTP/WS/CAPTCHA unit tests passed. Actual WebExitReason and browser compatibility still require console verification; no need to repeat login just to reconfirm the known unavailable browser."
   },
   "browser_port_status": {
-    "direction": "User revoked phone-relay preference: does not want to host a relay for community. Server files at Z:/[MMOnsterpatch Server]/ must remain untouched. Uncommitted relay files were removed; no relay was deployed.",
-    "source_assessment": "Inspected NetSurf Switch commit 3dabe65c245ab29a22f243e88d407caf2c09b5c2, Brewser and Chromium NX. NetSurf software framebuffer offers a bounded platform starting point; no hCaptcha support claimed.",
-    "implemented": "Original browser-port/switch2_surface.c uses libounce framebuffer and HID directly, implements real libnsfb surface interface and bypasses WebApplet/SDL. check-port.py cross-compiles against immutable upstream headers with -Werror.",
-    "validation": "Native adapter object cross-compilation passed. Not a linked/runnable browser NRO. Existing Discord NRO/source and NSO remain unchanged by this port step.",
-    "remaining": "NetSurf/QuickJS/dependency build, TLS and web security behavior, rendering, input/keyboard, ephemeral callback and actual user CAPTCHA acceptance still need implementation/hardware validation."
+    "direction": "Entirely on-console; no hosted relay. Z:/[MMOnsterpatch Server]/ untouched.",
+    "source_assessment": "BrowseNX uses the unavailable system browser. NetSurf runtime audit blocks CAPTCHA use (insecure random, same-page postMessage, unsupported Workers). Chromium NX is the current candidate, not yet a complete Switch 2 port.",
+    "implemented": "Native libnsfb adapter and 14 support libraries compiled. Added pinned LLVM AArch64 LKL build and libounce host adaptation; upstream Chromium ELF/memory/syscall/CDP/trampoline core compiled into static archive. Original separate runtime test NRO boots/checks/halt LKL when run on hardware.",
+    "validation": "AArch64 kernel object and optional runtime NRO compiled/linked locally, not run. No browser rendering or CAPTCHA acceptance proven. Current Discord application and resident NSO unchanged.",
+    "pins": {
+      "chromium_nx": "87a8095d20cf73b0fde0eee3215e70ebc887f048",
+      "lkl": "d0f76a77e8c2ca68bd7d96190b8da09040eab072"
+    },
+    "build": "Build-Browser-Runtime.bat (Debian WSL + LLVM/kernel tools + Windows devkitPro/libounce). No Docker/Actions. Build-NRO.bat remains the existing app only.",
+    "hardware_gate": "Separate dist/browser-runtime/DiscordNX2-Runtime-Test.nro; checks basic Linux boot, tmpfs file roundtrip and shutdown. Log sdmc:/discordnx2-browser-runtime.log. It does not log in or touch existing NSO.",
+    "remaining": "Runtime hardware compatibility; native executable-memory/exception behavior; Switch 2 display/input backend and Chromium guest image; ephemeral same-session CAPTCHA result integration; trusted HTTPS/origin/provider acceptance. Chromium needs a one-time browser data-image installation beyond the original NRO-only workflow."
   }
 }

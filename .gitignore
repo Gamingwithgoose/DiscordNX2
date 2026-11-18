@@ -5,3 +5,6 @@ plugin/build/
 app/*.nro
 plugin/*.nso
 *.log
+
+__pycache__/
+*.pyc

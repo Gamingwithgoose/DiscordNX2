@@ -212,3 +212,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - User selected entirely-on-console browser direction and withdrew phone relay; uncommitted relay backend discarded, no relay deployed and Z: server files untouched.
 - Add original libounce framebuffer/HID surface backend for pinned NetSurf/libnsfb interfaces and reproducible cross-compilation check. No system browser applet or original-Switch SDL graphics dependency in this adapter.
 - Adapter compiles with warnings as errors. This is not a full browser build or a CAPTCHA fix. HTML/JS/HTTPS engine integration, security and hCaptcha compatibility remain unfinished. Current Discord NRO and resident NSO unchanged; no new console test requested.
+
+
+## Chromium Switch 2 runtime components - after v0.29
+
+- Add reproducible local LLVM/AArch64 LKL build and libounce host adaptation; compile real Chromium NX ELF/memory/syscall/CDP/trampoline core against pinned revisions. Fix generated host logging after freeing a joined thread.
+- Add original separate Linux runtime test NRO: real host worker thread, kernel boot, uname and tmpfs roundtrip, clean halt, dedicated log, main-thread display ownership. Linked locally; console execution remains unverified.
+- Add optional Build-Browser-Runtime.bat; it does not overwrite DiscordNX2.nro. Clarify Build-NRO.bat still builds the existing app; no CAPTCHA/login fix is claimed.
+- NetSurf native dependency libraries compile, but source audit rejects its runtime for CAPTCHA use (Math.random-backed getRandomValues, same-page messaging, unsupported Workers). BrowseNX is a system applet launcher, not an embedded engine.
+- Chromium rendering, guest image, session-bound CAPTCHA integration and provider acceptance remain unfinished. A one-time browser data image is needed beyond NRO-only transfer. No relay/server changes, NSO changes, Docker or Actions.
