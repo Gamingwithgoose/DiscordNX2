@@ -175,3 +175,7 @@ The sanitized /kaihen/discordnx2-hardware.txt report logs only fixed authenticat
 Font: DiscordNX2 first tries the console's built-in shared TrueType font via pl:u and stb_truetype, with antialiased glyph rendering. It distributes no proprietary font file. If the Switch 2 shared-font service is incompatible, it falls back to the bundled public-domain IBM VGA 8x8 glyph font, replacing the old 5x7 lettering.
 
 Build validation: v0.21 Remote Auth Gateway connection and v0.18 UI were real-hardware verified; v0.22 source changes have NOT been compiled on the user's devkitPro or tested on their Switch. The first build/login may reveal toolchain or Discord-protocol issues. This source is NOT a guarantee of successful sign-in. TLS peer and hostname validation are required. There is no claim of working voice chat in this revision.
+
+### v0.22 first compiler fix (Switch 2)
+
+The first user build installed switch-mbedtls successfully but failed to compile native_login.c due to a leftover 3DS osGetTime call. The source now uses the standard monotonic millisecond clock. Pull main and rerun Build-NRO.bat; package installation should be skipped because switch-mbedtls is already present. Compilation, linking, and actual sign-in remain to be verified.
