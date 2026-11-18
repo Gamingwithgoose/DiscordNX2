@@ -27,13 +27,13 @@ endif
 all: $(TARGET).nro
 $(BUILD):
 	mkdir -p $@
-$(BUILD)/main.o: source/main.c source/browser_memory.h source/wifi_browser_probe.h | $(BUILD)
+$(BUILD)/main.o: source/main.c source/browser_memory.h source/wifi_browser_probe.h source/native_login.h source/session_store.h source/graphical_ui.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/voice_packet.o: source/voice_packet.c source/voice_packet.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/discord_gateway_probe.o: source/discord_gateway_probe.c source/discord_gateway_probe.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/graphical_ui.o: source/graphical_ui.c source/graphical_ui.h source/brand_icon.h | $(BUILD)
+$(BUILD)/graphical_ui.o: source/graphical_ui.c source/graphical_ui.h source/brand_icon.h source/native_login.h source/session_store.h source/client_json.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/discord_remote_probe.o: source/discord_remote_probe.c source/discord_gateway_probe.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
@@ -41,9 +41,11 @@ $(BUILD)/qrcodegen.o: source/vendor/qrcodegen.c source/vendor/qrcodegen.h | $(BU
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/auth_crypto.o: source/auth_crypto.c source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h source/native_ws.h source/captcha.h | $(BUILD)
+$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h source/native_ws.h source/captcha.h source/client_json.h source/client_data.h source/session_store.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/native_font.o: source/native_font.c source/native_font.h source/pretendo_font.h source/vendor/stb_truetype.h | $(BUILD)
+$(BUILD)/session_store.o: source/session_store.c source/session_store.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/native_font.o: source/native_font.c source/native_font.h source/pretendo_font.h source/vendor/stb_truetype.h source/client_json.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 # Temporary static verification page, published from docs/ on GitHub Pages.
 PHONE_CAPTCHA_ENABLED ?= 1
@@ -63,10 +65,10 @@ $(BUILD)/captcha_phone_wire.o: source/captcha_phone_wire.c source/captcha_phone_
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/captcha_phone_crypto.o: source/captcha_phone_crypto.c source/captcha_phone_wire.h source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/wifi_browser_probe.o $(BUILD)/browser_memory.o $(BUILD)/captcha.o $(BUILD)/captcha_phone.o $(BUILD)/captcha_phone_wire.o $(BUILD)/captcha_phone_crypto.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
+$(BUILD)/$(TARGET).elf: $(BUILD)/session_store.o $(BUILD)/wifi_browser_probe.o $(BUILD)/browser_memory.o $(BUILD)/captcha.o $(BUILD)/captcha_phone.o $(BUILD)/captcha_phone_wire.o $(BUILD)/captcha_phone_crypto.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(BUILD)/$(TARGET).nacp: Makefile | $(BUILD)
-	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.37" $@
+	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.38" $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).nacp assets/icon.jpg
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --icon=assets/icon.jpg --nacp=$(BUILD)/$(TARGET).nacp
 clean:

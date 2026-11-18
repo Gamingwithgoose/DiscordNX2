@@ -292,3 +292,15 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Repository cleanup: replace the accumulated README test history with a complete current guide and a prominent incomplete-functionality disclaimer. Document supported menus, controls, setup, NRO-only transfers, two QR steps, known blockers, privacy, self-hosting and developer checks; retain history in Git/CHANGELOG. Setup now directs users to Build-NRO.bat.
 - User made the repository public; GitHub Pages main:/docs enabled successfully with HTTPS and no custom domain. NACP metadata now depends on its Makefile so version changes are rebuilt.
 - Live publication verified: project home and verify.html both return HTTP200 over HTTPS and match the tested source exactly. Phone encryption/page tests and AArch64 strict syntax checks passed; no NRO built, real Discord acceptance still awaits hardware testing.
+
+
+## v0.38 - channels, text chat, Unicode names and saved login
+
+- Hardware milestone: user confirmed v0.37 account connection and real server list through the project-hosted CAPTCHA page.
+- Preserve UTF-8 and JSON Unicode escapes/surrogate pairs instead of replacing account/server names with question marks. Add bounded code-point glyph caching and shared-font fallback; unavailable glyphs/emoji still need font support.
+- Read Discord's server-folder ordering without changing settings; flatten folders, support up to 200 servers, indicate fallback API order.
+- Server selection now loads category/channel navigation. Text/Voice tabs filter real channels; voice/stage selection remains explicitly disconnected because Discord voice calls are unfinished.
+- Basic text/announcement history: latest 30 messages in chronological order, expanded scrollable reading, manual refresh and native controller composer (ASCII, 512 characters). Explicit Send action, escaped JSON, no automatic retry or mention parsing. No real account messages sent by development tests.
+- Optional PIN-protected saved session with PBKDF2-SHA256 and AES-256-GCM on SD; confirmed eight-digit PIN, startup unlock and validated account reload. Wrong PIN/network failure permits retry, logout forgets saved credentials; no PIN/key stored alongside ciphertext. Exit clears RAM without forgetting saved login.
+- Update README with actual supported behavior, unfinished voice/rich chat and first-time save/reopen test instructions. Maintain HANDOFF. Preserve existing audio, networking, resident plugin and normal public jailbreak; NRO-only update.
+- Host data/serialization and cross-process encrypted-session tests, existing login/CAPTCHA regressions and changed-source AArch64 syntax checks passed. No NRO built; hardware verification of these new features remains required.

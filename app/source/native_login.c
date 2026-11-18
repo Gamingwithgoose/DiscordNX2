@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 /* Experimental first-party-on-device unofficial Discord remote-auth session.
  * WARNING: Discord does not officially support third-party user clients.
- * RSA private key and eventual access token are strictly RAM-only.
+ * RSA keys are RAM-only. Optional saved tokens are encrypted with a user PIN.
  * Requires devkitPro's switch-mbedtls 2.28 package, never homegrown crypto.
  */
 #include "native_login.h"
+#include "client_data.h"
+#include "session_store.h"
 #include "auth_crypto.h"
 #include "captcha.h"
 #include "native_ws.h"
@@ -38,8 +40,9 @@ static u64 dnx2MonotonicMs(void) {
 #define REMOTE_HOST "remote-auth-gateway.discord.gg"
 #define API_HOST "discord.com"
 #define WS_BUF 8192
-#define HTTP_BUF 131072
+#define HTTP_BUF 1048576
 static Dnx2Account account;
+static char session_token[1024];
 static unsigned char http_body[HTTP_BUF];
 static char captcha_headers[8192];
 static Dnx2Captcha captcha_challenge;
@@ -52,9 +55,11 @@ static Dnx2AuthCancel active_cancel;
 static unsigned char ws_payload[WS_BUF+1];
 
 const Dnx2Account *dnx2Account(void){return &account;}
-void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count)account.selected=i;}
+void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
+void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;}}
 static void wipe(void *p,size_t n){volatile unsigned char *c=(volatile unsigned char*)p;while(n--)*c++=0;}
-void dnx2AccountLogout(void){wipe(&account,sizeof(account));}
+void dnx2AccountClearMemory(void){wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
+void dnx2AccountLogout(void){dnx2AccountClearMemory();dnx2SessionForget();}
 
 #ifdef DNX2_USE_MBEDTLS
 typedef struct {
@@ -239,30 +244,7 @@ static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){
     }
     return 0; /* keep partial frame for next poll */
 }
-static int json_string(const char *body,const char *key,char *out,size_t cap){
-    if(!body||!key||!out||cap==0)return 0;
-    char name[80];snprintf(name,sizeof(name),"\"%s\"",key);
-    const char *p=strstr(body,name);
-    if(!p)return 0;
-    p+=strlen(name);
-    while(*p==' '||*p=='\t')p++;
-    if(*p++!=':')return 0;
-    while(*p==' '||*p=='\t')p++;
-    if(*p++!='"')return 0;
-    size_t j=0;
-    while(*p&&*p!='"'){
-        unsigned char ch=(unsigned char)*p++;
-        if(ch=='\\'){
-            ch=(unsigned char)*p++;
-            if(ch=='u') {if(strlen(p)<4)return 0;p+=4;ch='?';}
-            else if(ch=='n'||ch=='r'||ch=='t')ch=' ';
-        }
-        if(ch<32||ch>126)ch='?';
-        if(j+1>=cap){out[0]=0;return 0;}
-        out[j++]=(char)ch;
-    }
-    out[j]=0;return *p=='"';
-}
+static int json_string(const char *body,const char *key,char *out,size_t cap){return dj_get(dj_root(body),key,out,cap);}
 static int uint_field(const char *body,const char *key,unsigned *out){
     char name[80];snprintf(name,sizeof(name),"\"%s\"",key);
     const char *p=strstr(body,name);if(!p)return 0;
@@ -283,7 +265,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     char req[12288];
     int len=snprintf(req,sizeof(req),
       "%s %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
-      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.28\r\n"
+      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.38\r\n"
       "Origin: https://discord.com\r\nReferer: https://discord.com/login\r\n"
       "Connection: close\r\n%s%s%s"
       "%sContent-Type: application/json\r\nContent-Length: %u\r\n\r\n",
@@ -367,35 +349,23 @@ body_complete:
     return 1;
 }
 static int parse_identity(const char *json){
-    char username[64]={0},display[80]={0};
+    char username[129]={0},display[321]={0};
     if(!json_string(json,"username",username,sizeof(username)))return 0;
     (void)json_string(json,"global_name",display,sizeof(display));
     snprintf(account.username,sizeof(account.username),"%s",username);
     snprintf(account.display_name,sizeof(account.display_name),"%s",display[0]?display:username);
     return 1;
 }
-static void parse_guilds(const char *json) {
-    const char *p=json;
-    while(account.server_count<DNX2_MAX_SERVERS) {
-        const char *left=strchr(p,'{');if(!left)break;
-        const char *right=strchr(left,'}');if(!right)break;
-        if((size_t)(right-left)>4096)break;
-        char entry[4097];size_t n=(size_t)(right-left)+1;
-        memcpy(entry,left,n);entry[n]=0;
-        char id[24]={0},name[80]={0};
-        if(json_string(entry,"id",id,sizeof(id)) &&
-           json_string(entry,"name",name,sizeof(name))){
-            int valid=1;
-            if(strlen(id)<15||strlen(id)>22)valid=0;
-            for(const char *digit=id;*digit;digit++)
-                if(*digit<'0'||*digit>'9')valid=0;
-            if(valid) {
-                Dnx2Server *g=&account.servers[account.server_count++];
-                strcpy(g->id,id);strcpy(g->name,name);
-            }
-        }
-        p=right+1;
+static void parse_guilds(const char *json){dnx_guilds(&account,json);}
+static void fetch_server_order(const char *token){
+    TlsSession https;account.order_synced=0;
+    if(http_request(&https,API_HOST,"GET","/api/v10/users/@me/settings-proto/1",NULL,token,(char*)http_body,sizeof(http_body))){
+        char *encoded=calloc(HTTP_BUF,1);unsigned char *decoded=calloc(HTTP_BUF,1);size_t n=0;
+        if(encoded&&decoded&&json_string((char*)http_body,"settings",encoded,HTTP_BUF)&&!mbedtls_base64_decode(decoded,HTTP_BUF,&n,(unsigned char*)encoded,strlen(encoded)))
+            account.order_synced=dnx_order_proto(&account,decoded,n);
+        if(encoded){wipe(encoded,HTTP_BUF);free(encoded);}if(decoded){wipe(decoded,HTTP_BUF);free(decoded);}
     }
+    tls_close(&https);wipe(http_body,sizeof(http_body));
 }
 static int fetch_profile(const char *token,Dnx2AuthStatus status){
     TlsSession https;
@@ -412,8 +382,62 @@ static int fetch_profile(const char *token,Dnx2AuthStatus status){
     if(!ok){status("SERVER LIST COULD NOT BE LOADED",NULL);return 0;}
     parse_guilds((char*)http_body);
     wipe(http_body,sizeof(http_body));
+    fetch_server_order(token);
+    snprintf(session_token,sizeof(session_token),"%s",token);
     account.signed_in=1;
     return 1;
+}
+static int client_open(Dnx2AuthCancel cancel){
+    active_cancel=cancel;if(!account.signed_in||!session_token[0])return 0;
+    if(R_FAILED(socketInitialize(NULL)))return 0;
+    if(R_FAILED(sslInitialize(1))){socketExit();return 0;}return 1;
+}
+static int client_get(const char *path,Dnx2AuthStatus status,Dnx2AuthCancel cancel){
+    if(!client_open(cancel)){active_cancel=NULL;snprintf(account.notice,sizeof(account.notice),"Network could not start. Try again.");return 0;}
+    status("Loading Discord data",NULL);TlsSession https;
+    int ok=http_request(&https,API_HOST,"GET",path,NULL,session_token,(char*)http_body,sizeof(http_body));
+    tls_close(&https);sslExit();socketExit();active_cancel=NULL;
+    if(!ok){unsigned code=last_http_status;
+        snprintf(account.notice,sizeof(account.notice),code==401?"Session expired. Log out and sign in again.":code==403?"Discord denied access to this channel.":code==429?"Discord rate limited this request. Wait before retrying.":"Discord request failed. Try again.");}
+    else account.notice[0]=0;
+    return ok;
+}
+int dnx2LoadChannels(Dnx2AuthStatus status,Dnx2AuthCancel cancel){
+    if(!account.signed_in||account.selected<0||account.selected>=account.server_count)return 0;
+    char path[100];snprintf(path,sizeof(path),"/api/v10/guilds/%s/channels",account.servers[account.selected].id);
+    int ok=client_get(path,status,cancel);if(ok){dnx_channels(&account,(char*)http_body);account.channels_loaded=1;}
+    wipe(http_body,sizeof(http_body));return ok;
+}
+int dnx2LoadMessages(Dnx2AuthStatus status,Dnx2AuthCancel cancel){
+    if(account.selected_channel<0||account.selected_channel>=account.channel_count)return 0;
+    int type=account.channels[account.selected_channel].type;
+    if(type!=0&&type!=5){snprintf(account.notice,sizeof(account.notice),"This channel type has no text reader yet.");return 0;}
+    char path[100];snprintf(path,sizeof(path),"/api/v10/channels/%s/messages?limit=30",account.channels[account.selected_channel].id);
+    account.message_count=0;int ok=client_get(path,status,cancel);if(ok)dnx_messages(&account,(char*)http_body);
+    wipe(http_body,sizeof(http_body));return ok;
+}
+int dnx2SendMessage(const char *text,Dnx2AuthStatus status,Dnx2AuthCancel cancel){
+    if(!text||!*text||strlen(text)>512||account.selected_channel<0||account.selected_channel>=account.channel_count)return 0;
+    int type=account.channels[account.selected_channel].type;if(type!=0&&type!=5)return 0;
+    char body[3200],path[100];if(!dnx_message_body(text,body,sizeof(body)))return 0;
+    snprintf(path,sizeof(path),"/api/v10/channels/%s/messages",account.channels[account.selected_channel].id);
+    if(!client_open(cancel)){wipe(body,sizeof(body));active_cancel=NULL;snprintf(account.notice,sizeof(account.notice),"Network could not start. Message was not sent.");return 0;}status("Sending your message",NULL);TlsSession https;
+    int ok=http_request(&https,API_HOST,"POST",path,body,session_token,(char*)http_body,sizeof(http_body));
+    tls_close(&https);sslExit();socketExit();active_cancel=NULL;wipe(body,sizeof(body));wipe(http_body,sizeof(http_body));
+    snprintf(account.notice,sizeof(account.notice),"%s",ok?"Message sent.":"Message not confirmed. Refresh before retrying to avoid duplicates.");return ok;
+}
+int dnx2RememberSession(const char *pin){return account.signed_in&&dnx2SessionSave(session_token,pin);}
+int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel cancel){
+    char token[1024]={0};if(!dnx2SessionLoad(token,sizeof(token),pin)){status("Could not unlock saved login. Check your PIN.",NULL);return 0;}
+    active_cancel=cancel;int ok=0;
+    if(R_SUCCEEDED(socketInitialize(NULL))){if(R_SUCCEEDED(sslInitialize(1))){
+        wipe(&account,sizeof(account));account.selected_channel=-1;ok=fetch_profile(token,status);
+        if(!ok&&last_http_status==401)dnx2SessionForget();
+        sslExit();}socketExit();}
+    active_cancel=NULL;wipe(token,sizeof(token));wipe(http_body,sizeof(http_body));
+    if(!ok){wipe(session_token,sizeof(session_token));wipe(&account,sizeof(account));account.selected_channel=-1;status("Saved login could not be restored. Retry or use QR login.",NULL);}
+    else status("Saved login restored",NULL);
+    return ok;
 }
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
@@ -608,6 +632,11 @@ fail:
     return 0;
 }
 #else
+int dnx2LoadChannels(Dnx2AuthStatus s,Dnx2AuthCancel c){(void)s;(void)c;return 0;}
+int dnx2LoadMessages(Dnx2AuthStatus s,Dnx2AuthCancel c){(void)s;(void)c;return 0;}
+int dnx2SendMessage(const char *t,Dnx2AuthStatus s,Dnx2AuthCancel c){(void)t;(void)s;(void)c;return 0;}
+int dnx2RememberSession(const char *p){(void)p;return 0;}
+int dnx2RestoreSession(const char *p,Dnx2AuthStatus s,Dnx2AuthCancel c){(void)p;(void)s;(void)c;return 0;}
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel){
     (void)cancel;
     if(status)status("INSTALL SWITCH-MBEDTLS TO ENABLE QR LOGIN",NULL);

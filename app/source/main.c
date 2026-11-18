@@ -10,6 +10,7 @@
 #include "discord_gateway_probe.h"
 #include "graphical_ui.h"
 #include "native_login.h"
+#include "session_store.h"
 #include "native_font.h"
 #include "browser_memory.h"
 #include "wifi_browser_probe.h"
@@ -961,7 +962,7 @@ static void wifi_browser_report(const char *stage,Result result) {
 static void run_gui_action(int action) {
     if(action==8) {
         diag_len=0;
-        diagf("DiscordNX2 v0.37 Wi-Fi browser launch test - no account data or network changes\n");
+        diagf("DiscordNX2 v0.38 Wi-Fi browser launch test - no account data or network changes\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalWifiBrowserStatus("Opening the system Wi-Fi browser...",0);
         dnx2GraphicalAuthEnd();
@@ -978,7 +979,7 @@ static void run_gui_action(int action) {
     }
     else if(action==7) {
         diag_len=0;
-        diagf("DiscordNX2 v0.37 executable memory check - no network or account data\n");
+        diagf("DiscordNX2 v0.38 executable memory check - no network or account data\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalBrowserCheckStatus("Checking executable memory...",0);
         int passed=dnx2BrowserMemoryCheck(browser_memory_report);
@@ -992,12 +993,45 @@ static void run_gui_action(int action) {
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.37 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.38 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();
         diagf("auth session complete=%u visible_servers=%d\n",ok,(int)dnx2Account()->server_count);
         (void)write_diagnostics();
+    }
+    else if(action>=9&&action<=11){
+        diag_len=0;diagf("DiscordNX2 v0.38 channel/text operation=%d - no message content or credentials\n",action);
+        int ok=0;dnx2GraphicalAuthBegin();
+        if(action==9)ok=dnx2LoadChannels(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
+        else if(action==10)ok=dnx2LoadMessages(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
+        else {
+            ok=dnx2SendMessage(dnx2GraphicalDraft(),dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
+            dnx2GraphicalClearDraft();
+            if(ok)dnx2LoadMessages(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
+        }
+        dnx2GraphicalAuthEnd();
+        diagf("operation complete=%d channels=%d messages=%d\n",ok,dnx2Account()->channel_count,dnx2Account()->message_count);
+        if(dnx2Account()->notice[0])diagf("result: %s\n",dnx2Account()->notice);
+        (void)write_diagnostics();
+    }
+    else if(action==12||action==13){
+        diag_len=0;diagf("DiscordNX2 v0.38 saved-login operation - no PIN or credentials\n");
+        char pin[9]={0},confirm[9]={0};
+        if(dnx2GraphicalPin(action==12?"Choose a login PIN":"Unlock saved login",pin)){
+            if(action==12){
+                int matched=dnx2GraphicalPin("Confirm your login PIN",confirm)&&!memcmp(pin,confirm,8);
+                dnx2GraphicalAuthBegin();
+                int saved=matched&&dnx2RememberSession(pin);
+                dnx2AuthProgressAndReport(saved?"Login saved. Enter your PIN on the next launch.":matched?"Could not save login to the SD card.":"PINs did not match. Login was not saved.",NULL);
+                dnx2GraphicalAuthEnd();
+            }else{
+                dnx2GraphicalAuthBegin();
+                dnx2RestoreSession(pin,dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
+                dnx2GraphicalAuthEnd();
+            }
+        }
+        volatile char *a=pin,*b=confirm;for(int i=0;i<9;i++){a[i]=0;b[i]=0;}
     }
     else if(action==5) {
         diag_len=0;
@@ -1101,7 +1135,9 @@ int main(void) {
     if (serviceIsActive(&hen)) serviceClose(&hen);
     if (serviceIsActive(&ro)) serviceClose(&ro);
     (void)dnx2FontInit();
+    if(dnx2SessionExists())run_gui_action(13);
     run_ui();
+    dnx2AccountClearMemory();
     dnx2FontExit();
     return 0;
 }

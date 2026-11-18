@@ -8,6 +8,8 @@
 #include "graphical_ui.h"
 #include "vendor/qrcodegen.h"
 #include "native_login.h"
+#include "session_store.h"
+#include "client_json.h"
 #include "native_font.h"
 #include "brand_icon.h"
 #include <math.h>
@@ -37,6 +39,20 @@ static uint32_t *pixels;
 static int stride_pixels;
 static int text_right=1240;
 static char auth_notice[128];
+static int tab=0,sel=0,focus=0,channel_view=0,message_view=0;
+static int message_expanded=0,message_offset=0;
+static char draft[513];
+const char *dnx2GraphicalDraft(void){return draft;}
+void dnx2GraphicalClearDraft(void){volatile char *p=draft;for(size_t i=0;i<sizeof(draft);i++)p[i]=0;}
+static int channel_at(int view,int row){
+    const Dnx2Account *p=dnx2Account();
+    for(int i=0;i<p->channel_count;i++){
+        int t=p->channels[i].type;
+        if(view==1||(view==2&&(t==0||t==5))||(view==3&&(t==2||t==13)))if(row--==0)return i;
+    }return -1;
+}
+static int channel_options(int view){int n=0;while(channel_at(view,n)>=0)n++;return n;}
+
 static void rect(int x,int y,int width,int height,uint32_t color) {
     if(!pixels||width<=0||height<=0)return;
     if(x<0){width+=x;x=0;}if(y<0){height+=y;y=0;}
@@ -80,9 +96,9 @@ static void text_line(int x,int y,const char *s,uint32_t color,int scale,int max
     if(dnx2FontDraw(pixels,stride_pixels,right,H,x,y,s,color,scale,maxchars))return;
     const int horizontal=scale>=3?2:1;
     const int advance=6*scale;
-    for(int i=0;s[i]&&i<maxchars && x+(i+1)*advance<=right;i++) {
-        unsigned char ch=(unsigned char)s[i];
-        if(ch>=128)ch='?';
+    const char *cursor=s;
+    for(int i=0;*cursor&&i<maxchars && x+(i+1)*advance<=right;i++) {
+        uint32_t cp=dnx_utf8_next(&cursor);unsigned char ch=cp<128?(unsigned char)cp:'?';
         const unsigned char *g=(const unsigned char*)font8x8_basic[ch];
         for(int row=0;row<8;row++) {
             for(int col=0;col<8;col++) {
@@ -125,64 +141,90 @@ static int qr_render_url(int x,int y,int area,const char *url) {
             rect(x+(col+4)*pitch,y+(row+4)*pitch,pitch,pitch,C_DARK);
     return size;
 }
-static void draw(const char *feedback,int tab,int selection,int focus,int qr_preview) {
+static void text_wrap(int x,int y,const char *text,int lines,int columns){
+    const char *p=text;
+    for(int row=0;row<lines&&*p;row++){
+        char linebuf[512];size_t n=0;
+        for(int col=0;col<columns&&*p;col++){
+            const char *start=p;dnx_utf8_next(&p);size_t k=(size_t)(p-start);
+            if(n+k>=sizeof(linebuf))break;
+            memcpy(linebuf+n,start,k);n+=k;
+        }linebuf[n]=0;text_line(x,y+row*23,linebuf,C_WHITE,2,columns);
+    }
+}
+static void draw(const char *feedback,int view,int selection,int content_focus,int qr_preview) {
     (void)feedback;(void)qr_preview;
     const Dnx2Account *p=dnx2Account();
-    const char *tabs[]={"Dashboard","Servers","Voice chat"};
-    rect(0,0,W,H,C_BG);
-    rounded(16,16,252,688,20,C_SIDEBAR);
-    text_right=250;
-    brand(28,30);
-    text_line(104,50,"DiscordNX2",C_WHITE,2,20);
-    text_line(32,102,"Switch 2 Native",C_MUTED,2,24);
-    for(int t=0;t<3;t++){
-        int y=180+t*76;
-        if(t==tab)rounded(28,y,228,56,14,focus==0?C_CARD_HI:C_CARD);
-        if(t==tab)rounded(28,y+14,4,28,2,C_PRIMARY);
-        text_line(48,y+17,tabs[t],t==tab?C_WHITE:C_MUTED,3,24);
+    const char *tabs[]={"Dashboard","Servers","Text chat","Voice chat"};
+    rect(0,0,W,H,C_BG);rounded(16,16,252,688,20,C_SIDEBAR);text_right=250;
+    brand(28,30);text_line(104,50,"DiscordNX2",C_WHITE,2,20);text_line(32,105,"Switch 2 Native",C_MUTED,2,24);
+    for(int t=0;t<4;t++){
+        int y=180+t*76;if(t==view)rounded(28,y,228,56,14,content_focus==0?C_CARD_HI:C_CARD);
+        if(t==view)rounded(28,y+14,4,28,2,C_PRIMARY);
+        text_line(48,y+17,tabs[t],t==view?C_WHITE:C_MUTED,3,24);
     }
-    text_right=1240;
-    text_line(312,48,tabs[tab],C_WHITE,4,32);
-    line(312,112,920,C_LINE);
-    if(tab==0){
-        block(312,160,920,340,C_CARD);
-        text_line(344,196,p->signed_in?"Your account":"Welcome to DiscordNX2",C_WHITE,3,46);
-        text_line(344,248,p->signed_in?p->display_name:"Sign in using the Discord app on your phone.",C_MUTED,2,64);
-        item(344,332,856,96,p->signed_in?"Log out":"Log in with QR code",
-             p->signed_in?"Clear this session":"Scan the code, then approve on your phone",focus==1);
-    }else if(tab==1){
-        if(!p->signed_in){
-            block(312,160,920,170,C_CARD);
-            text_line(344,200,"Your servers will appear here",C_WHITE,3,50);
-            text_line(344,252,"Log in from Dashboard to continue.",C_MUTED,2,60);
-        }else{
-            int start=(selection/7)*7;
-            if(!p->server_count)text_line(344,200,"This account has no servers.",C_MUTED,3,50);
-            for(int i=0;i<7 && start+i<p->server_count;i++){
-                int n=start+i,y=152+i*64;
-                rounded(312,y,920,52,12,focus==1&&selection==n?C_CARD_HI:C_CARD);
-                if(p->selected==n)rounded(322,y+14,4,24,2,C_GREEN);
-                text_line(344,y+16,p->servers[n].name,C_WHITE,2,70);
-            }
+    text_right=1240;text_line(312,48,tabs[view],C_WHITE,4,32);line(312,112,920,C_LINE);
+    if(view==0){
+        text_line(344,154,p->signed_in?p->display_name:"Welcome to DiscordNX2",C_WHITE,3,64);
+        item(312,220,920,96,p->signed_in?"Log out":"Log in with QR code",p->signed_in?"Forget this account and its saved login":"Scan and approve on your phone",content_focus==1&&selection==0);
+        item(312,338,920,96,p->signed_in?"Remember login with PIN":"Unlock saved login",p->signed_in?"Save encrypted access for future launches":dnx2SessionExists()?"Enter your PIN instead of scanning QR":"No saved login on this SD card",content_focus==1&&selection==1);
+        if(auth_notice[0])text_wrap(344,476,auth_notice,3,72);
+    }else if(!p->signed_in){text_line(344,200,"Log in from Dashboard to continue.",C_MUTED,2,64);
+    }else if(view==1&&!channel_view){
+        int start=(selection/7)*7;
+        if(!p->server_count)text_line(344,200,"This account has no servers.",C_MUTED,2,64);
+        for(int i=start;i<start+7&&i<p->server_count;i++){
+            int y=152+(i-start)*64;rounded(312,y,920,52,12,content_focus==1&&selection==i?C_CARD_HI:C_CARD);
+            text_line(344,y+16,p->servers[i].name,C_WHITE,2,70);
         }
+        text_line(312,620,p->order_synced?"Your Discord server order":"Discord order unavailable; showing API order",C_MUTED,2,80);
+    }else if(view==2&&message_view){
+        if(p->selected_channel>=0)text_line(312,134,p->channels[p->selected_channel].name,C_WHITE,3,64);
+        if(message_expanded&&selection<p->message_count){
+            const Dnx2Message *m=&p->messages[selection];text_line(332,182,m->author,C_MUTED,2,70);
+            const char *content=m->content;for(int i=0;i<message_offset&&*content;i++)dnx_utf8_next(&content);
+            text_wrap(332,226,content,16,66);
+            text_line(312,620,"Up/Down: Scroll    B: Message list",C_MUTED,2,80);
+        }else{
+            int start=(selection/4)*4;
+            for(int i=start;i<start+4&&i<p->message_count;i++){
+                int y=184+(i-start)*104;rounded(312,y,920,96,12,selection==i&&content_focus?C_CARD_HI:C_CARD);text_line(332,y+8,p->messages[i].author,C_MUTED,2,64);
+                text_wrap(332,y+34,p->messages[i].content,2,66);
+            }
+            if(!p->message_count&&!p->notice[0])text_line(344,220,"No messages returned for this channel.",C_MUTED,2,64);
+            text_line(312,620,"A: Read    X: Write    Y: Refresh    B: Channels",C_MUTED,2,80);
+        }
+    }else if(view==3&&message_view){
+        text_line(344,170,p->server_count?p->servers[p->selected].name:"No server selected",C_WHITE,3,64);
+        if(p->selected_channel>=0)text_line(344,224,p->channels[p->selected_channel].name,C_WHITE,3,64);
+        text_line(344,300,"Not connected",C_WARN,3,64);
+        text_wrap(344,350,"Voice calling is still being implemented. Selecting a channel does not join a call.",3,64);
+        text_line(344,480,"Members: unavailable until voice is connected",C_MUTED,2,72);
     }else{
-        block(312,160,920,178,C_CARD);
-        text_line(344,190,"Server",C_MUTED,2,30);
-        text_line(344,224,p->signed_in&&p->server_count?p->servers[p->selected].name:"No server selected",C_WHITE,3,55);
-        text_line(344,280,"Channel: Not connected",C_MUTED,2,60);
-        block(312,364,920,248,C_CARD);
-        text_line(344,398,"Members",C_WHITE,3,40);
-        text_line(344,450,"No voice channel connected.",C_MUTED,2,60);
+        if(!p->server_count)text_line(344,200,"Select a server first.",C_MUTED,2,64);
+        else{
+            text_line(312,130,p->servers[p->selected].name,C_MUTED,2,70);
+            int count=channel_options(view),start=(selection/7)*7;
+            for(int i=start;i<start+7&&i<count;i++){
+                int idx=channel_at(view,i),y=170+(i-start)*61;const Dnx2Channel *c=&p->channels[idx];char label[460];
+                const char *prefix=c->type==4?"-- ":c->type==2||c->type==13?"Voice: ":c->type==15||c->type==16?"Forum: ":"# ";
+                snprintf(label,sizeof(label),"%s%s",prefix,c->name);
+                rounded(312,y,920,52,12,content_focus==1&&selection==i?C_CARD_HI:C_CARD);
+                text_line(334,y+16,label,c->type==4?C_MUTED:C_WHITE,2,70);
+            }
+            if(!count&&!p->notice[0])text_line(344,220,p->channels_loaded?"No channels of this type returned.":"Select a server to load its channels.",C_MUTED,2,72);
+            text_line(312,620,"Y: Refresh channels    B: Back",C_MUTED,2,72);
+        }
     }
-    if(tab==0 && auth_notice[0] && !p->signed_in)text_line(344,536,auth_notice,C_MUTED,2,96);
-    text_line(312,670,"B: Back    A: Select    +: Exit",C_MUTED,2,60);
+    if(p->notice[0]&&view!=0)text_line(312,644,p->notice,C_WARN,2,90);
+    text_line(312,684,"B: Back    A: Select    +: Exit",C_MUTED,2,60);
 }
 static void draw_auth(const char *phase,const char *qr_url){
     text_right=1216;
     rect(0,0,W,H,C_BG);
     brand(64,38);
     text_line(150,54,"DiscordNX2",C_WHITE,4,30);
-    text_line(64,124,"Sign in with your phone",C_MUTED,2,60);
+    text_line(64,124,qr_url?"Sign in with your phone":"Discord account",C_MUTED,2,60);
     block(64,180,1152,420,C_SIDEBAR);
     if(qr_url && strncmp(qr_url,"https://discord.com/ra/",23)==0){
         qr_render_url(800,216,344,qr_url);
@@ -198,7 +240,7 @@ static void draw_auth(const char *phase,const char *qr_url){
         text_line(100,338,"Use the same Wi-Fi as your Switch.",C_MUTED,2,52);
         text_line(100,382,"Solve the challenge, then tap Send to Switch.",C_MUTED,2,52);
     }else{
-        text_line(100,234,"Connecting your account",C_WHITE,3,50);
+        text_line(100,234,"DiscordNX2",C_WHITE,3,50);
         text_line(100,294,"Please wait. You can cancel with B.",C_MUTED,2,60);
     }
     text_right=qr_url?718:1180;
@@ -209,7 +251,39 @@ static void draw_auth(const char *phase,const char *qr_url){
     text_line(100,526,readable,C_GREEN,2,96);
     text_line(64,650,"B: Cancel    +: Cancel",C_MUTED,2,60);
 }
-static int options_for(int tab){const Dnx2Account *p=dnx2Account();return tab==0?1:tab==1&&p->signed_in?p->server_count:0;}
+static int options_for(int view){
+    const Dnx2Account *p=dnx2Account();if(view==0)return 2;if(!p->signed_in)return 0;
+    if(view==1&&!channel_view)return p->server_count;
+    if(view==2&&message_view)return p->message_count;
+    if(view==3&&message_view)return 0;
+    return channel_options(view);
+}
+static int compose(Framebuffer *fb,PadState *pad){
+    static const char keys[]="abcdefghijklmnopqrstuvwxyz0123456789.,!?'-:;/@#&()_+=*\"";
+    int cell=0,upper=0,armed=0;size_t length=0;dnx2GraphicalClearDraft();
+    for(;;){
+        u32 pitch=0;pixels=(uint32_t*)framebufferBegin(fb,&pitch);if(!pixels)return 0;stride_pixels=(int)(pitch/4);text_right=1200;
+        rect(0,0,W,H,C_BG);text_line(64,40,"Write a message",C_WHITE,4,64);text_wrap(64,108,draft,4,80);
+        for(int i=0;i<(int)strlen(keys);i++){
+            int x=64+(i%10)*108,y=236+(i/10)*54;rounded(x,y,94,46,10,cell==i?C_PRIMARY:C_CARD);
+            char c[2]={upper?(char)toupper((unsigned char)keys[i]):keys[i],0};text_line(x+34,y+10,c,C_WHITE,3,1);
+        }
+        text_line(64,604,"A: Add    X: Space    Y: Shift    L: Delete",C_MUTED,2,90);
+        text_line(64,648,"R: Send message    B: Cancel",C_WHITE,2,80);
+        framebufferEnd(fb);pixels=NULL;padUpdate(pad);u64 down=padGetButtonsDown(pad);
+        if(!armed){if(!padGetButtons(pad))armed=1;svcSleepThread(16000000LL);continue;}
+        if(down&(HidNpadButton_B|HidNpadButton_Plus)){dnx2GraphicalClearDraft();return 0;}
+        if(down&HidNpadButton_AnyLeft)cell=(cell+(int)strlen(keys)-1)%(int)strlen(keys);
+        if(down&HidNpadButton_AnyRight)cell=(cell+1)%(int)strlen(keys);
+        if(down&HidNpadButton_AnyUp)cell=(cell+(int)strlen(keys)-10)%(int)strlen(keys);
+        if(down&HidNpadButton_AnyDown)cell=(cell+10)%(int)strlen(keys);
+        if(down&HidNpadButton_Y)upper=!upper;
+        if((down&HidNpadButton_L)&&length)draft[--length]=0;
+        if(length<512&&(down&(HidNpadButton_A|HidNpadButton_X))){draft[length++]=(down&HidNpadButton_X)?' ':upper?(char)toupper((unsigned char)keys[cell]):keys[cell];draft[length]=0;}
+        if((down&HidNpadButton_R)&&length)return 1;
+        svcSleepThread(16000000LL);
+    }
+}
 int dnx2GraphicalMenu(void) {
     Result rc=hidInitialize();
     if(R_FAILED(rc))return -1;
@@ -220,8 +294,10 @@ int dnx2GraphicalMenu(void) {
     rc=framebufferMakeLinear(&fb);
     if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
     PadState pad={0};padInitializeDefault(&pad);
-    int tab=0,sel=0,action=0;
-    int focus=0; /* 0 = left sidebar; 1 = right content */
+    int action=0;
+    if(sel>=options_for(tab))sel=0;
+    /* persistent menu state across network actions */
+    /* 0 = left sidebar; 1 = right content */
     char status[128]="SELECT AN OPTION";
     int analog_prior=0; /* analog stick edges; no auto-repeating tabs */
     int dirty=1;
@@ -259,21 +335,35 @@ int dnx2GraphicalMenu(void) {
         if(tab==0 && (down&HidNpadButton_X) && (padGetButtons(&pad)&HidNpadButton_R)) {
             action=7;break;
         }
-        if(down & HidNpadButton_B) {focus=0;dirty=1;}
+        if(down & HidNpadButton_B) {
+            if(message_expanded){message_expanded=0;message_offset=0;}
+            else if(focus==1&&message_view){message_view=0;sel=0;}
+            else if(focus==1&&tab==1&&channel_view){channel_view=0;sel=dnx2Account()->selected;}
+            else focus=0;
+            dirty=1;
+        }
         else if(down & HidNpadButton_AnyLeft) {
             if(focus==1) {focus=0;dirty=1;}
         } else if(down & HidNpadButton_AnyRight) {
             if(focus==0 && options_for(tab)>0) {focus=1;sel=0;dirty=1;}
-            /* Voice has no actions; Servers can test remote-auth gateway. */
+            /* Channel filters use the currently selected server. */
         }
-        int n=focus==0?3:options_for(tab);
-        if(n>0&&(down & HidNpadButton_AnyUp)) {
-            if(focus==0)tab=(tab+n-1)%n;
+        int n=focus==0?4:options_for(tab);
+        if(message_expanded&&focus==1){
+            if(down&HidNpadButton_AnyUp){message_offset=message_offset>330?message_offset-330:0;dirty=1;}
+            if(down&HidNpadButton_AnyDown){
+                const char *q=dnx2Account()->messages[sel].content;int chars=0;while(*q){dnx_utf8_next(&q);chars++;}
+                if(message_offset+330<chars)message_offset+=330;
+                dirty=1;
+            }
+        }
+        if(!(message_expanded&&focus==1)&&n>0&&(down & HidNpadButton_AnyUp)) {
+            if(focus==0){tab=(tab+n-1)%n;sel=0;message_view=message_expanded=0;}
             else sel=(sel+n-1)%n;
             dirty=1;
         }
-        if(n>0&&(down & HidNpadButton_AnyDown)) {
-            if(focus==0)tab=(tab+1)%n;
+        if(!(message_expanded&&focus==1)&&n>0&&(down & HidNpadButton_AnyDown)) {
+            if(focus==0){tab=(tab+1)%n;sel=0;message_view=message_expanded=0;}
             else sel=(sel+1)%n;
             dirty=1;
         }
@@ -281,11 +371,27 @@ int dnx2GraphicalMenu(void) {
             if(focus==0) {
                 if(options_for(tab)>0){focus=1;sel=0;dirty=1;}
             } else if(tab==0) {
-                if(dnx2Account()->signed_in){dnx2AccountLogout();sel=0;dirty=1;}
+                if(sel==1){action=dnx2Account()->signed_in?12:13;break;}
+                if(dnx2Account()->signed_in){dnx2AccountLogout();dnx2GraphicalClearDraft();channel_view=message_view=message_expanded=0;sel=0;dirty=1;}
                 else {action=6;break;}
-            } else if(tab==1) {
-                dnx2AccountSelect(sel);tab=2;focus=0;sel=0;dirty=1;
+            } else if(tab==1&&!channel_view) {
+                if(sel<dnx2Account()->server_count){dnx2AccountSelect(sel);channel_view=1;sel=0;action=9;break;}
+            } else if(tab==2&&message_view){
+                message_expanded=1;message_offset=0;dirty=1;
+            } else if(!message_view) {
+                int i=channel_at(tab,sel);
+                if(i>=0){int type=dnx2Account()->channels[i].type;
+                    if(type==0||type==5){dnx2ChannelSelect(i);tab=2;message_view=1;sel=0;action=10;break;}
+                    if(type==2||type==13){dnx2ChannelSelect(i);tab=3;message_view=1;sel=0;dirty=1;}
+                }
             }
+        }
+        if((down&HidNpadButton_Y)&&focus==1&&dnx2Account()->signed_in){
+            if(tab==2&&message_view){message_expanded=0;action=10;break;}
+            if(channel_view||tab>=2){action=9;message_view=0;sel=0;break;}
+        }
+        if((down&HidNpadButton_X)&&focus==1&&tab==2&&message_view){
+            if(compose(&fb,&pad)){action=11;break;}dirty=1;
         }
         svcSleepThread(16000000LL);
     }
@@ -389,4 +495,36 @@ int dnx2GraphicalWifiBrowserStatus(const char *message,int question) {
     text_line(80,398,"Results are saved to the hardware log.",C_MUTED,2,80);
     text_line(80,466,question?"A: Yes    B: No":"Close the browser to return here.",C_WHITE,2,70);
     framebufferEnd(&auth_fb);pixels=NULL;return 1;
+}
+
+/* Controller PIN input uses native rendering, not the unavailable web applet. */
+int dnx2GraphicalPin(const char *title,char pin[9]) {
+    memset(pin,'0',8);pin[8]=0;int digit=0,armed=0,ok=0;
+    dnx2GraphicalAuthBegin();
+    if(!auth_hid_ready||!auth_fb_ready)goto done;
+    for(;;){
+        u32 pitch=0;pixels=(uint32_t*)framebufferBegin(&auth_fb,&pitch);if(!pixels)break;
+        stride_pixels=(int)(pitch/4);text_right=1216;rect(0,0,W,H,C_BG);
+        text_line(64,60,title,C_WHITE,4,72);
+        text_line(64,144,"Your 8-digit PIN protects the saved login on this SD card.",C_MUTED,2,90);
+        text_line(64,190,"Choose a PIN you can remember; a forgotten PIN requires QR login.",C_MUTED,2,90);
+        for(int i=0;i<8;i++){
+            int x=120+i*130;rounded(x,290,102,100,16,i==digit?C_PRIMARY:C_CARD);
+            char shown[2]={i==digit?pin[i]:'*',0};text_line(x+40,326,shown,C_WHITE,4,1);
+        }
+        text_line(64,500,"Up/Down: Change digit    Left/Right: Move    A: Next / Finish",C_MUTED,2,100);
+        text_line(64,554,"B / +: Cancel",C_WHITE,2,64);
+        framebufferEnd(&auth_fb);pixels=NULL;padUpdate(&auth_pad);
+        u64 down=padGetButtonsDown(&auth_pad);
+        if(!armed){if(!padGetButtons(&auth_pad))armed=1;svcSleepThread(16000000LL);continue;}
+        if(down&(HidNpadButton_B|HidNpadButton_Plus))break;
+        if(down&HidNpadButton_AnyUp)pin[digit]=(char)('0'+(pin[digit]-'0'+1)%10);
+        if(down&HidNpadButton_AnyDown)pin[digit]=(char)('0'+(pin[digit]-'0'+9)%10);
+        if(down&HidNpadButton_AnyLeft)digit=(digit+7)%8;
+        if(down&HidNpadButton_AnyRight)digit=(digit+1)%8;
+        if(down&HidNpadButton_A){if(digit==7){ok=1;break;}digit++;}
+        svcSleepThread(16000000LL);
+    }
+done:
+    dnx2GraphicalAuthEnd();if(!ok)memset(pin,0,9);return ok;
 }

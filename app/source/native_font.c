@@ -4,6 +4,7 @@
  * Public-domain font8x8 is the safe fallback when pl:u is unavailable.
  */
 #include "native_font.h"
+#include "client_json.h"
 #include "pretendo_font.h"
 extern char font8x8_basic[128][8];
 #include <switch.h>
@@ -16,15 +17,18 @@ extern char font8x8_basic[128][8];
 typedef struct {
     unsigned char *bitmap;
     int xoff,yoff,w,h,advance;
+    uint32_t code;
 } CachedGlyph;
 static struct {
     stbtt_fontinfo info;
-    CachedGlyph glyphs[3][128];
+    stbtt_fontinfo fallback[6];
+    int fallback_count;
+    CachedGlyph glyphs[3][256];
     int initialized,pl_live;
 } font_state;
 static const int heights[3]={18,22,28};
 static void destroy_cache(void) {
-    for(int sz=0;sz<3;sz++)for(int c=0;c<128;c++){
+    for(int sz=0;sz<3;sz++)for(int c=0;c<256;c++){
         free(font_state.glyphs[sz][c].bitmap);
         font_state.glyphs[sz][c].bitmap=NULL;
     }
@@ -44,27 +48,11 @@ int dnx2FontInit(void) {
          memcmp(data,"OTTO",4)==0))goto fail;
     idx=stbtt_GetFontOffsetForIndex(data,0);
     if(idx<0||!stbtt_InitFont(&font_state.info,data,idx))goto fail;
-    for(int sz=0;sz<3;sz++){
-        float scale=stbtt_ScaleForPixelHeight(&font_state.info,(float)heights[sz]);
-        for(int code=32;code<=126;code++){
-            CachedGlyph *g=&font_state.glyphs[sz][code];
-            int advance=0,lsb=0;
-            stbtt_GetCodepointHMetrics(&font_state.info,code,&advance,&lsb);
-            (void)lsb;
-            g->advance=(int)(advance*scale+0.5f);
-            if(g->advance<4)g->advance=4;
-            g->bitmap=stbtt_GetCodepointBitmap(&font_state.info,0,scale,code,
-                                                &g->w,&g->h,&g->xoff,&g->yoff);
-            /* Pretendo omits digits and some punctuation. Keep labels complete. */
-            if(code!=' ' && (stbtt_FindGlyphIndex(&font_state.info,code)==0 || !g->bitmap || g->w==0)){
-                free(g->bitmap);
-                int xs=heights[sz]/12,ys=heights[sz]/8;
-                g->w=8*xs;g->h=8*ys;g->xoff=0;g->yoff=2-heights[sz];
-                g->advance=g->w+2;g->bitmap=calloc((size_t)g->w*g->h,1);
-                if(g->bitmap)for(int y=0;y<g->h;y++)for(int x=0;x<g->w;x++)
-                    g->bitmap[y*g->w+x]=(font8x8_basic[code][y/ys]&(1u<<(x/xs)))?255:0;
-            }
-        }
+    if(font_state.pl_live)for(int type=0;type<PlSharedFontType_Total;type++){
+        PlFontData shared={0};
+        if(R_FAILED(plGetSharedFontByType(&shared,(PlSharedFontType)type))||!shared.address||shared.size<64)continue;
+        int offset=stbtt_GetFontOffsetForIndex(shared.address,0);
+        if(offset>=0&&stbtt_InitFont(&font_state.fallback[font_state.fallback_count],shared.address,offset))font_state.fallback_count++;
     }
     font_state.initialized=1;
     return 1;
@@ -88,31 +76,51 @@ static inline uint32_t blend(uint32_t src,uint32_t color,unsigned a){
     unsigned b=(sb*ia+fb*a+127)/255;
     return r|(g<<8)|(b<<16)|(255u<<24);
 }
+static CachedGlyph *glyph(int sz,uint32_t cp){
+    CachedGlyph *g=&font_state.glyphs[sz][cp%256];
+    if(g->code==cp&&g->advance)return g;
+    free(g->bitmap);memset(g,0,sizeof(*g));g->code=cp;
+    stbtt_fontinfo *info=&font_state.info;
+    if(!stbtt_FindGlyphIndex(info,(int)cp))for(int i=0;i<font_state.fallback_count;i++){
+        if(stbtt_FindGlyphIndex(&font_state.fallback[i],(int)cp)){info=&font_state.fallback[i];break;}
+    }
+    float scale=stbtt_ScaleForPixelHeight(info,(float)heights[sz]);
+    int advance=0,lsb=0;stbtt_GetCodepointHMetrics(info,(int)cp,&advance,&lsb);
+    g->advance=(int)(advance*scale+0.5f);if(g->advance<4)g->advance=4;
+    g->bitmap=stbtt_GetCodepointBitmap(info,0,scale,(int)cp,&g->w,&g->h,&g->xoff,&g->yoff);
+    if(cp!=' '&&(!stbtt_FindGlyphIndex(info,(int)cp)||!g->bitmap||!g->w)){
+        free(g->bitmap);int xs=heights[sz]/12,ys=heights[sz]/8;
+        g->w=8*xs;g->h=8*ys;g->xoff=0;g->yoff=2-heights[sz];g->advance=g->w+2;
+        g->bitmap=calloc((size_t)g->w*g->h,1);
+        if(g->bitmap)for(int y=0;y<g->h;y++)for(int x=0;x<g->w;x++){
+            /* Missing Unicode glyph: one outlined box per code point. */
+            int on=cp<128?(font8x8_basic[cp][y/ys]&(1u<<(x/xs))):x==0||y==0||x==g->w-1||y==g->h-1;
+            g->bitmap[y*g->w+x]=on?255:0;
+        }
+    }
+    return g;
+}
 int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
                 int x,int y,const char *str,uint32_t color,int size,int maxchars) {
     if(!font_state.initialized||!pixels||!str)return 0;
     const int sz=size<=2?0:size==3?1:2;
     const int baseline=y+heights[sz]-2;
-    int cursor=x;
-    for(int i=0;str[i]&&i<maxchars;i++){
-        unsigned char cp=(unsigned char)str[i];
-        if(cp>=127||cp<32)cp='?';
-        CachedGlyph *g=&font_state.glyphs[sz][cp];
+    int cursor=x;const char *p=str;
+    for(int i=0;*p&&i<maxchars;i++){
+        uint32_t cp=dnx_utf8_next(&p);if(cp<32)cp=' ';
+        CachedGlyph *g=glyph(sz,cp);
         if(cursor+g->advance>width)break;
         if(g->bitmap && g->w>0&&g->h>0){
             for(int gy=0;gy<g->h;gy++){
-                int py=baseline+g->yoff+gy;
-                if(py<0||py>=height)continue;
+                int py=baseline+g->yoff+gy;if(py<0||py>=height)continue;
                 for(int gx=0;gx<g->w;gx++){
-                    int px=cursor+g->xoff+gx;
-                    if(px<0||px>=width)continue;
+                    int px=cursor+g->xoff+gx;if(px<0||px>=width)continue;
                     unsigned a=g->bitmap[gy*g->w+gx];
                     if(a)pixels[py*stride+px]=blend(pixels[py*stride+px],color,a);
                 }
             }
         }
-        cursor+=g->advance;
-        if(cursor>=width)break;
+        cursor+=g->advance;if(cursor>=width)break;
     }
     return 1;
 }

@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: MIT
 #ifndef DNX2_NATIVE_LOGIN_H
 #define DNX2_NATIVE_LOGIN_H
-#define DNX2_MAX_SERVERS 64
-typedef struct {char id[24];char name[80];} Dnx2Server;
+#define DNX2_MAX_SERVERS 200
+#define DNX2_MAX_CHANNELS 512
+#define DNX2_MAX_MESSAGES 30
+typedef struct {char id[24];char name[401];} Dnx2Server;
+typedef struct {char id[24],parent[24],name[401];int type,position;} Dnx2Channel;
+typedef struct {char author[321],content[8193];} Dnx2Message;
 typedef struct {
+    int channel_count,selected_channel,message_count,channels_loaded,order_synced;
+    char notice[160];
+    Dnx2Channel channels[DNX2_MAX_CHANNELS];
+    Dnx2Message messages[DNX2_MAX_MESSAGES];
     int signed_in,server_count,selected;
-    char username[64],display_name[80];
+    char username[129],display_name[321];
     Dnx2Server servers[DNX2_MAX_SERVERS];
 } Dnx2Account;
 typedef void (*Dnx2AuthStatus)(const char *stage,const char *qr_url);
@@ -13,6 +21,13 @@ typedef int (*Dnx2AuthCancel)(void);
 const Dnx2Account *dnx2Account(void);
 void dnx2AccountSelect(int index);
 void dnx2AccountLogout(void);
+void dnx2AccountClearMemory(void);
+int dnx2LoadChannels(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
+void dnx2ChannelSelect(int index);
+int dnx2LoadMessages(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
+int dnx2SendMessage(const char *text,Dnx2AuthStatus status,Dnx2AuthCancel cancel);
+int dnx2RememberSession(const char *pin);
+int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel cancel);
 /* Returns 1 when account and actual server data fetched; 0 otherwise.
  * No account token, RSA key, ticket, nonce, or QR fingerprint ever logged. */
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel);

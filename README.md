@@ -1,18 +1,21 @@
 # DiscordNX2
 
-> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Full Discord login is still being tested. **Discord voice chat, text messaging, live voice channels/member lists and background Discord calls are not implemented.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
+> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. New channel browsing, text chat and saved-login changes still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.37 build provides native graphical menus, an experimental QR sign-in flow and a temporary phone CAPTCHA handoff. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.38 source adds channel navigation, basic text chat and optional PIN-protected saved login to the working QR/CAPTCHA account connection. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
 | Area | Current status |
 | --- | --- |
-| Interface | Dashboard, Servers and Voice chat menus with controller navigation, rounded panels and custom branding. |
-| Native QR login | Real hardware reaches phone scan/approval. Discord has then required CAPTCHA; complete account login remains unverified. |
-| Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. Local interoperability tests pass; Discord acceptance requires hardware testing. |
-| Servers | Fetches real server names after successful account login; no sample server list. Currently limited to 64 servers. |
-| Voice chat | Interface only. Joining channels, live member lists, sending/receiving Discord audio and background calls remain unfinished. |
+| Interface | Dashboard, Servers, Text chat and Voice chat menus with controller navigation, rounded panels and custom branding. |
+| Native QR login | User confirmed successful account connection after the project-hosted phone CAPTCHA handoff in v0.37. |
+| Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. User confirmed account connection; individual future attempts may still be rejected or expire. |
+| Servers | Loads up to 200 real servers. Reads Discord folder/order settings and flattens folders in order; falls back to API order if unavailable. |
+| Channels / text | Server selection loads categories and channels. Text/announcement channels support reading the latest 30 messages, manual refresh and a controller composer. New in v0.38; needs hardware testing. |
+| Voice chat | Voice/stage channels can be selected, but joining calls, live members and sending/receiving Discord voice remain unfinished. |
+| Saved login | Optional eight-digit PIN encrypts credentials on SD. Enter PIN on future launches instead of scanning QR; expiry/revocation may require login again. New in v0.38. |
+| Special characters | UTF-8 and JSON Unicode escapes are decoded; shared console fonts provide glyph fallback. Missing glyphs appear as boxes. Full emoji/shaping support is not included. |
 | Audio and networking | Microphone capture/playback and separate transport/Gateway tests have passed hardware tests. These are not a working Discord call. |
 | C button | Not available through the tested controller APIs; no C-button push-to-talk or GameChat replacement. |
 | On-console browser | System browser attempts showed "This feature is unavailable". A compatible embedded browser is not included. |
@@ -66,7 +69,29 @@ All NRO compilation happens on your PC. No Docker or cloud NRO build is used. Or
 
 The local return listener lasts about 150 seconds. If it expires, cancel and start a fresh login; old QR links and challenge results cannot be reused. The app retries the pending login with the returned challenge result once. Provider restrictions may still reject a legitimate cross-device challenge.
 
-No Discord developer application, manually copied account token, PC companion or password entry on this website is required. Login tickets, account tokens and private keys stay in app memory and are cleared after use. Login is not saved between launches; logging out clears cached account/server information.
+No Discord developer application, manually copied account token, PC companion or password entry on this website is required. Private keys and login tickets stay in app memory. The signed-in access token remains in memory for channel/text requests; it is saved to SD only when you choose Remember login with PIN. Exiting clears in-memory credentials; logging out also deletes saved login.
+
+## Remember login across launches
+
+1. After signing in, return to **Dashboard** and choose **Remember login with PIN**.
+2. Choose an **eight-digit PIN**, then enter it again to confirm. Up/Down changes a digit, Left/Right moves between digits, and A advances/finishes. B or Plus cancels.
+3. Check that Dashboard says the login was saved. Close the app and reopen it.
+4. Enter the PIN when prompted. DiscordNX2 decrypts the saved token and validates it by loading your account and servers. A successful restore needs no QR or CAPTCHA.
+5. B skips startup unlock. **Unlock saved login** on Dashboard lets you retry later.
+
+The encrypted file is `/switch/DiscordNX2/session.bin` on the SD card. Its key is derived from your PIN with PBKDF2-HMAC-SHA256 (100,000 iterations); the credential uses AES-256-GCM with a random salt/IV. No decryption key or PIN is stored alongside it. This is PIN protection, not a console hardware keystore; someone with a copy of the SD file can try PIN guesses offline. Keep the file private and avoid an easily guessed PIN.
+
+Wrong PINs and temporary network failures preserve the saved file for retry. A confirmed expired/revoked credential requires a new login. **Log out** clears the account and deletes the saved file. If you forget the PIN, use QR login again or delete this file. The PIN is local to DiscordNX2 and is not your Discord password. The first v0.38 login still requires QR because earlier builds never saved their token.
+
+## Browse channels and use text chat
+
+1. Open **Servers**, select a server and press **A**. Its actual category/channel list replaces the server list. **B** returns to servers; **Y** reloads channels.
+2. Select a `#` text or announcement channel. **Text chat** opens the latest 30 messages, ordered oldest to newest within that window. Up/Down changes the selection/page; A opens the selected message and Up/Down scrolls it. B returns to the message list, then channels.
+3. **Y** refreshes messages. There is no live Gateway message subscription or older-history pagination in this build.
+4. **X** opens the native controller keyboard: D-pad chooses a character, A adds it, X adds a space, Y changes case, L deletes, **R sends**, and B cancels. Review the draft before pressing R. The initial composer supports ASCII and up to 512 characters; incoming messages retain Unicode. Automatic mention parsing is disabled.
+5. Text/Voice sidebar tabs filter channels in the selected server. Voice/stage selection shows the selected channel and an explicit disconnected state. **It does not join a voice call.**
+
+Categories are headings. Forums/media channels are listed but do not yet open threads. Attachments/embeds, rich formatting, message editing/deletion, DMs and live voice members are not implemented. If Discord denies access or rate limits a request, the app shows that result; it does not bypass permissions. An unconfirmed send is not retried automatically: refresh before choosing to send again.
 
 ## Controls and menus
 
@@ -78,7 +103,7 @@ No Discord developer application, manually copied account token, PC companion or
 | B | Return focus to the sidebar; cancel during login. |
 | Plus | Exit the menu; cancel during login. |
 
-Dashboard provides login/logout. Servers displays the real cached server list after successful login. Selecting a server opens Voice chat, whose channel/member states remain disconnected until that functionality is implemented.
+Dashboard provides login/logout and PIN save/unlock. Servers opens channel navigation. Text chat reads/sends basic messages; Voice chat selects a channel and shows its disconnected status until call transport is implemented.
 
 Developer shortcuts remain on Dashboard: **hold R + X** for the executable-memory check, and **hold R + Y** for the system Wi-Fi browser probe. Neither is needed for ordinary login. The Wi-Fi browser probe failed on the tested setup; an API return code of zero does not mean a browser appeared.
 
@@ -118,7 +143,10 @@ The default address is compiled into each NRO; moving hosting requires rebuildin
 | QR failed/expired | Cancel and start a new attempt. Phone approval is not proof the Switch received an account session. |
 | "This feature is unavailable" | This was observed in the system browser experiment. Use the temporary phone flow; changing DNS or replacing the NSO is not an established fix. |
 | Compiler/toolchain missing | Check devkitPro's install path and run Setup-Toolchain.bat if Switch 2 packages are absent. |
-| No voice audio or channel members | These Discord functions are not implemented yet. |
+| No voice audio or channel members | Voice calling is not implemented yet; channel selection does not start a call. |
+| Account/server name shows boxes | The name is decoded as Unicode, but the console fonts may not contain every glyph. Some emoji and complex scripts remain unsupported. |
+| Server order differs | The app uses flattened Discord folder order when settings are available. It indicates when API order is being used instead. |
+| Saved login will not unlock | Check the PIN, network and final status. Retry from Dashboard; if the token was revoked, use QR login again. |
 
 After a failed login/test, copy **`/kaihen/discordnx2-hardware.txt`** from the SD card before running another test. Share the stage-only report, NRO version and phone error text. **Never share QR links, CAPTCHA results, login tickets, account tokens, passwords or private keys.** Do not post a QR screenshot containing an active login session.
 
@@ -143,6 +171,8 @@ Small developer checks, separate from an NRO build:
 sh tests/run-native-http-tests.sh
 node tests/test_captcha_page.js
 ```
+
+New client parsing, message serialization and cross-process session storage tests run with `sh tests/run-client-tests.sh` in Debian with a C compiler and mbedTLS development headers. They use synthetic credentials and temporary files.
 
 The phone encryption integration test currently uses Windows Node.js plus a Debian WSL host harness with a C compiler and mbedTLS development headers. Prepare it with `wsl -d Debian -- sh /mnt/c/path/to/DiscordNX2/tests/run-phone-handoff-tests.sh`, then run `node tests/test_captcha_phone.js` from Windows. These use synthetic results and do not solve or submit a real CAPTCHA. Passing local tests does not prove Discord will accept login on hardware.
 

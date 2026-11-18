@@ -2,8 +2,12 @@
 #ifndef DNX2_GRAPHICAL_UI_H
 #define DNX2_GRAPHICAL_UI_H
 /* Return -1 if graphical services are unavailable, 0 to exit,
- * or an application action (6: QR login, 7: memory check, 8: Wi-Fi browser test). */
+ * or an application action: 6 QR, 7 memory, 8 Wi-Fi browser,
+ * 9 channels, 10 messages, 11 send draft, 12 save login, 13 restore login. */
 int dnx2GraphicalMenu(void);
+const char *dnx2GraphicalDraft(void);
+void dnx2GraphicalClearDraft(void);
+int dnx2GraphicalPin(const char *title,char pin[9]);
 void dnx2GraphicalAuthBegin(void);
 void dnx2GraphicalAuthStatus(const char *stage,const char *qr_url);
 int dnx2GraphicalAuthCancel(void);

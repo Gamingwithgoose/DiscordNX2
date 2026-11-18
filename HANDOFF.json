@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.37-project-pages-captcha",
+  "version": "0.38-channels-text-unicode-saved-login",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -72,7 +72,8 @@
     "v20": [
       "remote-auth gateway DNS successful, TCP port443 and SSL handshake succeeded",
       "remote-auth WebSocket HTTP 403; no HELLO; user/account not involved"
-    ]
+    ],
+    "v037_login": "User confirmed: account connected and real server list displayed using the project-hosted phone CAPTCHA handoff. Names had question marks; ordering differed from Discord. Channel/text and persistence changes in v0.38 await hardware testing."
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
@@ -125,7 +126,7 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": "Pull main in GitHub Desktop, run Build-NRO.bat, FTP only dist/DiscordNX2.nro, Dashboard > Log in with QR code. First QR: Discord mobile scanner. If CAPTCHA requested, second QR: phone camera/browser on same Wi-Fi. Complete challenge, wait for encrypted-ready status, Send to Switch. Share only stage-only hardware log and phone error text if login fails. No NSO, DNS or loader changes.",
+  "next_user_workflow": "Pull main, Build-NRO.bat, FTP only NRO. Log in once, check account/server Unicode/order; select server and browse channels, read text, optionally compose/send own message. Dashboard Remember login with PIN, confirm twice, close/reopen and unlock. Voice channels selectable but calls not implemented. Share stage-only log if channel/restore fails; never session.bin, PIN, messages or QR links.",
   "next_developer_work": [
     "Verify Pages is published from main:/docs with HTTPS and exact served verification source; no custom workflow or native cloud build.",
     "Investigate actual phone delivery/provider rejection with hardware report. Keep self-contained public-jailbreak browser support as long-term goal; hosting is temporary."
@@ -205,7 +206,7 @@
     "validation": "v0.37 canonical docs/verify.html passed actual WebCrypto/mbedTLS interoperability, 2048/4095-byte results, visible oversize errors, fallback callback polling, malformed result rejection and private destination checks. Legacy CAPTCHA page tests and AArch64 strict syntax checks passed. No NRO or dependency build. Live project Pages home/verification files HTTP200 and exact-source verified. User must build NRO and test real phone CAPTCHA/Discord acceptance.",
     "remaining_blockers": "Phone browser local HTTP form/navigation restrictions or permission prompts; Wi-Fi client isolation/VPN; provider domain restrictions for Discord dynamic sitekey; Discord rejecting cross-device challenge, expired ticket or solution. Do not spoof origin/browser identity or bypass challenge.",
     "phone_button_fix": "User can tick hCaptcha but Send stays disabled. Found silent rejection of results >2048 chars. v0.35 negotiates limit=4095 in QR and expands encrypted payload/native solution buffers to existing header limit; old QR defaults to 2048. Page shows size/encryption-stage errors and polls getResponse as a fallback for missed callback, using only genuine provider results.",
-    "status": "Re-enabled by default in v0.37 on the project GitHub Pages URL. Prepared button/size/callback fixes are served from docs/verify.html; old community website is not used by this build."
+    "status": "User confirmed account connection with v0.37 project-hosted page. Flow remains enabled and regression-tested in v0.38."
   },
   "wifi_browser_test": {
     "implemented": "Dashboard R+Y explicitly calls webWifiCreate/webWifiShow for https://example.com/ through installed libounce. NULL connection-test override, zero network UUID/revision; no captive DNS or network-profile changes. Framebuffer released before launch/restored after. Log applet initialization/API reply separately and ask user whether Example Domain actually appeared.",
@@ -227,5 +228,16 @@
       "index.html": "56a08af2e80d85023ac16c6f779a3b3f8552ef0cd69902e3febc84af4460b8c0",
       "verify.html": "b2f718b321795361599a397e6f3adb726d2ab2767a0ef0b289c75d56640a36cb"
     }
+  },
+  "v038_implementation": {
+    "unicode": "Replace lossy ASCII/\\u substitution with bounded top-level JSON parser preserving UTF-8 and surrogate pairs. Expand name buffers. Font renderer decodes code points, caches bounded glyphs and falls back through console shared fonts. Missing glyphs remain boxes; no bundled emoji engine or complex-script shaping.",
+    "servers": "Up to 200 servers. Read-only settings-proto/1 decode for PreloadedUserSettings field14 GuildFolders; flatten folders guild_ids in stored order, fallback guild_positions, API order if unavailable. Reference schema https://github.com/discord-userdoccers/discord-protos/blob/master/discord_protos/discord_users/v1/PreloadedUserSettings.proto . Never modify settings.",
+    "channels": "Selecting server loads GET guilds/{id}/channels, max512; parse nested JSON safely, sort positions/IDs and group categories. Servers opens channel navigation; Text chat / Voice chat filter selected-server channels.",
+    "text": "Text/announcement channels GET latest30 messages; chronological list, full text scroll, manual Y refresh. Controller ASCII composer max512 characters, explicit R sends POST with JSON escaping and allowed_mentions.parse empty. No automatic resend, no real messages sent during implementation. Forums/media/threads, DMs, attachments/rich UI and live subscriptions not implemented.",
+    "voice": "Can select actual voice/stage channel and see server/channel disconnected state. No claim of call join, voice members, Gateway voice handshake, RTP/Opus/DAVE or background Discord audio.",
+    "persistence": "Retain token in RAM for authenticated requests. Optional Dashboard Remember login with PIN uses confirmed 8-digit PIN; PBKDF2-SHA256 100000, random16 salt, AES256GCM random12 IV and16 tag, authenticated version/length header. sdmc:/switch/DiscordNX2/session.bin; key/PIN not saved. PIN offers offline-guessable protection, not device keystore. Startup asks PIN and revalidates profile/guilds; B skips, Dashboard retries. Wrong PIN/network preserve file, 401 forgets expired token, logout deletes. Normal exit wipes RAM without deleting file. Prior v0.37 never saved login; initial new login required.",
+    "validation": "New client/data and cross-process encrypted session host tests passed, including Unicode JSON/surrogates, nested fields, category grouping, server-order protobuf, message chronology/serialization, wrong PIN, small buffer, tamper and forget. Existing HTTP/WS/CAPTCHA/frontend tests pass. AArch64 strict syntax checks passed for changed native modules; main has its existing audio signedness warning. No NRO or dependency rebuild.",
+    "preserved": "Resident NSO source, audio pipeline, packet transport and public jailbreak/DNS unchanged. Native QR/CAPTCHA flow retained and regression-tested. Stage-only logs contain no tokens, PINs, names or message content.",
+    "remaining": "User must build/test Unicode font coverage, Discord settings ordering, channel API acceptance, message read/send, SD save/PIN restore. Call transport remains a separate substantial implementation."
   }
 }
