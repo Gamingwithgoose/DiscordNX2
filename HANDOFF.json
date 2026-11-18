@@ -1,9 +1,9 @@
 {
   "project": "DiscordNX2",
-  "date": "2026-11-17",
+  "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.38-channels-text-unicode-saved-login",
+  "version": "0.39-touch-native-keyboard-live-chat-fonts",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -101,7 +101,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "Changed Wi-Fi probe/UI/native source compiler checks and installed webWifi symbol availability only. No NRO or dependency build. Existing phone crypto/parser tests passed before Wi-Fi integration; hardware launch remains unverified.",
+  "build_validation": "v0.39 changed native modules passed strict AArch64 syntax checks; main retains one pre-existing audio signedness warning. Font embedding assembly checked without NRO linking. Production worker synthetic fixtures, touch geometry, actual font rasterization and existing HTTP/WS/CAPTCHA/session tests passed. No NRO or browser/dependency build; live Gateway acceptance, touch and native keyboard still require console testing.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -126,10 +126,11 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": "Pull main, Build-NRO.bat, FTP only NRO. Log in once, check account/server Unicode/order; select server and browse channels, read text, optionally compose/send own message. Dashboard Remember login with PIN, confirm twice, close/reopen and unlock. Voice channels selectable but calls not implemented. Share stage-only log if channel/restore fails; never session.bin, PIN, messages or QR links.",
+  "next_user_workflow": "Pull main, Build-NRO.bat, FTP only NRO (fonts embedded; no NSO/DNS/payload changes). Unlock existing v0.38 PIN or QR login. Tap server/channel, swipe, check Unicode name, leave conversation open and send a message from phone to check live/auto updates. Tap input to test native keyboard, Done should only edit draft; Send is explicit. If keyboard unavailable use QWERTY overlay. Report hardware and live logs, never session.bin/PIN/QR/message content.",
   "next_developer_work": [
-    "Verify Pages is published from main:/docs with HTTPS and exact served verification source; no custom workflow or native cloud build.",
-    "Investigate actual phone delivery/provider rejection with hardware report. Keep self-contained public-jailbreak browser support as long-term goal; hosting is temporary."
+    "Use next hardware feedback to verify native keyboard result, touch coordinates, font coverage and Live updates versus Auto refresh mode. Keep public jailbreak/NRO-only workflow.",
+    "Preserve tested QR/CAPTCHA account connection and PIN session format; no repeat probing of known unavailable browser.",
+    "Discord voice transport and live members remain a separate unfinished implementation; never equate selected channel with joined call."
   ],
   "implementation_base_head": "5c39f8c8d46ce262f3b277eb3536e400d3b61313",
   "v023_implementation": {
@@ -239,5 +240,16 @@
     "validation": "New client/data and cross-process encrypted session host tests passed, including Unicode JSON/surrogates, nested fields, category grouping, server-order protobuf, message chronology/serialization, wrong PIN, small buffer, tamper and forget. Existing HTTP/WS/CAPTCHA/frontend tests pass. AArch64 strict syntax checks passed for changed native modules; main has its existing audio signedness warning. No NRO or dependency rebuild.",
     "preserved": "Resident NSO source, audio pipeline, packet transport and public jailbreak/DNS unchanged. Native QR/CAPTCHA flow retained and regression-tested. Stage-only logs contain no tokens, PINs, names or message content.",
     "remaining": "User must build/test Unicode font coverage, Discord settings ordering, channel API acceptance, message read/send, SD save/PIN restore. Call transport remains a separate substantial implementation."
+  },
+  "v039_implementation": {
+    "hardware_feedback": "User reports v0.38 account name still squares, no touch, ABC keyboard and manual-only text refresh. This revision addresses those sources; new interaction/live integration requires console testing.",
+    "layout": "Replace tab/card navigation with 88px server-initial rail, 268px server/category/channel sidebar, conversation and bottom draft input/Send. Home via brand icon for login/PIN/logout. Shared chat_layout.h drives touch hit regions. Touch range1280x720 matches framebuffer; tap-on-release and drag scrolling, touch QWERTY overlay and PIN controls, controller navigation retained.",
+    "keyboard": "Message input/X invokes action14 after menu framebuffer and update worker close. appletInitialize + swkbdCreate/Show QWERTY native API, UTF8 draft max512 bytes/128 native characters. Acceptance only edits draft; Send/R is separate. Native unavailable/cancel preserves draft; explicit touch QWERTY overlay fallback, never full-screen ABC. Native applet availability not proven. Main hardware report records only result code/accepted flag.",
+    "fonts": "Unmodified embedded Noto Sans, Sans Math, Symbols2 and monochrome Emoji via unicode_fonts.S .incbin; OFL notices and pinned hashes/commit in app/assets/fonts/sources.json. Console shared fonts still used, no proprietary redistribution. Tests rasterize U+1D400,1D49C,1D56C,1D5D4 styled letters plus accents, Greek/Cyrillic, symbols, emoji including goose. Skip variation-selector/ZWJ boxes, pixel-aware wrapping. Complex shaping/color/combined emoji incomplete; not universal coverage. Primary UI font is bundled Noto Sans, so readable mixed-case rendering does not depend on pl:u initialization. Console fonts supply additional glyphs.",
+    "live": "Foreground worker shares no UI/HID; own socket/SSL/CSRNG lifecycle; Gateway v10 JSON WSS with verified handshake, Hello/Identify, heartbeats/ACKs, READY/RESUMED, in-memory session Resume and selected-guild/channel subscription. Message create/update/delete/bulk-delete events coalesce a REST latest30 refresh; 15s resync. Failed/rejected Gateway falls back to5s automatic REST with visible label. No repeated Identify storm (60s gate), 429 Retry-After observed, 401/403 stop. Maximum frame/message1MiB; oversized/unsupported payload falls back. Provider acceptance of unofficial user Gateway not hardware verified.",
+    "ownership": "Mutex protects pending snapshots; visible account, draft, scroll and selection stay on main thread. Stop/join worker before channel/server changes, logout, native keyboard, other API operations or exit. Keep newest follow only at bottom; ID anchor for older views; expanded message pauses snapshot application. Preserve draft on incoming updates and unconfirmed send. No account messages sent during tests.",
+    "diagnostics": "sdmc:/kaihen/discordnx2-live.txt fixed ready/mode/event/refresh/http/cancel counters only; no IDs/names/message/PIN/token data. Existing hardware report includes native keyboard API result.",
+    "validation": "v0.39 changed native modules passed strict AArch64 syntax checks; main retains one pre-existing audio signedness warning. Font embedding assembly checked without NRO linking. Production worker synthetic fixtures, touch geometry, actual font rasterization and existing HTTP/WS/CAPTCHA/session tests passed. No NRO or browser/dependency build; live Gateway acceptance, touch and native keyboard still require console testing.",
+    "preserved": "Working auth/CAPTCHA and saved-session file format, audio pipeline, packet transport, resident NSO and normal public jailbreak/DNS. Voice calling remains unfinished."
   }
 }

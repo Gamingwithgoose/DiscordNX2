@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 /* Switch shared standard font, rasterized by stb_truetype (public domain/MIT).
- * Only references console-provided font memory; does not redistribute font.
+ * Uses console fonts plus embedded OFL-licensed Noto Unicode fallbacks.
  * Public-domain font8x8 is the safe fallback when pl:u is unavailable.
  */
 #include "native_font.h"
 #include "client_json.h"
-#include "pretendo_font.h"
 extern char font8x8_basic[128][8];
 #include <switch.h>
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -19,9 +18,10 @@ typedef struct {
     int xoff,yoff,w,h,advance;
     uint32_t code;
 } CachedGlyph;
+extern const unsigned char dnx2_font_sans[],dnx2_font_math[],dnx2_font_symbols[],dnx2_font_emoji[];
 static struct {
     stbtt_fontinfo info;
-    stbtt_fontinfo fallback[6];
+    stbtt_fontinfo fallback[10];
     int fallback_count;
     CachedGlyph glyphs[3][256];
     int initialized,pl_live;
@@ -35,13 +35,10 @@ static void destroy_cache(void) {
 }
 int dnx2FontInit(void) {
     if(font_state.initialized)return 1;
-    const unsigned char *data=pretendo_font;
+    const unsigned char *data=dnx2_font_sans;
     int idx;
     if(!R_FAILED(plInitialize(PlServiceType_User))){
         font_state.pl_live=1;
-        PlFontData shared={0};
-        if(!R_FAILED(plGetSharedFontByType(&shared,PlSharedFontType_Standard)) && shared.address && shared.size>=64)
-            data=(const unsigned char*)shared.address;
     }
     /* Avoid parsing non-font wrappers as a TTF. */
     if(!((data[0]==0&&data[1]==1&&data[2]==0&&data[3]==0)||
@@ -53,6 +50,11 @@ int dnx2FontInit(void) {
         if(R_FAILED(plGetSharedFontByType(&shared,(PlSharedFontType)type))||!shared.address||shared.size<64)continue;
         int offset=stbtt_GetFontOffsetForIndex(shared.address,0);
         if(offset>=0&&stbtt_InitFont(&font_state.fallback[font_state.fallback_count],shared.address,offset))font_state.fallback_count++;
+    }
+    const unsigned char *bundled[]={dnx2_font_sans,dnx2_font_math,dnx2_font_symbols,dnx2_font_emoji};
+    for(int i=0;i<4;i++){
+        int offset=stbtt_GetFontOffsetForIndex(bundled[i],0);
+        if(offset>=0&&stbtt_InitFont(&font_state.fallback[font_state.fallback_count],bundled[i],offset))font_state.fallback_count++;
     }
     font_state.initialized=1;
     return 1;
@@ -100,6 +102,17 @@ static CachedGlyph *glyph(int sz,uint32_t cp){
     }
     return g;
 }
+int dnx2FontFit(const char *text,int width,int size,int maxchars){
+    if(!text||width<1)return 0;
+    int sz=size<=2?0:size==3?1:2,used=0;const char *p=text,*end=text;
+    for(int i=0;*p&&i<maxchars;i++){
+        uint32_t cp=dnx_utf8_next(&p);int advance=font_state.initialized?glyph(sz,cp)->advance:6*size;
+        if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)advance=0;
+        if(used+advance>width)break;
+        used+=advance;end=p;
+    }
+    return (int)(end-text);
+}
 int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
                 int x,int y,const char *str,uint32_t color,int size,int maxchars) {
     if(!font_state.initialized||!pixels||!str)return 0;
@@ -107,7 +120,7 @@ int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
     const int baseline=y+heights[sz]-2;
     int cursor=x;const char *p=str;
     for(int i=0;*p&&i<maxchars;i++){
-        uint32_t cp=dnx_utf8_next(&p);if(cp<32)cp=' ';
+        uint32_t cp=dnx_utf8_next(&p);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;if(cp<32)cp=' ';
         CachedGlyph *g=glyph(sz,cp);
         if(cursor+g->advance>width)break;
         if(g->bitmap && g->w>0&&g->h>0){

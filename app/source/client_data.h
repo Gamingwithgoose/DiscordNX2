@@ -74,7 +74,7 @@ static inline int dnx_message_body(const char *text,char *body,size_t cap){
 static inline void dnx_messages(Dnx2Account *a,const char *json){
     a->message_count=0;DnxJson root=dj_root(json),e;const char *p=NULL;
     while(a->message_count<DNX2_MAX_MESSAGES&&dj_next(root,&p,&e)){
-        Dnx2Message m={0};DnxJson author=dj_field(e,"author");
+        Dnx2Message m={0};dj_get(e,"id",m.id,sizeof(m.id));DnxJson author=dj_field(e,"author");
         if(!dj_get(author,"global_name",m.author,sizeof(m.author))||!m.author[0])dj_get(author,"username",m.author,sizeof(m.author));
         if(!dj_get(e,"content",m.content,sizeof(m.content)))snprintf(m.content,sizeof(m.content),"[Message is too long to display]");
         if(!m.content[0])snprintf(m.content,sizeof(m.content),"[Attachment, embed or empty message]");

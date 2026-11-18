@@ -10,6 +10,9 @@
 #include "native_login.h"
 #include "session_store.h"
 #include "client_json.h"
+#include "chat_layout.h"
+#include <switch/applets/swkbd.h>
+#include <stdlib.h>
 #include "native_font.h"
 #include "brand_icon.h"
 #include <math.h>
@@ -39,20 +42,11 @@ static uint32_t *pixels;
 static int stride_pixels;
 static int text_right=1240;
 static char auth_notice[128];
-static int tab=0,sel=0,focus=0,channel_view=0,message_view=0;
+static int tab=0,sel=0,focus=0;
 static int message_expanded=0,message_offset=0;
 static char draft[513];
 const char *dnx2GraphicalDraft(void){return draft;}
 void dnx2GraphicalClearDraft(void){volatile char *p=draft;for(size_t i=0;i<sizeof(draft);i++)p[i]=0;}
-static int channel_at(int view,int row){
-    const Dnx2Account *p=dnx2Account();
-    for(int i=0;i<p->channel_count;i++){
-        int t=p->channels[i].type;
-        if(view==1||(view==2&&(t==0||t==5))||(view==3&&(t==2||t==13)))if(row--==0)return i;
-    }return -1;
-}
-static int channel_options(int view){int n=0;while(channel_at(view,n)>=0)n++;return n;}
-
 static void rect(int x,int y,int width,int height,uint32_t color) {
     if(!pixels||width<=0||height<=0)return;
     if(x<0){width+=x;x=0;}if(y<0){height+=y;y=0;}
@@ -144,80 +138,105 @@ static int qr_render_url(int x,int y,int area,const char *url) {
 static void text_wrap(int x,int y,const char *text,int lines,int columns){
     const char *p=text;
     for(int row=0;row<lines&&*p;row++){
-        char linebuf[512];size_t n=0;
-        for(int col=0;col<columns&&*p;col++){
-            const char *start=p;dnx_utf8_next(&p);size_t k=(size_t)(p-start);
-            if(n+k>=sizeof(linebuf))break;
-            memcpy(linebuf+n,start,k);n+=k;
-        }linebuf[n]=0;text_line(x,y+row*23,linebuf,C_WHITE,2,columns);
+        char linebuf[512];int bytes=dnx2FontFit(p,text_right-x,2,columns);
+        if(bytes<=0)break;
+        if(bytes>=(int)sizeof(linebuf))bytes=(int)sizeof(linebuf)-1;
+        memcpy(linebuf,p,(size_t)bytes);linebuf[bytes]=0;p+=bytes;
+        text_line(x,y+row*23,linebuf,C_WHITE,2,columns);
     }
 }
-static void draw(const char *feedback,int view,int selection,int content_focus,int qr_preview) {
-    (void)feedback;(void)qr_preview;
-    const Dnx2Account *p=dnx2Account();
-    const char *tabs[]={"Dashboard","Servers","Text chat","Voice chat"};
-    rect(0,0,W,H,C_BG);rounded(16,16,252,688,20,C_SIDEBAR);text_right=250;
-    brand(28,30);text_line(104,50,"DiscordNX2",C_WHITE,2,20);text_line(32,105,"Switch 2 Native",C_MUTED,2,24);
-    for(int t=0;t<4;t++){
-        int y=180+t*76;if(t==view)rounded(28,y,228,56,14,content_focus==0?C_CARD_HI:C_CARD);
-        if(t==view)rounded(28,y+14,4,28,2,C_PRIMARY);
-        text_line(48,y+17,tabs[t],t==view?C_WHITE:C_MUTED,3,24);
+static int server_cursor=-1,server_page=0,channel_cursor=0,channel_first=0;
+static int message_first=0,follow_latest=1;
+static int keyboard_failed;
+static char keyboard_notice[128];
+typedef struct {int held,start_x,start_y,last_y,moved;u64 sample;} TouchInput;
+static TouchInput touch_input;
+static void touch_init(void){
+    (void)hidSetTouchScreenOutputRanges(W,H);hidInitializeTouchScreen();memset(&touch_input,0,sizeof(touch_input));
+}
+/* Tap only on release; a drag scrolls, never activates a row or Send. */
+static int touch_event(int *x,int *y,int *scroll){
+    HidTouchScreenState state={0};*scroll=0;
+    if(!hidGetTouchScreenStates(&state,1)||state.sampling_number==touch_input.sample)return 0;
+    touch_input.sample=state.sampling_number;
+    if(state.count>0){
+        int tx=(int)state.touches[0].x,ty=(int)state.touches[0].y;
+        if(!touch_input.held){touch_input.held=1;touch_input.start_x=tx;touch_input.start_y=touch_input.last_y=ty;touch_input.moved=0;}
+        if(abs(tx-touch_input.start_x)>14||abs(ty-touch_input.start_y)>14)touch_input.moved=1;
+        if(touch_input.moved&&abs(ty-touch_input.last_y)>=40){*x=touch_input.start_x;*y=ty;*scroll=ty<touch_input.last_y?1:-1;touch_input.last_y=ty;return 2;}
+    }else if(touch_input.held){
+        touch_input.held=0;if(!touch_input.moved){*x=touch_input.start_x;*y=touch_input.start_y;return 1;}
     }
-    text_right=1240;text_line(312,48,tabs[view],C_WHITE,4,32);line(312,112,920,C_LINE);
-    if(view==0){
-        text_line(344,154,p->signed_in?p->display_name:"Welcome to DiscordNX2",C_WHITE,3,64);
-        item(312,220,920,96,p->signed_in?"Log out":"Log in with QR code",p->signed_in?"Forget this account and its saved login":"Scan and approve on your phone",content_focus==1&&selection==0);
-        item(312,338,920,96,p->signed_in?"Remember login with PIN":"Unlock saved login",p->signed_in?"Save encrypted access for future launches":dnx2SessionExists()?"Enter your PIN instead of scanning QR":"No saved login on this SD card",content_focus==1&&selection==1);
-        if(auth_notice[0])text_wrap(344,476,auth_notice,3,72);
-    }else if(!p->signed_in){text_line(344,200,"Log in from Dashboard to continue.",C_MUTED,2,64);
-    }else if(view==1&&!channel_view){
-        int start=(selection/7)*7;
-        if(!p->server_count)text_line(344,200,"This account has no servers.",C_MUTED,2,64);
-        for(int i=start;i<start+7&&i<p->server_count;i++){
-            int y=152+(i-start)*64;rounded(312,y,920,52,12,content_focus==1&&selection==i?C_CARD_HI:C_CARD);
-            text_line(344,y+16,p->servers[i].name,C_WHITE,2,70);
+    return 0;
+}
+static int selected_text(void){const Dnx2Account *a=dnx2Account();return a->signed_in&&a->selected_channel>=0&&(a->channels[a->selected_channel].type==0||a->channels[a->selected_channel].type==5);}
+static void draw(const char *feedback,int view,int selection,int content_focus,int qr_preview){
+    (void)feedback;(void)selection;(void)content_focus;(void)qr_preview;
+    const Dnx2Account *a=dnx2Account();int home=view==0;
+    rect(0,0,W,H,C_BG);rect(0,0,88,H,C_DARK);rect(88,0,268,H,C_SIDEBAR);
+    brand(12,10);text_right=82;
+    for(int row=0;row<8;row++){
+        int index=server_page*8+row;if(index>=a->server_count)break;int y=98+row*62;
+        int active=!home&&index==a->selected;
+        rounded(15,y,58,52,active?15:22,active?C_PRIMARY:C_CARD);
+        if(focus==0&&server_cursor==index)rounded(3,y+12,4,28,2,C_WHITE);
+        char label[16]={0};const char *p=a->servers[index].name;size_t n=0;
+        for(int i=0;i<2&&*p;i++){const char *start=p;dnx_utf8_next(&p);size_t k=(size_t)(p-start);if(n+k<sizeof(label)){memcpy(label+n,start,k);n+=k;}}
+        text_line(25,y+16,label,C_WHITE,2,2);
+    }
+    rounded(8,602,32,34,8,C_CARD);rounded(48,602,32,34,8,C_CARD);text_line(18,610,"<",C_WHITE,2,1);text_line(58,610,">",C_WHITE,2,1);
+    text_line(12,670,"Exit",C_MUTED,2,5);
+    text_right=344;
+    text_line(104,26,home?"DiscordNX2":a->server_count?a->servers[a->selected].name:"Select a server",C_WHITE,3,28);
+    line(88,76,268,C_LINE);
+    if(home){text_line(106,112,"Your Discord on Switch 2",C_MUTED,2,26);text_line(106,158,"Tap a server to browse.",C_MUTED,2,26);}
+    else for(int row=0;row<12;row++){
+        int index=channel_first+row;if(index>=a->channel_count)break;const Dnx2Channel *c=&a->channels[index];int y=100+44*row;
+        int active=index==a->selected_channel;
+        if(active||(focus==1&&channel_cursor==index))rounded(96,y,252,40,8,active?C_CARD_HI:C_CARD);
+        char label[440];snprintf(label,sizeof(label),"%s%s",c->type==4?"":c->type==2||c->type==13?"Voice  ":c->type==15||c->type==16?"Forum  ":"# ",c->name);
+        text_line(c->type==4?104:112,y+12,label,c->type==4?C_MUTED:C_WHITE,2,30);
+    }
+    rect(88,650,268,70,C_DARK);text_line(104,666,a->signed_in?a->display_name:"Signed out",C_WHITE,2,30);
+    text_line(104,693,"Home: account and saved login",C_MUTED,1,30);
+    text_right=1256;
+    if(home){
+        text_line(392,46,"Welcome to DiscordNX2",C_WHITE,4,64);
+        text_line(392,158,a->signed_in?a->display_name:"Sign in using Discord on your phone.",C_WHITE,3,70);
+        item(392,254,824,90,a->signed_in?"Log out":"Log in with QR code",a->signed_in?"Forget this account and saved login":"Approve your Switch login on your phone",focus==2&&sel==0);
+        item(392,366,824,90,a->signed_in?"Remember login with PIN":"Unlock saved login",a->signed_in?"Save encrypted access for future launches":"Enter your saved-login PIN",focus==2&&sel==1);
+        if(auth_notice[0])text_wrap(392,504,auth_notice,4,70);
+        return;
+    }
+    if(!a->signed_in){text_line(392,100,"Open Home to sign in.",C_MUTED,3,60);return;}
+    if(a->selected_channel<0){text_line(392,32,"Choose a channel",C_WHITE,3,60);text_wrap(392,158,a->notice[0]?a->notice:"Your channels are on the left. Tap a text channel to open the conversation.",4,70);return;}
+    const Dnx2Channel *c=&a->channels[a->selected_channel];char heading[440];snprintf(heading,sizeof(heading),"%s%s",selected_text()?"# ":"Voice  ",c->name);
+    text_line(380,26,heading,C_WHITE,3,72);line(356,76,924,C_LINE);
+    if(selected_text()){
+        text_line(380,80,dnx2LiveStatus(),C_MUTED,1,70);
+        if(message_expanded&&sel<a->message_count){
+            const Dnx2Message *m=&a->messages[sel];text_line(380,112,m->author,C_PRIMARY,2,72);
+            const char *text=m->content;for(int i=0;i<message_offset&&*text;i++)dnx_utf8_next(&text);
+            text_wrap(380,152,text,19,74);
+        }else for(int row=0;row<4;row++){
+            int index=message_first+row;if(index>=a->message_count)break;int y=100+row*122;
+            const Dnx2Message *m=&a->messages[index];
+            if(focus==2&&sel==index)rounded(366,y,900,116,8,C_CARD);
+            text_line(382,y+8,m->author,C_PRIMARY,2,72);text_wrap(382,y+36,m->content,3,74);
         }
-        text_line(312,620,p->order_synced?"Your Discord server order":"Discord order unavailable; showing API order",C_MUTED,2,80);
-    }else if(view==2&&message_view){
-        if(p->selected_channel>=0)text_line(312,134,p->channels[p->selected_channel].name,C_WHITE,3,64);
-        if(message_expanded&&selection<p->message_count){
-            const Dnx2Message *m=&p->messages[selection];text_line(332,182,m->author,C_MUTED,2,70);
-            const char *content=m->content;for(int i=0;i<message_offset&&*content;i++)dnx_utf8_next(&content);
-            text_wrap(332,226,content,16,66);
-            text_line(312,620,"Up/Down: Scroll    B: Message list",C_MUTED,2,80);
-        }else{
-            int start=(selection/4)*4;
-            for(int i=start;i<start+4&&i<p->message_count;i++){
-                int y=184+(i-start)*104;rounded(312,y,920,96,12,selection==i&&content_focus?C_CARD_HI:C_CARD);text_line(332,y+8,p->messages[i].author,C_MUTED,2,64);
-                text_wrap(332,y+34,p->messages[i].content,2,66);
-            }
-            if(!p->message_count&&!p->notice[0])text_line(344,220,"No messages returned for this channel.",C_MUTED,2,64);
-            text_line(312,620,"A: Read    X: Write    Y: Refresh    B: Channels",C_MUTED,2,80);
-        }
-    }else if(view==3&&message_view){
-        text_line(344,170,p->server_count?p->servers[p->selected].name:"No server selected",C_WHITE,3,64);
-        if(p->selected_channel>=0)text_line(344,224,p->channels[p->selected_channel].name,C_WHITE,3,64);
-        text_line(344,300,"Not connected",C_WARN,3,64);
-        text_wrap(344,350,"Voice calling is still being implemented. Selecting a channel does not join a call.",3,64);
-        text_line(344,480,"Members: unavailable until voice is connected",C_MUTED,2,72);
+        if(!a->message_count)text_line(392,158,"No messages in this channel yet.",C_MUTED,2,72);
+        rounded(372,626,768,58,12,focus==3?C_CARD_HI:C_CARD);
+        text_line(390,644,draft[0]?draft:"Message this channel...",draft[0]?C_WHITE:C_MUTED,2,70);
+        rounded(1150,626,112,58,12,draft[0]?C_PRIMARY:C_CARD);text_line(1170,644,"Send",draft[0]?C_WHITE:C_MUTED,2,8);
+        text_right=1060;
+        if(keyboard_notice[0])text_line(380,600,keyboard_notice,C_WARN,1,90);
+        else if(a->notice[0])text_line(380,600,a->notice,C_WARN,1,90);
+        text_right=1256;rounded(1080,590,180,30,8,C_CARD);text_line(1112,599,"QWERTY",C_MUTED,1,16);
+        text_line(380,697,"Tap to type    X: Keyboard    R: Send    Y: Refresh",C_MUTED,1,96);
     }else{
-        if(!p->server_count)text_line(344,200,"Select a server first.",C_MUTED,2,64);
-        else{
-            text_line(312,130,p->servers[p->selected].name,C_MUTED,2,70);
-            int count=channel_options(view),start=(selection/7)*7;
-            for(int i=start;i<start+7&&i<count;i++){
-                int idx=channel_at(view,i),y=170+(i-start)*61;const Dnx2Channel *c=&p->channels[idx];char label[460];
-                const char *prefix=c->type==4?"-- ":c->type==2||c->type==13?"Voice: ":c->type==15||c->type==16?"Forum: ":"# ";
-                snprintf(label,sizeof(label),"%s%s",prefix,c->name);
-                rounded(312,y,920,52,12,content_focus==1&&selection==i?C_CARD_HI:C_CARD);
-                text_line(334,y+16,label,c->type==4?C_MUTED:C_WHITE,2,70);
-            }
-            if(!count&&!p->notice[0])text_line(344,220,p->channels_loaded?"No channels of this type returned.":"Select a server to load its channels.",C_MUTED,2,72);
-            text_line(312,620,"Y: Refresh channels    B: Back",C_MUTED,2,72);
-        }
+        text_line(392,160,"Not connected",C_WARN,3,60);text_wrap(392,220,"Voice calls are still being implemented. Selecting this channel does not join a call.",4,72);
+        text_line(392,360,"Members unavailable until voice is connected.",C_MUTED,2,72);
     }
-    if(p->notice[0]&&view!=0)text_line(312,644,p->notice,C_WARN,2,90);
-    text_line(312,684,"B: Back    A: Select    +: Exit",C_MUTED,2,60);
 }
 static void draw_auth(const char *phase,const char *qr_url){
     text_right=1216;
@@ -249,155 +268,141 @@ static void draw_auth(const char *phase,const char *qr_url){
     for(size_t i=0;readable[i];i++)readable[i]=(char)tolower((unsigned char)readable[i]);
     readable[0]=(char)toupper((unsigned char)readable[0]);
     text_line(100,526,readable,C_GREEN,2,96);
-    text_line(64,650,"B: Cancel    +: Cancel",C_MUTED,2,60);
+    rounded(64,630,240,54,12,C_CARD);text_line(84,648,"Cancel",C_WHITE,2,60);
 }
-static int options_for(int view){
-    const Dnx2Account *p=dnx2Account();if(view==0)return 2;if(!p->signed_in)return 0;
-    if(view==1&&!channel_view)return p->server_count;
-    if(view==2&&message_view)return p->message_count;
-    if(view==3&&message_view)return 0;
-    return channel_options(view);
-}
-static int compose(Framebuffer *fb,PadState *pad){
-    static const char keys[]="abcdefghijklmnopqrstuvwxyz0123456789.,!?'-:;/@#&()_+=*\"";
-    int cell=0,upper=0,armed=0;size_t length=0;dnx2GraphicalClearDraft();
+static int fallback_keyboard(Framebuffer *fb,PadState *pad){
+    static const char *rows[]={"1234567890","qwertyuiop","asdfghjkl","zxcvbnm.,?","!@#&()-_:/"};
+    int row=1,column=0,upper=0,armed=0;
     for(;;){
-        u32 pitch=0;pixels=(uint32_t*)framebufferBegin(fb,&pitch);if(!pixels)return 0;stride_pixels=(int)(pitch/4);text_right=1200;
-        rect(0,0,W,H,C_BG);text_line(64,40,"Write a message",C_WHITE,4,64);text_wrap(64,108,draft,4,80);
-        for(int i=0;i<(int)strlen(keys);i++){
-            int x=64+(i%10)*108,y=236+(i/10)*54;rounded(x,y,94,46,10,cell==i?C_PRIMARY:C_CARD);
-            char c[2]={upper?(char)toupper((unsigned char)keys[i]):keys[i],0};text_line(x+34,y+10,c,C_WHITE,3,1);
+        u32 pitch=0;pixels=(uint32_t*)framebufferBegin(fb,&pitch);if(!pixels)return 0;stride_pixels=(int)(pitch/4);
+        draw(NULL,tab,sel,focus,0);rect(356,278,924,442,C_SIDEBAR);text_right=1260;
+        text_line(380,292,"Touch QWERTY",C_WHITE,3,60);text_line(380,334,draft[0]?draft:"Write your message",C_WHITE,2,80);
+        for(int r=0;r<5;r++)for(int c=0;c<(int)strlen(rows[r]);c++){
+            int x=380+c*86,y=382+r*47;rounded(x,y,78,41,8,r==row&&c==column?C_PRIMARY:C_CARD);
+            char text[2]={upper?(char)toupper((unsigned char)rows[r][c]):rows[r][c],0};text_line(x+28,y+11,text,C_WHITE,2,1);
         }
-        text_line(64,604,"A: Add    X: Space    Y: Shift    L: Delete",C_MUTED,2,90);
-        text_line(64,648,"R: Send message    B: Cancel",C_WHITE,2,80);
-        framebufferEnd(fb);pixels=NULL;padUpdate(pad);u64 down=padGetButtonsDown(pad);
-        if(!armed){if(!padGetButtons(pad))armed=1;svcSleepThread(16000000LL);continue;}
-        if(down&(HidNpadButton_B|HidNpadButton_Plus)){dnx2GraphicalClearDraft();return 0;}
-        if(down&HidNpadButton_AnyLeft)cell=(cell+(int)strlen(keys)-1)%(int)strlen(keys);
-        if(down&HidNpadButton_AnyRight)cell=(cell+1)%(int)strlen(keys);
-        if(down&HidNpadButton_AnyUp)cell=(cell+(int)strlen(keys)-10)%(int)strlen(keys);
-        if(down&HidNpadButton_AnyDown)cell=(cell+10)%(int)strlen(keys);
+        const char *labels[]={"Shift","Space","Delete","Done"};
+        for(int c=0;c<4;c++){rounded(380+c*214,626,202,44,8,C_CARD);text_line(398+c*214,640,labels[c],C_WHITE,2,12);}
+        text_line(380,690,"A: Add    X: Space    Y: Shift    L: Delete    R: Done    B: Back",C_MUTED,1,110);
+        framebufferEnd(fb);pixels=NULL;padUpdate(pad);u64 down=padGetButtonsDown(pad);int x=0,y=0,scroll=0,tap=touch_event(&x,&y,&scroll);
+        if(!armed){if(!padGetButtons(pad)&&!touch_input.held)armed=1;svcSleepThread(16000000LL);continue;}
+        if(down&(HidNpadButton_B|HidNpadButton_Plus))return 0;
+        if(down&HidNpadButton_AnyLeft)column=(column+(int)strlen(rows[row])-1)%(int)strlen(rows[row]);
+        if(down&HidNpadButton_AnyRight)column=(column+1)%(int)strlen(rows[row]);
+        if(down&HidNpadButton_AnyUp)row=(row+4)%5;
+        if(down&HidNpadButton_AnyDown)row=(row+1)%5;
+        if(column>=(int)strlen(rows[row]))column=(int)strlen(rows[row])-1;
+        int add=!!(down&HidNpadButton_A),space=!!(down&HidNpadButton_X),del=!!(down&HidNpadButton_L),done=!!(down&HidNpadButton_R);
         if(down&HidNpadButton_Y)upper=!upper;
-        if((down&HidNpadButton_L)&&length)draft[--length]=0;
-        if(length<512&&(down&(HidNpadButton_A|HidNpadButton_X))){draft[length++]=(down&HidNpadButton_X)?' ':upper?(char)toupper((unsigned char)keys[cell]):keys[cell];draft[length]=0;}
-        if((down&HidNpadButton_R)&&length)return 1;
+        if(tap==1&&x>=380&&x<1240){
+            if(y>=382&&y<617){int r=(y-382)/47,c=(x-380)/86;if(r<5&&c<(int)strlen(rows[r])){row=r;column=c;add=1;}}
+            else if(y>=626&&y<670){int key=(x-380)/214;if(key==0)upper=!upper;else if(key==1)space=1;else if(key==2)del=1;else if(key==3)done=1;}
+        }
+        size_t n=strlen(draft);
+        if(del&&n){do{n--;}while(n&&((unsigned char)draft[n]&0xc0)==0x80);draft[n]=0;}
+        if((add||space)&&n<512){draft[n++]=space?' ':upper?(char)toupper((unsigned char)rows[row][column]):rows[row][column];draft[n]=0;}
+        if(done)return 1;
         svcSleepThread(16000000LL);
     }
 }
-int dnx2GraphicalMenu(void) {
-    Result rc=hidInitialize();
-    if(R_FAILED(rc))return -1;
-    padConfigureInput(1,HidNpadStyleSet_NpadStandard);
-    Framebuffer fb={0};
-    rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
-    if(R_FAILED(rc)){hidExit();return -1;}
-    rc=framebufferMakeLinear(&fb);
-    if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
-    PadState pad={0};padInitializeDefault(&pad);
-    int action=0;
-    if(sel>=options_for(tab))sel=0;
-    /* persistent menu state across network actions */
-    /* 0 = left sidebar; 1 = right content */
-    char status[128]="SELECT AN OPTION";
-    int analog_prior=0; /* analog stick edges; no auto-repeating tabs */
-    int dirty=1;
-    while(1) {
-        if(dirty) {
-            u32 stride=0;
-            pixels=(uint32_t*)framebufferBegin(&fb,&stride);
-            if(!pixels) {action=-1;break;}
-            stride_pixels=(int)(stride/4);
-            draw(status,tab,sel,focus,0);
-            framebufferEnd(&fb);
-            pixels=NULL;dirty=0;
-        }
-        padUpdate(&pad);
-        u64 down=padGetButtonsDown(&pad);
-        HidAnalogStickState stick=padGetStickPos(&pad,0);
-        /* Distinct stick threshold crossings, alongside D-pad edges. */
-        int analog=0;
-        if(stick.x<-16000)analog=1;
-        else if(stick.x>16000)analog=2;
-        else if(stick.y>16000)analog=3;
-        else if(stick.y<-16000)analog=4;
-        if(analog && analog!=analog_prior) {
-            if(analog==1)down|=HidNpadButton_Left;
-            if(analog==2)down|=HidNpadButton_Right;
-            if(analog==3)down|=HidNpadButton_Up;
-            if(analog==4)down|=HidNpadButton_Down;
-        }
-        analog_prior=analog;
-        if(down & HidNpadButton_Plus)break;
-        /* Deliberate test shortcut; no diagnostic tab or automatic login probes. */
-        if(tab==0 && (down&HidNpadButton_Y) && (padGetButtons(&pad)&HidNpadButton_R)) {
-            action=8;break;
-        }
-        if(tab==0 && (down&HidNpadButton_X) && (padGetButtons(&pad)&HidNpadButton_R)) {
-            action=7;break;
-        }
-        if(down & HidNpadButton_B) {
-            if(message_expanded){message_expanded=0;message_offset=0;}
-            else if(focus==1&&message_view){message_view=0;sel=0;}
-            else if(focus==1&&tab==1&&channel_view){channel_view=0;sel=dnx2Account()->selected;}
-            else focus=0;
-            dirty=1;
-        }
-        else if(down & HidNpadButton_AnyLeft) {
-            if(focus==1) {focus=0;dirty=1;}
-        } else if(down & HidNpadButton_AnyRight) {
-            if(focus==0 && options_for(tab)>0) {focus=1;sel=0;dirty=1;}
-            /* Channel filters use the currently selected server. */
-        }
-        int n=focus==0?4:options_for(tab);
-        if(message_expanded&&focus==1){
-            if(down&HidNpadButton_AnyUp){message_offset=message_offset>330?message_offset-330:0;dirty=1;}
-            if(down&HidNpadButton_AnyDown){
-                const char *q=dnx2Account()->messages[sel].content;int chars=0;while(*q){dnx_utf8_next(&q);chars++;}
-                if(message_offset+330<chars)message_offset+=330;
+static void scroll_messages(int delta){
+    const Dnx2Account *a=dnx2Account();int max=a->message_count>4?a->message_count-4:0;
+    if(message_expanded){message_offset+=delta*296;if(message_offset<0)message_offset=0;
+        const char *p=a->messages[sel].content;int count=0;while(*p){dnx_utf8_next(&p);count++;}if(message_offset>=count)message_offset=count>296?count-296:0;return;}
+    message_first+=delta;if(message_first<0)message_first=0;if(message_first>max)message_first=max;follow_latest=message_first==max;sel=message_first;
+}
+static int open_channel(int index){
+    const Dnx2Account *a=dnx2Account();if(index<0||index>=a->channel_count)return 0;
+    int type=a->channels[index].type;if(type==4)return 0;
+    if(type!=0&&type!=5&&type!=2&&type!=13){snprintf(keyboard_notice,sizeof(keyboard_notice),"Forum threads are not available yet.");return 0;}
+    if(index!=a->selected_channel)dnx2GraphicalClearDraft();
+    dnx2LiveStop();dnx2ChannelSelect(index);channel_cursor=index;tab=(type==0||type==5)?2:3;focus=2;message_expanded=0;message_offset=0;follow_latest=1;sel=0;keyboard_notice[0]=0;
+    return tab==2?10:0;
+}
+int dnx2GraphicalMenu(void){
+    Result rc=hidInitialize();if(R_FAILED(rc))return -1;padConfigureInput(1,HidNpadStyleSet_NpadStandard);touch_init();
+    Framebuffer fb={0};rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
+    if(R_FAILED(rc)){hidExit();return -1;}rc=framebufferMakeLinear(&fb);if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
+    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";
+    if(!dnx2Account()->signed_in)tab=0;
+    if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=dnx2Account()->message_count>4?dnx2Account()->message_count-4:0;}
+    while(1){
+        const Dnx2Account *a=dnx2Account();
+        if(tab==2&&selected_text()){
+            char anchor[24]={0};if(message_first<a->message_count)snprintf(anchor,sizeof(anchor),"%s",a->messages[message_first].id);
+            if(!message_expanded&&dnx2LiveApply()){
+                if(follow_latest)message_first=a->message_count>4?a->message_count-4:0;
+                else for(int i=0;i<a->message_count;i++)if(anchor[0]&&!strcmp(a->messages[i].id,anchor)){message_first=i;break;}
+                if(message_first>=a->message_count)message_first=a->message_count>4?a->message_count-4:0;
+                if(sel>=a->message_count)sel=a->message_count?a->message_count-1:0;
                 dirty=1;
             }
+            const char *state=dnx2LiveStatus();if(state!=last_live){last_live=state;dirty=1;}
         }
-        if(!(message_expanded&&focus==1)&&n>0&&(down & HidNpadButton_AnyUp)) {
-            if(focus==0){tab=(tab+n-1)%n;sel=0;message_view=message_expanded=0;}
-            else sel=(sel+n-1)%n;
+        if(dirty){u32 stride=0;pixels=(uint32_t*)framebufferBegin(&fb,&stride);if(!pixels){action=-1;break;}stride_pixels=(int)(stride/4);draw(NULL,tab,sel,focus,0);framebufferEnd(&fb);pixels=NULL;dirty=0;}
+        padUpdate(&pad);u64 down=padGetButtonsDown(&pad);HidAnalogStickState stick=padGetStickPos(&pad,0);
+        int analog=stick.x<-16000?1:stick.x>16000?2:stick.y>16000?3:stick.y<-16000?4:0;
+        if(analog&&analog!=analog_prior)down|=analog==1?HidNpadButton_Left:analog==2?HidNpadButton_Right:analog==3?HidNpadButton_Up:HidNpadButton_Down;
+        analog_prior=analog;
+        int x=0,y=0,scroll=0,touch=touch_event(&x,&y,&scroll);
+        if(!input_armed){if(!padGetButtons(&pad)&&!touch_input.held)input_armed=1;down=0;touch=0;}
+        if(down&HidNpadButton_Plus)break;
+        if(tab==0&&(padGetButtons(&pad)&HidNpadButton_R)&&(down&HidNpadButton_X)){action=7;break;}
+        if(tab==0&&(padGetButtons(&pad)&HidNpadButton_R)&&(down&HidNpadButton_Y)){action=8;break;}
+        int choose_server=-2,choose_channel=-1,keyboard=0,send=0,account_action=-1;
+        if(touch==2){
+            if(x<88){server_page+=scroll;if(server_page<0)server_page=0;int max=(a->server_count-1)/8;if(server_page>max)server_page=max;}
+            else if(x<356){channel_first+=scroll;if(channel_first<0)channel_first=0;int max=a->channel_count>12?a->channel_count-12:0;if(channel_first>max)channel_first=max;}
+            else if(selected_text())scroll_messages(scroll);
             dirty=1;
         }
-        if(!(message_expanded&&focus==1)&&n>0&&(down & HidNpadButton_AnyDown)) {
-            if(focus==0){tab=(tab+1)%n;sel=0;message_view=message_expanded=0;}
-            else sel=(sel+1)%n;
+        if(touch==1){DnxHit hit=dnx_chat_hit(x,y,server_page,channel_first,message_first,tab==0,selected_text());
+            if(hit.kind==DNX_HOME){dnx2LiveStop();tab=0;focus=2;sel=0;dirty=1;}
+            else if(hit.kind==DNX_SERVER)choose_server=hit.index;
+            else if(hit.kind==DNX_CHANNEL){choose_channel=hit.index;focus=1;}
+            else if(hit.kind==DNX_INPUT)keyboard=1;
+            else if(hit.kind==DNX_FALLBACK)keyboard=2;
+            else if(hit.kind==DNX_SEND)send=1;
+            else if(hit.kind==DNX_MESSAGE&&hit.index<a->message_count){if(!message_expanded)sel=hit.index;message_expanded=!message_expanded;message_offset=0;focus=2;dirty=1;}
+            else if(hit.kind==DNX_PREVIOUS||hit.kind==DNX_NEXT){server_page+=hit.kind==DNX_NEXT?1:-1;if(server_page<0)server_page=0;int max=(a->server_count-1)/8;if(server_page>max)server_page=max;dirty=1;}
+            else if(hit.kind==DNX_LOGIN)account_action=0;
+            else if(hit.kind==DNX_REMEMBER)account_action=1;
+            else if(hit.kind==DNX_EXIT)break;
+        }
+        if(down&HidNpadButton_B){if(message_expanded){message_expanded=0;message_offset=0;}else if(focus>0)focus--;else{dnx2LiveStop();tab=0;}dirty=1;}
+        if(down&HidNpadButton_AnyLeft){if(focus>0)focus--;dirty=1;}
+        if(down&HidNpadButton_AnyRight){if(focus<3)focus++;dirty=1;}
+        int delta=(down&HidNpadButton_AnyUp)?-1:(down&HidNpadButton_AnyDown)?1:0;
+        if(delta){
+            if(focus==0){server_cursor+=delta;if(server_cursor<-1)server_cursor=a->server_count-1;if(server_cursor>=a->server_count)server_cursor=-1;if(server_cursor>=0)server_page=server_cursor/8;}
+            else if(tab==0){sel=(sel+1)%2;}
+            else if(focus==1){channel_cursor+=delta;if(channel_cursor<0)channel_cursor=0;if(channel_cursor>=a->channel_count)channel_cursor=a->channel_count?a->channel_count-1:0;if(channel_cursor<channel_first)channel_first=channel_cursor;if(channel_cursor>=channel_first+12)channel_first=channel_cursor-11;}
+            else if(selected_text())scroll_messages(delta);
             dirty=1;
         }
-        if(down & HidNpadButton_A) {
-            if(focus==0) {
-                if(options_for(tab)>0){focus=1;sel=0;dirty=1;}
-            } else if(tab==0) {
-                if(sel==1){action=dnx2Account()->signed_in?12:13;break;}
-                if(dnx2Account()->signed_in){dnx2AccountLogout();dnx2GraphicalClearDraft();channel_view=message_view=message_expanded=0;sel=0;dirty=1;}
-                else {action=6;break;}
-            } else if(tab==1&&!channel_view) {
-                if(sel<dnx2Account()->server_count){dnx2AccountSelect(sel);channel_view=1;sel=0;action=9;break;}
-            } else if(tab==2&&message_view){
-                message_expanded=1;message_offset=0;dirty=1;
-            } else if(!message_view) {
-                int i=channel_at(tab,sel);
-                if(i>=0){int type=dnx2Account()->channels[i].type;
-                    if(type==0||type==5){dnx2ChannelSelect(i);tab=2;message_view=1;sel=0;action=10;break;}
-                    if(type==2||type==13){dnx2ChannelSelect(i);tab=3;message_view=1;sel=0;dirty=1;}
-                }
-            }
+        if(down&HidNpadButton_A){
+            if(focus==0){if(server_cursor<0){dnx2LiveStop();tab=0;focus=2;sel=0;dirty=1;}else choose_server=server_cursor;}
+            else if(tab==0)account_action=sel;
+            else if(focus==1)choose_channel=channel_cursor;
+            else if(focus==3)keyboard=1;
+            else if(selected_text()&&a->message_count){sel=message_first;message_expanded=!message_expanded;message_offset=0;dirty=1;}
         }
-        if((down&HidNpadButton_Y)&&focus==1&&dnx2Account()->signed_in){
-            if(tab==2&&message_view){message_expanded=0;action=10;break;}
-            if(channel_view||tab>=2){action=9;message_view=0;sel=0;break;}
+        if(account_action>=0){dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}
+            if(a->signed_in){dnx2AccountLogout();dnx2GraphicalClearDraft();tab=0;focus=2;dirty=1;}else{action=6;break;}}
+        if(choose_server>=0&&choose_server<a->server_count){dnx2LiveStop();dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;message_expanded=0;action=9;break;}
+        if(choose_channel>=0){int next=open_channel(choose_channel);dirty=1;if(next){action=next;break;}}
+        if((down&HidNpadButton_X)&&tab!=0&&selected_text())keyboard=1;
+        if((down&HidNpadButton_R)&&tab!=0&&selected_text())send=1;
+        if((down&HidNpadButton_Y)&&tab!=0){action=selected_text()?10:9;break;}
+        if(keyboard&&selected_text()){
+            dnx2LiveStop();focus=3;
+            if(keyboard==2||keyboard_failed){fallback_keyboard(&fb,&pad);dirty=1;dnx2LiveStart();}
+            else{action=14;break;}
         }
-        if((down&HidNpadButton_X)&&focus==1&&tab==2&&message_view){
-            if(compose(&fb,&pad)){action=11;break;}dirty=1;
-        }
+        if(send&&selected_text()&&draft[0]){action=11;break;}
         svcSleepThread(16000000LL);
     }
-    framebufferClose(&fb);
-    hidExit();
-    return action;
+    dnx2LiveStop();framebufferClose(&fb);hidExit();return action;
 }
 
 /* Dedicated auth framebuffer. The normal menu releases its framebuffer before
@@ -413,7 +418,7 @@ void dnx2GraphicalAuthBegin(void) {
     if(R_SUCCEEDED(rc)){
         auth_hid_ready=1;
         padConfigureInput(1,HidNpadStyleSet_NpadStandard);
-        padInitializeDefault(&auth_pad);
+        padInitializeDefault(&auth_pad);touch_init();
     }
     rc=framebufferCreate(&auth_fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
     if(R_SUCCEEDED(rc)){
@@ -426,7 +431,8 @@ int dnx2GraphicalAuthCancel(void) {
     if(!auth_hid_ready)return 0;
     padUpdate(&auth_pad);
     u64 buttons=padGetButtonsDown(&auth_pad);
-    return !!(buttons&(HidNpadButton_B|HidNpadButton_Plus));
+    int x=0,y=0,scroll=0;int tap=touch_event(&x,&y,&scroll);
+    return !!(buttons&(HidNpadButton_B|HidNpadButton_Plus))||(tap==1&&y>=620);
 }
 void dnx2GraphicalAuthStatus(const char *phase,const char *qr_url) {
     snprintf(auth_notice,sizeof(auth_notice),"%s",phase?phase:"");
@@ -512,10 +518,17 @@ int dnx2GraphicalPin(const char *title,char pin[9]) {
             int x=120+i*130;rounded(x,290,102,100,16,i==digit?C_PRIMARY:C_CARD);
             char shown[2]={i==digit?pin[i]:'*',0};text_line(x+40,326,shown,C_WHITE,4,1);
         }
+        const char *buttons[]={"Up","Down","Next / Finish","Cancel"};
+        for(int i=0;i<4;i++){rounded(64+i*290,430,270,48,10,C_CARD);text_line(84+i*290,446,buttons[i],C_WHITE,2,24);}
         text_line(64,500,"Up/Down: Change digit    Left/Right: Move    A: Next / Finish",C_MUTED,2,100);
         text_line(64,554,"B / +: Cancel",C_WHITE,2,64);
         framebufferEnd(&auth_fb);pixels=NULL;padUpdate(&auth_pad);
         u64 down=padGetButtonsDown(&auth_pad);
+        int tx=0,ty=0,scroll=0;int tap=touch_event(&tx,&ty,&scroll);
+        if(tap==1){
+            if(ty>=290&&ty<390&&tx>=120&&tx<1160){digit=(tx-120)/130;if(digit>7)digit=7;}
+            if(ty>=430&&ty<478&&tx>=64){int button=(tx-64)/290;down|=button==0?HidNpadButton_Up:button==1?HidNpadButton_Down:button==2?HidNpadButton_A:HidNpadButton_B;}
+        }
         if(!armed){if(!padGetButtons(&auth_pad))armed=1;svcSleepThread(16000000LL);continue;}
         if(down&(HidNpadButton_B|HidNpadButton_Plus))break;
         if(down&HidNpadButton_AnyUp)pin[digit]=(char)('0'+(pin[digit]-'0'+1)%10);
@@ -527,4 +540,29 @@ int dnx2GraphicalPin(const char *title,char pin[9]) {
     }
 done:
     dnx2GraphicalAuthEnd();if(!ok)memset(pin,0,9);return ok;
+}
+
+int dnx2GraphicalNativeKeyboard(unsigned *result){
+    /* The normal menu closes its framebuffer and message worker first. */
+    if(result)*result=0;
+    Result rc=appletInitialize();if(R_FAILED(rc)){keyboard_failed=1;if(result)*result=rc;snprintf(keyboard_notice,sizeof(keyboard_notice),"System keyboard unavailable. Tap the input for touch QWERTY.");return -1;}
+    SwkbdConfig config;rc=swkbdCreate(&config,0);int created=R_SUCCEEDED(rc),ok=0;
+    char text[sizeof(draft)]={0};
+    if(created){
+        swkbdConfigMakePresetDefault(&config);swkbdConfigSetType(&config,SwkbdType_QWERTY);
+        swkbdConfigSetHeaderText(&config,"DiscordNX2 message");swkbdConfigSetGuideText(&config,"Write a message");
+        swkbdConfigSetOkButtonText(&config,"Done");swkbdConfigSetStringLenMax(&config,128);swkbdConfigSetStringLenMin(&config,0);
+        swkbdConfigSetInitialText(&config,draft);rc=swkbdShow(&config,text,sizeof(text));
+        if(R_SUCCEEDED(rc)){snprintf(draft,sizeof(draft),"%s",text);ok=1;keyboard_failed=0;keyboard_notice[0]=0;}
+        swkbdClose(&config);
+    }
+    appletExit();volatile char *p=text;for(size_t i=0;i<sizeof(text);i++)p[i]=0;
+    if(R_FAILED(rc)){
+        /* libnx/libounce return BadAppletExit for Cancel as well as an applet
+         * that failed to show. Keep the existing draft; never auto-send. */
+        keyboard_failed=rc!=MAKERESULT(Module_Libnx,LibnxError_LibAppletBadExit);
+        snprintf(keyboard_notice,sizeof(keyboard_notice),"Keyboard closed. Tap QWERTY if the system keyboard is unavailable.");
+    }
+    if(result)*result=rc;
+    return ok?1:R_FAILED(rc)?-1:0;
 }

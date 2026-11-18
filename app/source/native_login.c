@@ -9,6 +9,7 @@
 #include "session_store.h"
 #include "auth_crypto.h"
 #include "captcha.h"
+#define DNX2_WS_MAX (1024*1024)
 #include "native_ws.h"
 #include <switch.h>
 #include <switch/services/bsd.h>
@@ -58,7 +59,7 @@ const Dnx2Account *dnx2Account(void){return &account;}
 void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
 void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;}}
 static void wipe(void *p,size_t n){volatile unsigned char *c=(volatile unsigned char*)p;while(n--)*c++=0;}
-void dnx2AccountClearMemory(void){wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
+void dnx2AccountClearMemory(void){dnx2LiveReset();wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
 void dnx2AccountLogout(void){dnx2AccountClearMemory();dnx2SessionForget();}
 
 #ifdef DNX2_USE_MBEDTLS
@@ -154,18 +155,18 @@ static int b64(const unsigned char *in,size_t n,char *out,size_t cap){
     size_t result=0;
     return mbedtls_base64_encode((unsigned char*)out,cap,&result,in,n)==0;
 }
-static int ws_connect(TlsSession *s){
+static int ws_connect_to(TlsSession *s,const char *host,const char *path){
     unsigned char rnd[16];
     if(!random_bytes(rnd,sizeof(rnd)))return 0;
     char key[32]={0};
     if(!b64(rnd,sizeof(rnd),key,sizeof(key)))return 0;
     char req[700];
     int len=snprintf(req,sizeof(req),
-        "GET /?v=2 HTTP/1.1\r\nHost: " REMOTE_HOST "\r\n"
+        "GET %s HTTP/1.1\r\nHost: %s\r\n"
         "Upgrade: websocket\r\nConnection: Upgrade\r\n"
         "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n"
         "Origin: https://discord.com\r\n"
-        "User-Agent: DiscordNX2-native/0.22\r\n\r\n",key);
+        "User-Agent: DiscordNX2-native/0.39\r\n\r\n",path,host,key);
     if(len<=0||(size_t)len>=sizeof(req)||!tls_send(s,req,(size_t)len))return 0;
     unsigned char hdr[4096]={0};
     size_t length=0,where=0;
@@ -211,6 +212,7 @@ static int ws_connect(TlsSession *s){
     wipe(hdr,sizeof(hdr));wipe(concat,sizeof(concat));
     return 1;
 }
+static int ws_connect(TlsSession *s){return ws_connect_to(s,REMOTE_HOST,"/?v=2");}
 static int ws_send(TlsSession *s,unsigned opcode,const char *data,size_t len){
     if(len>4096)return 0;
     unsigned char header[8],mask[4];
@@ -439,6 +441,7 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
     else status("Saved login restored",NULL);
     return ok;
 }
+#include "live_gateway.inc"
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
     dnx2AccountLogout();
@@ -632,6 +635,11 @@ fail:
     return 0;
 }
 #else
+void dnx2LiveStart(void){}
+void dnx2LiveStop(void){}
+void dnx2LiveReset(void){}
+int dnx2LiveApply(void){return 0;}
+const char *dnx2LiveStatus(void){return "Updates unavailable";}
 int dnx2LoadChannels(Dnx2AuthStatus s,Dnx2AuthCancel c){(void)s;(void)c;return 0;}
 int dnx2LoadMessages(Dnx2AuthStatus s,Dnx2AuthCancel c){(void)s;(void)c;return 0;}
 int dnx2SendMessage(const char *t,Dnx2AuthStatus s,Dnx2AuthCancel c){(void)t;(void)s;(void)c;return 0;}

@@ -1,21 +1,21 @@
 # DiscordNX2
 
-> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. New channel browsing, text chat and saved-login changes still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
+> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch, native keyboard compatibility and live message updates still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.38 source adds channel navigation, basic text chat and optional PIN-protected saved login to the working QR/CAPTCHA account connection. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.39 source adds a Discord-style server rail, channel sidebar, conversation pane, touch controls, native keyboard integration and live message updates to the QR/CAPTCHA account connection and PIN-protected saved login. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
 | Area | Current status |
 | --- | --- |
-| Interface | Dashboard, Servers, Text chat and Voice chat menus with controller navigation, rounded panels and custom branding. |
+| Interface | Server rail, category/channel sidebar, conversation view with a tappable message input, and Home for account settings. Touch and controller navigation; rounded panels and custom branding. |
 | Native QR login | User confirmed successful account connection after the project-hosted phone CAPTCHA handoff in v0.37. |
 | Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. User confirmed account connection; individual future attempts may still be rejected or expire. |
 | Servers | Loads up to 200 real servers. Reads Discord folder/order settings and flattens folders in order; falls back to API order if unavailable. |
-| Channels / text | Server selection loads categories and channels. Text/announcement channels support reading the latest 30 messages, manual refresh and a controller composer. New in v0.38; needs hardware testing. |
+| Channels / text | Text/announcement channels show the latest 30 messages. A foreground Gateway worker listens for message events and refreshes affected history; five-second automatic polling is the fallback. Tap input to request the native software keyboard; touch QWERTY fallback is available. |
 | Voice chat | Voice/stage channels can be selected, but joining calls, live members and sending/receiving Discord voice remain unfinished. |
 | Saved login | Optional eight-digit PIN encrypts credentials on SD. Enter PIN on future launches instead of scanning QR; expiry/revocation may require login again. New in v0.38. |
-| Special characters | UTF-8 and JSON Unicode escapes are decoded; shared console fonts provide glyph fallback. Missing glyphs appear as boxes. Full emoji/shaping support is not included. |
+| Special characters | Embedded OFL Noto Sans, Math, Symbols 2 and monochrome Emoji supplement console fonts, including styled mathematical letters. Missing glyphs can still appear as boxes; complex shaping and combined/color emoji are incomplete. |
 | Audio and networking | Microphone capture/playback and separate transport/Gateway tests have passed hardware tests. These are not a working Discord call. |
 | C button | Not available through the tested controller APIs; no C-button push-to-talk or GameChat replacement. |
 | On-console browser | System browser attempts showed "This feature is unavailable". A compatible embedded browser is not included. |
@@ -60,7 +60,7 @@ All NRO compilation happens on your PC. No Docker or cloud NRO build is used. Or
 
 ## Test QR login and CAPTCHA
 
-1. Open **Dashboard**. Press Right to focus its content, highlight **Log in with QR code**, and press **A**.
+1. Open **Home**. Press Right to focus its content, highlight **Log in with QR code**, and press **A**.
 2. Scan the first QR using **Discord's own mobile QR scanner** and approve your own Switch login. Keep DiscordNX2 open.
 3. If Discord requests CAPTCHA, the Switch displays a **second QR**. Scan this one with your phone camera/browser, rather than Discord's scanner.
 4. Confirm the phone and Switch are on the **same Wi-Fi**. Keep the Switch on its verification screen.
@@ -73,39 +73,48 @@ No Discord developer application, manually copied account token, PC companion or
 
 ## Remember login across launches
 
-1. After signing in, return to **Dashboard** and choose **Remember login with PIN**.
+1. After signing in, return to **Home** and choose **Remember login with PIN**.
 2. Choose an **eight-digit PIN**, then enter it again to confirm. Up/Down changes a digit, Left/Right moves between digits, and A advances/finishes. B or Plus cancels.
-3. Check that Dashboard says the login was saved. Close the app and reopen it.
+3. Check that Home says the login was saved. Close the app and reopen it.
 4. Enter the PIN when prompted. DiscordNX2 decrypts the saved token and validates it by loading your account and servers. A successful restore needs no QR or CAPTCHA.
-5. B skips startup unlock. **Unlock saved login** on Dashboard lets you retry later.
+5. B skips startup unlock. **Unlock saved login** on Home lets you retry later.
 
 The encrypted file is `/switch/DiscordNX2/session.bin` on the SD card. Its key is derived from your PIN with PBKDF2-HMAC-SHA256 (100,000 iterations); the credential uses AES-256-GCM with a random salt/IV. No decryption key or PIN is stored alongside it. This is PIN protection, not a console hardware keystore; someone with a copy of the SD file can try PIN guesses offline. Keep the file private and avoid an easily guessed PIN.
 
-Wrong PINs and temporary network failures preserve the saved file for retry. A confirmed expired/revoked credential requires a new login. **Log out** clears the account and deletes the saved file. If you forget the PIN, use QR login again or delete this file. The PIN is local to DiscordNX2 and is not your Discord password. The first v0.38 login still requires QR because earlier builds never saved their token.
+Wrong PINs and temporary network failures preserve the saved file for retry. A confirmed expired/revoked credential requires a new login. **Log out** clears the account and deletes the saved file. If you forget the PIN, use QR login again or delete this file. The PIN is local to DiscordNX2 and is not your Discord password. Existing v0.38 saved logins keep the same file format and PIN. Builds older than v0.38 never saved their token, so those users must log in once before choosing Remember login.
 
 ## Browse channels and use text chat
 
-1. Open **Servers**, select a server and press **A**. Its actual category/channel list replaces the server list. **B** returns to servers; **Y** reloads channels.
-2. Select a `#` text or announcement channel. **Text chat** opens the latest 30 messages, ordered oldest to newest within that window. Up/Down changes the selection/page; A opens the selected message and Up/Down scrolls it. B returns to the message list, then channels.
-3. **Y** refreshes messages. There is no live Gateway message subscription or older-history pagination in this build.
-4. **X** opens the native controller keyboard: D-pad chooses a character, A adds it, X adds a space, Y changes case, L deletes, **R sends**, and B cancels. Review the draft before pressing R. The initial composer supports ASCII and up to 512 characters; incoming messages retain Unicode. Automatic mention parsing is disabled.
-5. Text/Voice sidebar tabs filter channels in the selected server. Voice/stage selection shows the selected channel and an explicit disconnected state. **It does not join a voice call.**
+The interface has three areas: a narrow **server rail** on the left, the selected server's **channel sidebar** in the middle, and the **conversation** on the right. Tap the app icon at the top left for Home and saved-login/logout settings.
 
-Categories are headings. Forums/media channels are listed but do not yet open threads. Attachments/embeds, rich formatting, message editing/deletion, DMs and live voice members are not implemented. If Discord denies access or rate limits a request, the app shows that result; it does not bypass permissions. An unconfirmed send is not retried automatically: refresh before choosing to send again.
+1. Tap a server icon, or focus the rail with Left, choose a server with Up/Down and press A. Server icons are initials, not downloaded avatars. Swipe the rail or use its arrow buttons for more servers.
+2. Tap a text/announcement channel in the channel sidebar. Swipe the sidebar to scroll categories and channels. With a controller, move Right to channels, choose a row and press A.
+3. New messages update automatically while the conversation is open. **Live updates** means Gateway Ready/Resume succeeded; message-create/update/delete events trigger history refresh. **Auto refresh (5 s)** means Gateway was unavailable and REST polling is active. A slow connection, rate limit or access failure can delay updates. A periodic resync also catches missed events. This is foreground-only, not a background plugin feature.
+4. Swipe the conversation or use Up/Down to read recent messages. New messages follow the bottom only if you were already at the bottom; older reading keeps an ID anchor where possible. Tap a message, or press A in the conversation, for expanded reading. B closes expanded reading; live snapshots wait until you return so the message does not change underneath you.
+5. Tap the **message box** at the bottom, or press X, to request the Switch software keyboard. Finishing the keyboard changes the draft only. **Tap Send or press R** to send it. Incoming updates do not send, clear or overwrite your draft. A failed/unconfirmed send preserves it; refresh/check before manually retrying.
+6. The native keyboard depends on system applet access in your homebrew environment. Its compatibility with this setup remains unverified. If it is unavailable, tap the **QWERTY** button above the input for an embedded touch keyboard. It is an overlay, not the old full-screen alphabetical keyboard. Touch a key, Shift, Space, Delete or Done; controller equivalents are A, Y, X, L and R. **Done does not send.** B leaves the overlay with the draft intact.
+7. The native keyboard currently limits entry to 128 characters in a 512-byte UTF-8 draft. The fallback adds ASCII, up to the same byte limit. Automatic mention parsing is disabled. No older-history pagination is included beyond the latest 30 messages.
 
-## Controls and menus
+Voice/stage selection displays the actual selected channel and disconnected state. **It does not join a voice call.** Categories are headings. Forums/media channels are listed but thread browsing, DMs, rich attachments/embeds, edits/deletes from this UI and live voice members remain unfinished. Discord permissions and rate limits apply.
 
-| Control | Action |
+## Touch and controller controls
+
+| Input | Action |
 | --- | --- |
-| D-pad / stick | Navigate menus and lists. |
-| Left / Right | Move between sidebar and content. |
-| A | Activate the selected item. |
-| B | Return focus to the sidebar; cancel during login. |
-| Plus | Exit the menu; cancel during login. |
+| Tap server / channel | Select and open it. |
+| Swipe server rail / channel sidebar / conversation | Scroll that area; a drag does not activate a row or Send. |
+| Tap message box / X | Request native keyboard; QWERTY button opens fallback. |
+| Tap Send / R | Send the current nonempty draft. |
+| Left / Right | Change focus between rail, channels, conversation and input. |
+| Up / Down | Navigate or scroll the focused area. |
+| A | Activate focused item; read a message; edit the input when input is focused. |
+| Y | Manually refresh the conversation or channel list. |
+| B | Close expanded reading or move focus back. |
+| Plus / Exit | Close DiscordNX2. |
 
-Dashboard provides login/logout and PIN save/unlock. Servers opens channel navigation. Text chat reads/sends basic messages; Voice chat selects a channel and shows its disconnected status until call transport is implemented.
+Touch is initialized through libounce with a 1280x720 output range matching the framebuffer. Handheld touch accuracy and the system keyboard must be checked on actual hardware; docked use retains controller navigation. PIN save/unlock also has touch buttons and digit selection.
 
-Developer shortcuts remain on Dashboard: **hold R + X** for the executable-memory check, and **hold R + Y** for the system Wi-Fi browser probe. Neither is needed for ordinary login. The Wi-Fi browser probe failed on the tested setup; an API return code of zero does not mean a browser appeared.
+Developer shortcuts remain on Home: **hold R + X** for the executable-memory check and **hold R + Y** for the Wi-Fi browser probe. Neither is needed for ordinary login. The Wi-Fi browser probe failed on the tested setup; a native software-keyboard attempt is separate from that browser test.
 
 ## Temporary verification website
 
@@ -144,11 +153,13 @@ The default address is compiled into each NRO; moving hosting requires rebuildin
 | "This feature is unavailable" | This was observed in the system browser experiment. Use the temporary phone flow; changing DNS or replacing the NSO is not an established fix. |
 | Compiler/toolchain missing | Check devkitPro's install path and run Setup-Toolchain.bat if Switch 2 packages are absent. |
 | No voice audio or channel members | Voice calling is not implemented yet; channel selection does not start a call. |
-| Account/server name shows boxes | The name is decoded as Unicode, but the console fonts may not contain every glyph. Some emoji and complex scripts remain unsupported. |
+| Account/server name shows boxes | v0.39 embeds Unicode, Math, Symbols and monochrome Emoji fallbacks. Some combining sequences, scripts or emoji can still be unsupported. Share the character names/code points or an example display name, never login data. |
+| Keyboard does not open | Report the native-keyboard result in the hardware log. Use the on-screen QWERTY button; no custom loader or NSO is supplied as a workaround. |
+| Messages do not update immediately | Read the update status. Gateway fallback polls every five seconds; rate limits/network errors delay it. The live log records connection stages without message content. |
 | Server order differs | The app uses flattened Discord folder order when settings are available. It indicates when API order is being used instead. |
-| Saved login will not unlock | Check the PIN, network and final status. Retry from Dashboard; if the token was revoked, use QR login again. |
+| Saved login will not unlock | Check the PIN, network and final status. Retry from Home; if the token was revoked, use QR login again. |
 
-After a failed login/test, copy **`/kaihen/discordnx2-hardware.txt`** from the SD card before running another test. Share the stage-only report, NRO version and phone error text. **Never share QR links, CAPTCHA results, login tickets, account tokens, passwords or private keys.** Do not post a QR screenshot containing an active login session.
+After a failed login/keyboard test, copy **`/kaihen/discordnx2-hardware.txt`** from the SD card before running another test. Share the stage-only report, NRO version and phone error text. **Never share QR links, CAPTCHA results, login tickets, account tokens, passwords or private keys.** Do not post a QR screenshot containing an active login session. For automatic-update problems, also copy `/kaihen/discordnx2-live.txt` after leaving the conversation or exiting the app. It contains only fixed connection state/counters/status codes.
 
 ## Source layout and development
 
@@ -172,8 +183,12 @@ sh tests/run-native-http-tests.sh
 node tests/test_captcha_page.js
 ```
 
-New client parsing, message serialization and cross-process session storage tests run with `sh tests/run-client-tests.sh` in Debian with a C compiler and mbedTLS development headers. They use synthetic credentials and temporary files.
+Touch geometry, synthetic production live-worker events and actual embedded-font rasterization tests run with `sh tests/run-chat-tests.sh`. New client parsing, message serialization and cross-process session storage tests run with `sh tests/run-client-tests.sh` in Debian with a C compiler and mbedTLS development headers. They use synthetic credentials and temporary files.
 
 The phone encryption integration test currently uses Windows Node.js plus a Debian WSL host harness with a C compiler and mbedTLS development headers. Prepare it with `wsl -d Debian -- sh /mnt/c/path/to/DiscordNX2/tests/run-phone-handoff-tests.sh`, then run `node tests/test_captcha_phone.js` from Windows. These use synthetic results and do not solve or submit a real CAPTCHA. Passing local tests does not prove Discord will accept login on hardware.
 
 Thanks to the ouncebrew, kaiHEN, devkitPro and upstream projects referenced in the source for the homebrew tooling and libraries.
+
+### Bundled font licenses
+
+`app/assets/fonts/` contains unmodified Noto fonts from Google Fonts under SIL Open Font License 1.1. Each font ships with its OFL notice, and `sources.json` records the exact upstream commit, source URLs and SHA-256 hashes. The fonts are embedded in the NRO; users do not need to copy font files to the SD card. Console-provided fonts are not redistributed. Monochrome glyph support does not provide full emoji sequence rendering or complex-script shaping.

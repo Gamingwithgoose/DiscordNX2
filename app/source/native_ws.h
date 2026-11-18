@@ -3,7 +3,9 @@
 #define DNX2_NATIVE_WS_H
 #include <stdint.h>
 #include <string.h>
+#ifndef DNX2_WS_MAX
 #define DNX2_WS_MAX 8192
+#endif
 typedef struct {
     unsigned char wire[DNX2_WS_MAX+14],message[DNX2_WS_MAX+1];
     size_t used,message_used,control_size;

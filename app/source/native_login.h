@@ -6,7 +6,7 @@
 #define DNX2_MAX_MESSAGES 30
 typedef struct {char id[24];char name[401];} Dnx2Server;
 typedef struct {char id[24],parent[24],name[401];int type,position;} Dnx2Channel;
-typedef struct {char author[321],content[8193];} Dnx2Message;
+typedef struct {char id[24],author[321],content[8193];} Dnx2Message;
 typedef struct {
     int channel_count,selected_channel,message_count,channels_loaded,order_synced;
     char notice[160];
@@ -22,6 +22,11 @@ const Dnx2Account *dnx2Account(void);
 void dnx2AccountSelect(int index);
 void dnx2AccountLogout(void);
 void dnx2AccountClearMemory(void);
+void dnx2LiveStart(void);
+void dnx2LiveStop(void);
+void dnx2LiveReset(void);
+int dnx2LiveApply(void);
+const char *dnx2LiveStatus(void);
 int dnx2LoadChannels(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
 void dnx2ChannelSelect(int index);
 int dnx2LoadMessages(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
