@@ -7,6 +7,7 @@
  */
 #include "graphical_ui.h"
 #include "vendor/qrcodegen.h"
+#include "native_login.h"
 #include "vendor/font8x8_basic.h"
 #include <switch.h>
 #include <switch/display/framebuffer.h>
@@ -100,7 +101,7 @@ static int qr_render_url(int x,int y,int area,const char *url) {
 }
 static void draw(const char *feedback,int tab,int selection,int focus,int qr_preview) {
     rect(0,0,W,H,C_BG);
-    if(qr_preview)qr_render_url(800,160,340,"https://discord.com/activate");
+    (void)qr_preview; /* QR URLs only shown by an authenticated live session. */
     rect(0,0,268,H,C_SIDEBAR);
     rect(0,0,268,9,C_PRIMARY);
     text_line(28,42,"DISCORDNX2",C_WHITE,3,18);
@@ -116,7 +117,8 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
     rect(19,635,231,54,C_CARD);
     text_line(31,652,"LOCAL BUILD 0.22",C_MUTED,2,23);
 
-    pill(1080,36,160,"NO LOGIN",C_CARD_HI);
+    const Dnx2Account *profile=dnx2Account();
+    pill(1080,36,160,profile->signed_in?"SIGNED IN":"NO LOGIN",profile->signed_in?C_GREEN:C_CARD_HI);
     text_line(308,40,tabs[tab],C_WHITE,4,26);
     text_line(309,93,"DISCORDNX2 - NATIVE CLIENT FOUNDATION",C_MUTED,2,50);
     line(310,139,930,C_LINE);
@@ -129,14 +131,33 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
         item(310,376,930,107,"CONNECTIVITY CHECK","PUBLIC GATEWAY - NO ACCOUNT LOGIN",focus==1&&selection==0);
         item(310,501,930,107,"FULL HARDWARE TEST","AUDIO, PACKETS, UDP AND DISCORD GATEWAY",focus==1&&selection==1);
     } else if(tab==1) {
-        block(310,172,930,433,C_CARD);
-        pill(343,201,305,"AUTH NOT READY",C_WARN);
-        text_line(343,264,"DISCORD QR LOGIN",C_WHITE,4,33);
-        text_line(343,316,"NO ACCOUNT TOKEN IS ACTIVE.",C_MUTED,3,46);
-        text_line(343,361,"REMOTE AUTH REQUIRES SECURE RSA SESSION SUPPORT.",C_MUTED,2,58);
-        item(343,420,866,95,"TEST REMOTE AUTH CONNECTION",
-             "REAL DISCORD REMOTE AUTH WEBSOCKET HELLO",focus==1&&selection==0);
-        text_line(343,554,"QR SCAN AUTHENTICATION IS NOT ENABLED YET.",C_WARN,2,57);
+        if(profile->signed_in) {
+            pill(310,165,245,"ACCOUNT LOADED",C_GREEN);
+            text_line(573,178,profile->display_name,C_WHITE,3,28);
+            text_line(315,220,"YOUR DISCORD SERVERS",C_WHITE,3,38);
+            int start=(selection/7)*7;
+            if(start>=profile->server_count)start=0;
+            if(profile->server_count==0)
+                text_line(315,292,"YOUR ACCOUNT HAS NO SERVERS",C_MUTED,3,40);
+            for(int i=0;i<7&&start+i<profile->server_count;i++){
+                int index=start+i,y=262+i*46;
+                rect(310,y,925,40,index==profile->selected?C_CARD_HI:C_CARD);
+                if(focus==1&&selection==index)rect(310,y,7,40,C_GREEN);
+                text_line(333,y+8,profile->servers[index].name,C_WHITE,2,54);
+            }
+            if(selection>=profile->server_count || profile->server_count<7)
+                item(310,570,925,63,"LOG OUT","CLEAR SESSION METADATA",focus==1&&selection==profile->server_count);
+            text_line(314,614,"SERVER SELECT ONLY - VOICE IS NOT YET IMPLEMENTED",C_WARN,2,59);
+        } else {
+            block(310,172,930,433,C_CARD);
+            pill(343,201,315,"QR AUTH EXPERIMENT",C_WARN);
+            text_line(343,265,"SIGN IN TO DISCORD",C_WHITE,4,35);
+            text_line(343,322,"SCAN A SESSION-BOUND QR WITH YOUR PHONE.",C_MUTED,2,58);
+            text_line(343,369,"USE A TEST ACCOUNT - UNOFFICIAL CLIENT.",C_WARN,2,58);
+            item(343,430,864,110,"SIGN IN WITH QR CODE",
+                 "SECURE RSA + MOBILE APPROVAL",focus==1);
+            text_line(343,566,"TOKENS AND PRIVATE KEYS ARE NEVER SAVED.",C_MUTED,2,58);
+        }
     } else if(tab==2) {
         block(310,172,930,355,C_CARD);
         pill(342,200,300,"VOICE DISCONNECTED",C_WARN);
@@ -144,6 +165,8 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
         text_line(342,333,"NO ACTIVE DISCORD VOICE SESSION",C_MUTED,3,49);
         text_line(342,383,"OPUS AND DAVE ARE NOT CONNECTED YET.",C_MUTED,2,58);
         text_line(342,420,"OPEN MIC IS NOT TRANSMITTING.",C_MUTED,2,52);
+        if(profile->signed_in && profile->server_count>0)
+            text_line(342,473,profile->servers[profile->selected].name,C_WHITE,2,58);
     } else {
         item(310,174,930,98,"FULL INTEGRATION TEST","MIC, PLAYBACK, PACKETS, UDP AND GATEWAY",focus==1&&selection==0);
         item(310,287,930,98,"DISCORD GATEWAY TEST","REAL TLS + WEBSOCKET HELLO",focus==1&&selection==1);
@@ -157,7 +180,7 @@ static void draw(const char *feedback,int tab,int selection,int focus,int qr_pre
     if(focus==0)text_line(311,590,"SIDEBAR FOCUS - PRESS RIGHT FOR CONTENT",C_WARN,2,52);
     else text_line(311,590,"CONTENT FOCUS - PRESS LEFT FOR SIDEBAR",C_WARN,2,52);
 }
-static int options_for(int tab){return tab==0?2:tab==1?1:tab==3?5:0;}
+static int options_for(int tab){const Dnx2Account *p=dnx2Account();return tab==0?2:tab==1?(p->signed_in?p->server_count+1:1):tab==3?5:0;}
 static int action_for(int tab,int selection) {
     if(tab==0)return selection==0?2:1;
     if(tab==3)return selection==0?1:selection==1?2:selection==2?3:selection==3?4:5;
@@ -227,8 +250,10 @@ int dnx2GraphicalMenu(void) {
             if(focus==0) {
                 if(options_for(tab)>0){focus=1;sel=0;dirty=1;}
             } else if(tab==1) {
-                action=5; /* Remote Auth TLS + HELLO, not sign-in. */
-                break;
+                const Dnx2Account *account=dnx2Account();
+                if(!account->signed_in){action=6;break;}
+                if(sel==account->server_count){dnx2AccountLogout();sel=0;dirty=1;}
+                else {dnx2AccountSelect(sel);snprintf(status,sizeof(status),"SERVER SELECTED - VOICE COMING NEXT");dirty=1;}
             } else {
                 action=action_for(tab,sel);
                 if(action>0)break;
@@ -243,4 +268,62 @@ int dnx2GraphicalMenu(void) {
     framebufferClose(&fb);
     hidExit();
     return action;
+}
+
+/* Dedicated auth framebuffer. The normal menu releases its framebuffer before
+ * RSA/TLS start; these callbacks only render actual session-bound URLs.
+ * Press B or + to cancel before the QR session expires. */
+static Framebuffer auth_fb;
+static int auth_fb_ready=0,auth_hid_ready=0;
+static PadState auth_pad;
+void dnx2GraphicalAuthBegin(void) {
+    Result rc=hidInitialize();
+    if(R_SUCCEEDED(rc)){
+        auth_hid_ready=1;
+        padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+        padInitializeDefault(&auth_pad);
+    }
+    rc=framebufferCreate(&auth_fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
+    if(R_SUCCEEDED(rc)){
+        rc=framebufferMakeLinear(&auth_fb);
+        if(R_SUCCEEDED(rc))auth_fb_ready=1;
+        else framebufferClose(&auth_fb);
+    }
+}
+int dnx2GraphicalAuthCancel(void) {
+    if(!auth_hid_ready)return 0;
+    padUpdate(&auth_pad);
+    u64 buttons=padGetButtonsDown(&auth_pad);
+    return !!(buttons&(HidNpadButton_B|HidNpadButton_Plus));
+}
+void dnx2GraphicalAuthStatus(const char *phase,const char *qr_url) {
+    if(!auth_fb_ready)return;
+    u32 stride=0;
+    pixels=(uint32_t*)framebufferBegin(&auth_fb,&stride);
+    if(!pixels)return;
+    stride_pixels=(int)(stride/4);
+    rect(0,0,W,H,C_BG);
+    rect(0,0,W,13,C_PRIMARY);
+    text_line(65,60,"DISCORDNX2",C_WHITE,4,35);
+    text_line(65,119,"NATIVE DISCORD ACCOUNT LOGIN",C_MUTED,2,55);
+    block(60,175,1160,444,C_SIDEBAR);
+    if(qr_url && strncmp(qr_url,"https://discord.com/ra/",23)==0) {
+        if(qr_render_url(735,209,370,qr_url)){
+            text_line(86,232,"SCAN USING DISCORD MOBILE",C_WHITE,3,55);
+            text_line(86,292,"SETTINGS - SCAN QR CODE",C_MUTED,2,55);
+            text_line(86,335,"CONFIRM THIS LOGIN ON YOUR PHONE",C_WARN,2,55);
+        }else text_line(86,245,"QR ENCODING ERROR",C_WARN,3,42);
+    }else {
+        text_line(88,240,"ESTABLISHING A SECURE SESSION",C_WHITE,3,48);
+        text_line(88,300,"NEVER SHARE ACCOUNT TOKENS",C_MUTED,2,50);
+    }
+    text_line(87,542,phase?phase:"CONNECTING",C_GREEN,2,62);
+    text_line(87,650,"B: CANCEL    PLUS: CANCEL    NO PASSWORDS REQUIRED",C_MUTED,2,65);
+    framebufferEnd(&auth_fb);
+    pixels=NULL;
+}
+void dnx2GraphicalAuthEnd(void) {
+    if(auth_fb_ready)framebufferClose(&auth_fb);
+    if(auth_hid_ready)hidExit();
+    auth_fb_ready=0;auth_hid_ready=0;
 }
