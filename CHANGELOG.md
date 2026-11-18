@@ -291,3 +291,4 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 
 - Repository cleanup: replace the accumulated README test history with a complete current guide and a prominent incomplete-functionality disclaimer. Document supported menus, controls, setup, NRO-only transfers, two QR steps, known blockers, privacy, self-hosting and developer checks; retain history in Git/CHANGELOG. Setup now directs users to Build-NRO.bat.
 - User made the repository public; GitHub Pages main:/docs enabled successfully with HTTPS and no custom domain. NACP metadata now depends on its Makefile so version changes are rebuilt.
+- Live publication verified: project home and verify.html both return HTTP200 over HTTPS and match the tested source exactly. Phone encryption/page tests and AArch64 strict syntax checks passed; no NRO built, real Discord acceptance still awaits hardware testing.

@@ -125,11 +125,7 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": [
-    "Pull main; run Build-NRO.bat; FTP only dist/DiscordNX2.nro. No DNS, PC host, payload or NSO changes.",
-    "Dashboard Log in: first QR inside Discord app; second QR in phone camera/browser on same Wi-Fi; complete hCaptcha and tap Send to Switch.",
-    "Temporary Pages hosting may stop at any time. If phone stays disabled, report the new explicit status message/result length without sharing verification data."
-  ],
+  "next_user_workflow": "Pull main in GitHub Desktop, run Build-NRO.bat, FTP only dist/DiscordNX2.nro, Dashboard > Log in with QR code. First QR: Discord mobile scanner. If CAPTCHA requested, second QR: phone camera/browser on same Wi-Fi. Complete challenge, wait for encrypted-ready status, Send to Switch. Share only stage-only hardware log and phone error text if login fails. No NSO, DNS or loader changes.",
   "next_developer_work": [
     "Verify Pages is published from main:/docs with HTTPS and exact served verification source; no custom workflow or native cloud build.",
     "Investigate actual phone delivery/provider rejection with hardware report. Keep self-contained public-jailbreak browser support as long-term goal; hosting is temporary."
@@ -206,7 +202,7 @@
     "transport": "WebCrypto AES-256-GCM, random 96-bit IV, 128-bit tag; AES key wrapped using active session RSA-2048 OAEP/SHA256 public key. AAD DiscordNX2 CAPTCHA v1: + state. Envelope version1 + 256-byte RSA + 12-byte IV + ciphertext/tag. Plaintext state + newline + bounded printable token. Local HTTP carries ciphertext only; no ticket, account token, private key or plaintext solution is sent over LAN or hosted on website.",
     "bounds": "Listener binds only existing Discord socket private IPv4 address, random OS port; private-source peers, 150-second total wait, 3-second receive deadline, 8 invalid requests maximum, bounded Content-Length, no transfer-encoding or pipelining, exact POST path. Listener and secrets closed/wiped on success/cancel/error/timeout. QR limited to 2200 bytes; never truncate challenge data.",
     "hosting": "https://gamingwithgoose.github.io/DiscordNX2/verify.html; canonical source docs/verify.html. No relay or external community-site dependency.",
-    "validation": "v0.37 canonical docs/verify.html passed actual WebCrypto/mbedTLS interoperability, 2048/4095-byte results, visible oversize errors, fallback callback polling, malformed result rejection and private destination checks. Legacy CAPTCHA page tests and AArch64 strict syntax checks passed. No NRO or dependency build.",
+    "validation": "v0.37 canonical docs/verify.html passed actual WebCrypto/mbedTLS interoperability, 2048/4095-byte results, visible oversize errors, fallback callback polling, malformed result rejection and private destination checks. Legacy CAPTCHA page tests and AArch64 strict syntax checks passed. No NRO or dependency build. Live project Pages home/verification files HTTP200 and exact-source verified. User must build NRO and test real phone CAPTCHA/Discord acceptance.",
     "remaining_blockers": "Phone browser local HTTP form/navigation restrictions or permission prompts; Wi-Fi client isolation/VPN; provider domain restrictions for Discord dynamic sitekey; Discord rejecting cross-device challenge, expired ticket or solution. Do not spoof origin/browser identity or bypass challenge.",
     "phone_button_fix": "User can tick hCaptcha but Send stays disabled. Found silent rejection of results >2048 chars. v0.35 negotiates limit=4095 in QR and expands encrypted payload/native solution buffers to existing header limit; old QR defaults to 2048. Page shows size/encryption-stage errors and polls getResponse as a fallback for missed callback, using only genuine provider results.",
     "status": "Re-enabled by default in v0.37 on the project GitHub Pages URL. Prepared button/size/callback fixes are served from docs/verify.html; old community website is not used by this build."
@@ -225,7 +221,11 @@
     "verification_url": "https://gamingwithgoose.github.io/DiscordNX2/verify.html",
     "custom_domain": "None needed; default github.io used. No Cloudflare/DNS changes made.",
     "notice": "Hosting may stop at any time, without notice. No uptime/availability guarantee; temporary fallback until proper browser support. Same notice appears in README, site home and verification page.",
-    "status": "Enabled successfully via GitHub Pages API after user made repository public: main:/docs, HTTPS enforced, no custom domain. Source push and live content verification pending.",
-    "readme_cleanup": "Replaced accumulated historical install/test directions with current v0.37 setup/build/transfer/login/CAPTCHA/controls/troubleshooting/self-hosting/developer instructions. INCOMPLETE FUNCTIONALITY AT THIS TIME disclaimer first. History retained in Git and appended CHANGELOG; no resident/audio/network source removed."
+    "status": "LIVE: enabled main:/docs, HTTPS enforced, no custom domain. Both /DiscordNX2/ and /DiscordNX2/verify.html returned HTTP200 and exactly matched the tested UTF-8 source after LF normalization. Site source published in e8e9e1f8830b162e25ef3c339e68a9b86059ed49. No Cloudflare/DNS or console loader/plugin changes.",
+    "readme_cleanup": "Replaced accumulated historical install/test directions with current v0.37 setup/build/transfer/login/CAPTCHA/controls/troubleshooting/self-hosting/developer instructions. INCOMPLETE FUNCTIONALITY AT THIS TIME disclaimer first. History retained in Git and appended CHANGELOG; no resident/audio/network source removed.",
+    "verified_sha256": {
+      "index.html": "56a08af2e80d85023ac16c6f779a3b3f8552ef0cd69902e3febc84af4460b8c0",
+      "verify.html": "b2f718b321795361599a397e6f3adb726d2ab2767a0ef0b289c75d56640a36cb"
+    }
   }
 }
