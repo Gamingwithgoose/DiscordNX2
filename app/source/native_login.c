@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 #include <ctype.h>
 
 #ifdef DNX2_USE_MBEDTLS
@@ -25,6 +26,13 @@
 #include <mbedtls/base64.h>
 #endif
 
+/* Monotonic milliseconds, matching the 3DS dnx2MonotonicMs() semantics.
+ * Switch 2/libounce does not export dnx2MonotonicMs(). */
+static u64 dnx2MonotonicMs(void) {
+    struct timespec ts={0};
+    if(clock_gettime(CLOCK_MONOTONIC,&ts)!=0)return 0;
+    return (u64)ts.tv_sec*1000u+(u64)ts.tv_nsec/1000000u;
+}
 #define REMOTE_HOST "remote-auth-gateway.discord.gg"
 #define API_HOST "discord.com"
 #define WS_BUF 8192
@@ -119,7 +127,7 @@ static int tls_get(TlsSession *s,unsigned char *out,size_t max){
 }
 static int tls_exact(TlsSession *s,unsigned char *buf,size_t n,u64 deadline){
     size_t at=0;
-    while(at<n && osGetTime()<deadline) {
+    while(at<n && dnx2MonotonicMs()<deadline) {
         int got=tls_get(s,buf+at,n-at);
         if(got>0)at+=(size_t)got;
         else if(got==0)return 0;
@@ -407,18 +415,18 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     status("CONNECTING TO DISCORD QR LOGIN",NULL);
     if(!tls_open(&remote,REMOTE_HOST))goto network_cleanup;
     if(!ws_connect(&remote)) {status("REMOTE AUTH WEBSOCKET REJECTED",NULL);goto remote_cleanup;}
-    unsigned heartbeat=41250;u64 last_heartbeat=osGetTime();
-    u64 expire=osGetTime()+120000;
+    unsigned heartbeat=41250;u64 last_heartbeat=dnx2MonotonicMs();
+    u64 expire=dnx2MonotonicMs()+120000;
     int qr_shown=0;
     char ticket[700]={0};
-    for(unsigned attempts=0;attempts<180 && osGetTime()<expire;attempts++){
+    for(unsigned attempts=0;attempts<180 && dnx2MonotonicMs()<expire;attempts++){
         if(cancel&&cancel()){status("LOGIN CANCELED",NULL);break;}
-        int n=ws_receive(&remote,ws_payload,sizeof(ws_payload),osGetTime()+4500);
+        int n=ws_receive(&remote,ws_payload,sizeof(ws_payload),dnx2MonotonicMs()+4500);
         if(n==-2)break;
         if(n<=0) {
-            if(osGetTime()-last_heartbeat>(u64)heartbeat) {
+            if(dnx2MonotonicMs()-last_heartbeat>(u64)heartbeat) {
                 if(!ws_text(&remote,"{\"op\":\"heartbeat\"}"))break;
-                last_heartbeat=osGetTime();
+                last_heartbeat=dnx2MonotonicMs();
             }
             continue;
         }
@@ -427,9 +435,9 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
             unsigned ms=0,timeout=0;
             if(uint_field(json,"heartbeat_interval",&ms)&&ms>=1000&&ms<90000)heartbeat=ms;
             if(uint_field(json,"timeout_ms",&timeout)&&timeout>=5000&&timeout<180000)
-                expire=osGetTime()+timeout;
+                expire=dnx2MonotonicMs()+timeout;
             if(!ws_text(&remote,"{\"op\":\"heartbeat\"}"))break;
-            last_heartbeat=osGetTime();
+            last_heartbeat=dnx2MonotonicMs();
             char init[1200];
             int len=snprintf(init,sizeof(init),
                  "{\"op\":\"init\",\"encoded_public_key\":\"%s\"}",pubkey);
@@ -467,9 +475,9 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
         }else if(json_operation(json,"cancel")){
             status("LOGIN CANCELED ON PHONE",NULL);break;
         }
-        if(osGetTime()-last_heartbeat>(u64)heartbeat) {
+        if(dnx2MonotonicMs()-last_heartbeat>(u64)heartbeat) {
             if(!ws_text(&remote,"{\"op\":\"heartbeat\"}"))break;
-            last_heartbeat=osGetTime();
+            last_heartbeat=dnx2MonotonicMs();
         }
     }
 remote_cleanup:
