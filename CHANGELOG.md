@@ -221,3 +221,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add optional Build-Browser-Runtime.bat; it does not overwrite DiscordNX2.nro. Clarify Build-NRO.bat still builds the existing app; no CAPTCHA/login fix is claimed.
 - NetSurf native dependency libraries compile, but source audit rejects its runtime for CAPTCHA use (Math.random-backed getRandomValues, same-page messaging, unsupported Workers). BrowseNX is a system applet launcher, not an embedded engine.
 - Chromium rendering, guest image, session-bound CAPTCHA integration and provider acceptance remain unfinished. A one-time browser data image is needed beyond NRO-only transfer. No relay/server changes, NSO changes, Docker or Actions.
+
+
+## v0.30 - in-app executable-memory compatibility check
+
+- Hardware confirmed the separate LKL runtime boots, completes file checks and shuts down (result 0).
+- Add original executable-memory backend using libounce process-code mappings, guarded virtual address reservation, read/execute-only permissions, cache maintenance, replacement and cleanup. Failed unmap retains backing storage rather than freeing memory still mapped by Horizon.
+- Dashboard R+X explicitly runs one small check per launch: fixed built-in AArch64 returns 42, then rewritten code returns 53. Logs each stage immediately to the existing hardware report and shows a dedicated result screen. No diagnostics tab, automatic login test, account data or networking added.
+- Included in normal Build-NRO.bat; no Linux/browser dependency rebuild or extra SD assets. Native source is checked with the existing compiler; final NRO build left to user as requested.
+- CAPTCHA login and full Chromium integration remain unfinished. Audio, networking, normal login controls and resident NSO unchanged.

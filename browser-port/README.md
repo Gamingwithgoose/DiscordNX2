@@ -29,3 +29,8 @@ Retain Chromium NX's and Linux/LKL's GPL-2.0 license/source requirements when re
 `switch2_surface.c` is original MIT framebuffer/HID platform code implementing libnsfb. `check-port.py` cross-compiles it with warnings as errors. `prepare-engine.py` and `build-support-libraries.sh` produced 14 AArch64 native support libraries against pinned NetSurf source `3dabe65c245ab29a22f243e88d407caf2c09b5c2`.
 
 `audit-runtime.py` exits 2 on this pinned source: the JavaScript runtime uses Math.random for getRandomValues, implements only same-page postMessage and rejects Workers. These are security/compatibility blockers, so this engine is not integrated into login. The source-pattern audit is a rejection gate, not a complete security review or proof of support if it ever passes.
+
+
+## v0.30 normal-app compatibility check
+
+The separate runtime probe passed on the user's console (boot, file roundtrip, shutdown, result 0). The next test is implemented directly in the normal DiscordNX2 source: Build-NRO.bat, then hold R and press X on Dashboard. This executes only fixed built-in instructions in a read/execute-only alias, replaces them and verifies the replacement, and cleans up. Results go to the existing `/kaihen/discordnx2-hardware.txt`; B returns to Dashboard. It runs once per process, so relaunch before retrying. It requires no browser dependencies or extra SD assets. Full browser rendering and CAPTCHA remain unfinished.

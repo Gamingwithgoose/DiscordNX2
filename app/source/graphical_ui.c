@@ -245,6 +245,10 @@ int dnx2GraphicalMenu(void) {
         }
         analog_prior=analog;
         if(down & HidNpadButton_Plus)break;
+        /* Deliberate test shortcut; no diagnostic tab or automatic login probes. */
+        if(tab==0 && (down&HidNpadButton_X) && (padGetButtons(&pad)&HidNpadButton_R)) {
+            action=7;break;
+        }
         if(down & HidNpadButton_B) {focus=0;dirty=1;}
         else if(down & HidNpadButton_AnyLeft) {
             if(focus==1) {focus=0;dirty=1;}
@@ -321,4 +325,25 @@ void dnx2GraphicalAuthEnd(void) {
     if(auth_fb_ready)framebufferClose(&auth_fb);
     if(auth_hid_ready)hidExit();
     auth_fb_ready=0;auth_hid_ready=0;
+}
+
+
+void dnx2GraphicalBrowserCheckStatus(const char *message, int complete) {
+    if(!auth_fb_ready)return;
+    u32 stride=0;
+    pixels=(uint32_t*)framebufferBegin(&auth_fb,&stride);
+    if(!pixels)return;
+    stride_pixels=(int)(stride/4);
+    text_right=1240;
+    rect(0,0,W,H,C_BG);
+    brand(48,42);
+    text_line(132,62,"Browser compatibility",C_WHITE,3,48);
+    block(48,156,1184,388,C_CARD);
+    text_line(80,196,message,C_WHITE,3,64);
+    text_line(80,276,"Checking support needed to run Chromium on this console.",C_MUTED,2,80);
+    text_line(80,324,"This does not open a browser or sign in to Discord.",C_MUTED,2,80);
+    text_line(80,398,complete?"Results saved to the hardware log.":"This should take a moment.",C_MUTED,2,80);
+    text_line(80,466,complete?"B: Back":"Please wait",C_WHITE,2,50);
+    framebufferEnd(&auth_fb);
+    pixels=NULL;
 }

@@ -11,6 +11,7 @@
 #include "graphical_ui.h"
 #include "native_login.h"
 #include "native_font.h"
+#include "browser_memory.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -947,14 +948,29 @@ static void dnx2AuthProgressAndReport(const char *phase,const char *qr_url) {
     (void)write_diagnostics();
     dnx2GraphicalAuthStatus(phase,qr_url);
 }
+static void browser_memory_report(const char *stage,Result result) {
+    /* Persist before executing code so a console fault retains the last step. */
+    diagf("browser memory: %s result=%08x\n",stage,result);
+    (void)write_diagnostics();
+}
 static void run_gui_action(int action) {
-    if(action==1)hardware_report();
+    if(action==7) {
+        diag_len=0;
+        diagf("DiscordNX2 v0.30 executable memory check - no network or account data\n");
+        dnx2GraphicalAuthBegin();
+        dnx2GraphicalBrowserCheckStatus("Checking executable memory...",0);
+        int passed=dnx2BrowserMemoryCheck(browser_memory_report);
+        dnx2GraphicalBrowserCheckStatus(passed?"Executable memory check passed":"Executable memory check failed",1);
+        while(appletMainLoop()&&!dnx2GraphicalAuthCancel())svcSleepThread(16000000LL);
+        dnx2GraphicalAuthEnd();
+    }
+    else if(action==1)hardware_report();
     else if(action==2)run_discord_only();
     else if(action==3)run_voice_only();
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.29 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.30 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();

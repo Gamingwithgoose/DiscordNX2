@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 set "DISCORDNX2_ROOT=%CD%"
 echo DiscordNX2 NRO-only local build
-echo Browser-port work is separate. This builds the existing Discord app only.
+echo Includes the browser memory check: hold R and press X on Dashboard.
 set "BASH=C:\devkitPro\msys2\usr\bin\bash.exe"
 if not exist "%BASH%" goto fail
 echo Checking secure QR-login cryptography dependency...

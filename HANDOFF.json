@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.29-browser-exit-reason",
+  "version": "0.30-browser-memory-check",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -97,7 +97,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "Native NRO build and existing HTTP/WS/CAPTCHA unit tests passed. Actual WebExitReason and browser compatibility still require console verification; no need to repeat login just to reconfirm the known unavailable browser.",
+  "build_validation": "v0.30: syntax/type checks passed for changed native source with the installed AArch64 compiler; new executable-memory code checked with warnings as errors. Existing audio source has a pre-existing signedness warning. No NRO or dependencies built, per user request. Hardware memory execution remains unverified.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -123,9 +123,9 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Do not rebuild/retest the existing Discord NRO to reconfirm CAPTCHA; Build-NRO.bat still uses unavailable system browser.",
-    "Optional browser-runtime gate: run separate DiscordNX2-Runtime-Test.nro alongside existing Discord app, then inspect sdmc:/discordnx2-browser-runtime.log. This is not a login fix.",
-    "No NSO replacement, kaiHEN restart, relay deployment, Docker or Actions."
+    "Pull main; run Build-NRO.bat; FTP only dist/DiscordNX2.nro. Existing NSO unchanged.",
+    "On Dashboard hold R and press X once, then B to return. Send /kaihen/discordnx2-hardware.txt. Relaunch to repeat the memory check.",
+    "Normal QR login is unchanged; this update does not fix CAPTCHA or include a full browser."
   ],
   "next_developer_work": [
     "Continue browser-port engine integration and dependency build using local devkitPro/libounce; no hosted relay.",
@@ -193,6 +193,8 @@
     },
     "build": "Build-Browser-Runtime.bat (Debian WSL + LLVM/kernel tools + Windows devkitPro/libounce). No Docker/Actions. Build-NRO.bat remains the existing app only.",
     "hardware_gate": "Separate dist/browser-runtime/DiscordNX2-Runtime-Test.nro; checks basic Linux boot, tmpfs file roundtrip and shutdown. Log sdmc:/discordnx2-browser-runtime.log. It does not log in or touch existing NSO.",
-    "remaining": "Runtime hardware compatibility; native executable-memory/exception behavior; Switch 2 display/input backend and Chromium guest image; ephemeral same-session CAPTCHA result integration; trusted HTTPS/origin/provider acceptance. Chromium needs a one-time browser data-image installation beyond the original NRO-only workflow."
+    "remaining": "Executable memory check on hardware, full Chromium display/input/guest image, secure lifecycle and ephemeral CAPTCHA callback, provider acceptance. CAPTCHA login still blocked; app still has no embedded browser.",
+    "runtime_hardware_result": "User supplied discordnx2-browser-runtime.txt: runtime boot, file checks and shutdown passed (result 0). Initial console/PCI warnings did not prevent those tests. This does not verify Chromium or guest executable memory.",
+    "next_in_app_test": "v0.30 Build-NRO.bat uses only existing normal toolchain; Dashboard hold R and press X. Tests fixed built-in AArch64 code with read/execute-only alias, remaps replacement code, verifies cache coherency, releases mapping/backing storage. Stage-only results saved to existing /kaihen/discordnx2-hardware.txt. No new dependencies, Linux build or browser image."
   }
 }
