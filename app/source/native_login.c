@@ -406,6 +406,10 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     status("GENERATING SECURE RSA-2048 SESSION",NULL);
     if(!dnx2AuthCryptoOpen()){status("SECURE RSA KEY GENERATION FAILED",NULL);return 0;}
     char fingerprint[80]={0},pubkey[900]={0};
+    if(!dnx2AuthCryptoSelfTest()){
+        status("LOCAL RSA OAEP SELFTEST FAILED",NULL);goto fail;
+    }
+    status("LOCAL RSA OAEP SELFTEST PASSED",NULL);
     if(!dnx2AuthCryptoPublicKey(pubkey,sizeof(pubkey)) ||
        !dnx2AuthCryptoFingerprint(fingerprint,sizeof(fingerprint)))goto fail;
     if(R_FAILED(socketInitialize(NULL)))goto fail;
@@ -445,9 +449,18 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
             wipe(init,sizeof(init));
         }else if(json_operation(json,"nonce_proof")){
             char encrypted[700]={0},proof[100]={0};
-            if(!json_string(json,"encrypted_nonce",encrypted,sizeof(encrypted))||
-               !dnx2AuthCryptoNonceProof(encrypted,proof,sizeof(proof))){
-                status("FAILED TO VERIFY ENCRYPTED NONCE",NULL);break;
+            if(!json_string(json,"encrypted_nonce",encrypted,sizeof(encrypted))){
+                status("NONCE FIELD MISSING OR INVALID",NULL);break;
+            }
+            if(!dnx2AuthCryptoNonceProof(encrypted,proof,sizeof(proof))){
+                int error=dnx2AuthCryptoError();
+                if(error==2)status("NONCE ERROR: BASE64 DECODE FAILED",NULL);
+                else if(error==3)status("NONCE ERROR: CIPHERTEXT LENGTH",NULL);
+                else if(error==4)status("NONCE ERROR: RSA OAEP DECRYPT FAILED",NULL);
+                else if(error==5)status("NONCE ERROR: PROOF ENCODE FAILED",NULL);
+                else status("NONCE ERROR: NO ACTIVE CRYPTO SESSION",NULL);
+                wipe(encrypted,sizeof(encrypted));
+                break;
             }
             char response[220];
             int len=snprintf(response,sizeof(response),

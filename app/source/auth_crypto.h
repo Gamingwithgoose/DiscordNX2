@@ -11,4 +11,9 @@ int dnx2AuthCryptoFingerprint(char *out,size_t cap);
 int dnx2AuthCryptoDecrypt(const char *cipher,unsigned char *plain,size_t cap,size_t *plain_len);
 int dnx2AuthCryptoNonceProof(const char *cipher,char *proof,size_t proof_cap);
 int dnx2AuthCryptoAvailable(void);
+/* Fixed non-sensitive status: 0 OK, 1 no session, 2 invalid base64,
+ * 3 ciphertext length mismatch, 4 RSA OAEP decrypt error, 5 QR proof error. */
+int dnx2AuthCryptoError(void);
+/* Local public encrypt -> private decrypt test with randomized OAEP. */
+int dnx2AuthCryptoSelfTest(void);
 #endif

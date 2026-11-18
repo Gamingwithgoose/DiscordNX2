@@ -27,6 +27,7 @@ typedef struct {
     char public_key[900];
 } DnxCrypto;
 static DnxCrypto crypto;
+static int auth_crypto_error;
 
 static int hw_entropy(void *ctx,unsigned char *out,size_t len,size_t *olen) {
     (void)ctx;
@@ -69,6 +70,7 @@ static int decode_base64(const char *str,unsigned char *out,size_t cap,size_t *d
     return rc==0;
 }
 int dnx2AuthCryptoAvailable(void){return 1;}
+int dnx2AuthCryptoError(void){return auth_crypto_error;}
 void dnx2AuthCryptoClose(void) {
     mbedtls_pk_free(&crypto.pk);
     mbedtls_ctr_drbg_free(&crypto.drbg);
@@ -78,6 +80,7 @@ void dnx2AuthCryptoClose(void) {
 }
 int dnx2AuthCryptoOpen(void) {
     dnx2AuthCryptoClose();
+    auth_crypto_error=0;
     mbedtls_pk_init(&crypto.pk);
     mbedtls_entropy_init(&crypto.entropy);
     mbedtls_ctr_drbg_init(&crypto.drbg);
@@ -118,20 +121,52 @@ int dnx2AuthCryptoFingerprint(char *out,size_t cap) {
 }
 int dnx2AuthCryptoDecrypt(const char *cipher,unsigned char *plain,
                           size_t cap,size_t *plain_len) {
-    if(!crypto.active||!cipher||!plain||!plain_len)return 0;
+    auth_crypto_error=0;
+    if(!crypto.active||!cipher||!plain||!plain_len) {
+        auth_crypto_error=1;return 0;
+    }
     unsigned char encrypted[512]={0};
     size_t bytes=0,olen=0;
-    if(!decode_base64(cipher,encrypted,sizeof(encrypted),&bytes) ||
-       bytes!=mbedtls_rsa_get_len(mbedtls_pk_rsa(crypto.pk)))goto fail;
-    if(mbedtls_rsa_rsaes_oaep_decrypt(mbedtls_pk_rsa(crypto.pk),
+    int ok=decode_base64(cipher,encrypted,sizeof(encrypted),&bytes);
+    if(!ok) {auth_crypto_error=2;goto fail;}
+    if(bytes!=mbedtls_rsa_get_len(mbedtls_pk_rsa(crypto.pk))) {
+        auth_crypto_error=3;goto fail;
+    }
+    int rc=mbedtls_rsa_rsaes_oaep_decrypt(mbedtls_pk_rsa(crypto.pk),
          mbedtls_ctr_drbg_random,&crypto.drbg,MBEDTLS_RSA_PRIVATE,
-         NULL,0,&olen,encrypted,plain,cap)!=0)goto fail;
+         NULL,0,&olen,encrypted,plain,cap);
+    if(rc!=0) {
+        /* Expose category only, never ciphertext, nonce, or crypto buffers. */
+        auth_crypto_error=4;goto fail;
+    }
     *plain_len=olen;
     clear_volatile(encrypted,sizeof(encrypted));
     return 1;
 fail:
     clear_volatile(encrypted,sizeof(encrypted));
     return 0;
+}
+/* Before trusting a remote challenge, verify this platform's RSA-2048
+ * encryption/decryption integration with an ephemeral, non-secret test. */
+int dnx2AuthCryptoSelfTest(void) {
+    if(!crypto.active){auth_crypto_error=1;return 0;}
+    static const unsigned char sample[]="DiscordNX2 OAEP selftest v1";
+    unsigned char cipher[256]={0},result[256]={0};
+    size_t n=0;
+    int ret=mbedtls_rsa_rsaes_oaep_encrypt(mbedtls_pk_rsa(crypto.pk),
+        mbedtls_ctr_drbg_random,&crypto.drbg,MBEDTLS_RSA_PUBLIC,
+        NULL,0,sizeof(sample)-1,sample,cipher);
+    int ok=(ret==0);
+    if(ok){
+        ret=mbedtls_rsa_rsaes_oaep_decrypt(mbedtls_pk_rsa(crypto.pk),
+            mbedtls_ctr_drbg_random,&crypto.drbg,MBEDTLS_RSA_PRIVATE,
+            NULL,0,&n,cipher,result,sizeof(result));
+        ok=ret==0&&n==sizeof(sample)-1&&memcmp(sample,result,n)==0;
+    }
+    clear_volatile(cipher,sizeof(cipher));
+    clear_volatile(result,sizeof(result));
+    auth_crypto_error=ok?0:4;
+    return ok;
 }
 /* Current v2 remote-auth field is "nonce": the decrypted RSA-OAEP
  * nonce base64url-encoded. The 2021-era "proof" SHA-256 variant is not
@@ -140,13 +175,16 @@ int dnx2AuthCryptoNonceProof(const char *cipher,char *proof,size_t proof_cap) {
     unsigned char nonce[256]={0};
     size_t n=0;
     int ok=dnx2AuthCryptoDecrypt(cipher,nonce,sizeof(nonce),&n);
-    if(ok)ok=base64_url(nonce,n,proof,proof_cap);
+    if(ok){ok=base64_url(nonce,n,proof,proof_cap);
+        if(!ok)auth_crypto_error=5;}
     clear_volatile(nonce,sizeof(nonce));
     return ok;
 }
 
 #else
 int dnx2AuthCryptoAvailable(void){return 0;}
+int dnx2AuthCryptoError(void){return 1;}
+int dnx2AuthCryptoSelfTest(void){return 0;}
 int dnx2AuthCryptoOpen(void){return 0;}
 void dnx2AuthCryptoClose(void){}
 int dnx2AuthCryptoPublicKey(char*out,size_t n){(void)out;(void)n;return 0;}
