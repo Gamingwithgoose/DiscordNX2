@@ -94,9 +94,10 @@
     "v0.22: native unofficial Discord remote-auth QR login attempt using mbedTLS RSA-2048/OAEP-SHA256, fingerprint validation, masked WS, heartbeat, ticket exchange, ephemeral user token and actual user/guild REST metadata.",
     "v0.22: anti-aliased shared system TrueType via pl:u/stb_truetype when available, public-domain 8x8 fallback. No font file distributed.",
     "v0.22: Build-NRO.bat attempts to install switch-mbedtls through pacman if required; sanitized stage-only auth logs intentionally omit all credentials and QR URLs.",
-    "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics."
+    "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
+    "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "User v0.22 Build-NRO successfully installed switch-mbedtls 2.28.10-1 and compiled main, voice_packet, discord_gateway_probe, graphical_ui, discord_remote_probe, qrcodegen, auth_crypto. Failed compiling native_login.c because osGetTime() is 3DS-only. Source hotfix pushed but not yet rebuilt; remaining native_font.c and linker have not been reached.",
+  "build_validation": "Real hardware v0.22 built and attempted native QR login. Logged RSA session generation and connection then encrypted nonce verification failed before QR; precise cause unresolved. New self-test and detailed failure stages committed but not hardware tested.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -122,10 +123,11 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "GitHub Desktop pull main (clock hotfix), run Build-NRO.bat again; mbedTLS is already installed and will not need re-download",
-    "If build fails, paste compiler/linker error. If it builds, FTP only dist/DiscordNX2.nro",
-    "Keep installed /kaihen/plugins/discordnx2.nso untouched; do not restart kaiHEN",
-    "If login is attempted, use a separate test Discord account and never paste a QR URL, access token, ticket or password; use stage-only hardware report on failure"
+    "GitHub Desktop pull main; Build-NRO.bat (mbedTLS already installed), FTP only dist/DiscordNX2.nro",
+    "Launch Servers > SIGN IN WITH QR CODE using a test account only when a real QR appears",
+    "If QR still fails, upload /kaihen/discordnx2-hardware.txt: should show LOCAL RSA OAEP SELFTEST PASSED or FAILED, and nonce-specific error",
+    "No need to rerun audio or regular Gateway; installed resident NSO unchanged",
+    "Never share QR login URLs, nonce fields, access tokens, tickets or secrets"
   ],
   "next_developer_work": [
     "Fix native build/compiler and mbedTLS portlibs integration as first priority if user build fails",

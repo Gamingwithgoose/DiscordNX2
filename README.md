@@ -179,3 +179,7 @@ Build validation: v0.21 Remote Auth Gateway connection and v0.18 UI were real-ha
 ### v0.22 first compiler fix (Switch 2)
 
 The first user build installed switch-mbedtls successfully but failed to compile native_login.c due to a leftover 3DS osGetTime call. The source now uses the standard monotonic millisecond clock. Pull main and rerun Build-NRO.bat; package installation should be skipped because switch-mbedtls is already present. Compilation, linking, and actual sign-in remain to be verified.
+
+### v0.22 native QR nonce fix investigation
+
+Actual Switch 2 test reached `GENERATING SECURE RSA-2048 SESSION`, `CONNECTING TO DISCORD QR LOGIN`, then `FAILED TO VERIFY ENCRYPTED NONCE`; no QR generated. A follow-up revision adds a local RSA-OAEP round-trip self-test and static stage-specific nonce failure labels, so the next attempt distinguishes malformed challenge, base64 decode, ciphertext size, RSA private decrypt, and proof encoding. No secret values are logged. Pull main, rebuild NRO only, and share the stage-only report if it still fails. This does NOT yet claim working QR sign-in.

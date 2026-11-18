@@ -137,3 +137,7 @@ Replaced handmade 5x7 text with public-domain 8x8 fallback, added optional antia
 ## November 17, 2026 - v0.22 QR login build fix: Switch monotonic clock
 
 User's first v0.22 Build-NRO.bat installed switch-mbedtls-2.28.10-1 successfully and compiled main/voice_packet/gateway/graphical_ui/remote_probe/QR encoder/auth_crypto; stopped at native_login.c:122 with an implicit declaration of osGetTime (3DS-only API). Replaced all 11 usages with dnx2MonotonicMs() using C clock_gettime(CLOCK_MONOTONIC), explicit u64 millisecond return, and added time.h; preserves heartbeat and timeout semantics. No rebuild verified on the user's devkitPro yet; other files later in build may expose additional errors. All prior functionality and resident NSO unchanged.
+
+## November 17, 2026 - v0.22 native QR nonce challenge diagnostics
+
+Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA session creation, remote-auth connection, then FAILED TO VERIFY ENCRYPTED NONCE before QR was generated. Added local RSA-2048 OAEP encrypt/decrypt self-test before connecting and replaced ambiguous nonce failure with stage-specific messages for absent/invalid encrypted_nonce, base64 decoding, ciphertext size mismatch, OAEP decrypt failure, and proof encoding failure. These statuses contain no nonce, keys, fingerprint or tokens. Build and actual QR login not yet verified after this fix. Existing font, audio and resident NSO unchanged.
