@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #define DNX2_PHONE_REQUEST_MAX 8192u
-#define DNX2_PHONE_PAYLOAD_MAX 4096u
+#define DNX2_PHONE_PAYLOAD_MAX 6144u
 /* 1 complete, 0 needs more bytes, -1 invalid. Payload points into request. */
 int dnx2PhoneRequest(const char *request,size_t count,const char **payload,size_t *length);
 int dnx2PhonePrivateIp(uint32_t host_order);

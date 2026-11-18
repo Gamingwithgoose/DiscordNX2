@@ -11,7 +11,8 @@ const params=new URLSearchParams(location.hash.slice(1));
 const state=params.get('state')||'',sitekey=params.get('sitekey')||'',rqdata=params.get('rqdata')||'';
 const pub=params.get('pub')||'',back=params.get('return')||'';
 history.replaceState(null,'',location.pathname);
-let sealed='',finished=false,busy=false,valid=false,generation=0;
+const tokenLimit=params.has('limit')?Number(params.get('limit')):2048;
+let sealed='',finished=false,busy=false,valid=false,generation=0,responseTimer;
 const button=document.getElementById('send');
 function message(text){document.getElementById('status').textContent=text;}
 function privateReturn(value){
@@ -26,37 +27,49 @@ function privateReturn(value){
 function decode64(value){return Uint8Array.from(atob(value),c=>c.charCodeAt(0));}
 function encode64(bytes){return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 async function seal(token){
- if(!valid||finished||busy||typeof token!=='string'||!token||token.length>2048||!/^[\x21-\x7e]+$/.test(token))return;
+ if(!valid||finished||busy||sealed)return;
+ if(typeof token!=='string'||!token){message('The CAPTCHA has not returned a completed result yet. Finish the challenge on this page.');return;}
+ if(token.length>tokenLimit){message('The verification result exceeds this Switch app version’s limit ('+token.length+' characters; maximum '+tokenLimit+'). Update DiscordNX2, then start a new login.');return;}
+ if(!/^[\x21-\x7e]+$/.test(token)){message('The CAPTCHA returned an unsupported result. Start a new login on the Switch.');return;}
  busy=true;const serial=++generation;
+ let step='starting encryption';
+ message('Verification received. Encrypting the result for your Switch…');
  try{
   const key=crypto.getRandomValues(new Uint8Array(32)),iv=crypto.getRandomValues(new Uint8Array(12));
   const aes=await crypto.subtle.importKey('raw',key,'AES-GCM',false,['encrypt']);
+  step='reading the Switch public key';
   const rsa=await crypto.subtle.importKey('spki',decode64(pub),{name:'RSA-OAEP',hash:'SHA-256'},false,['encrypt']);
+  step='encrypting the session key';
   const wrapped=new Uint8Array(await crypto.subtle.encrypt({name:'RSA-OAEP'},rsa,key));
   key.fill(0);
   const text=new TextEncoder().encode(state+'\n'+token);
+  step='encrypting the verification result';
   const data=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:new TextEncoder().encode('DiscordNX2 CAPTCHA v1:'+state),tagLength:128},aes,text));
   text.fill(0);
   if(wrapped.length!==256)throw new Error('key size');
   const envelope=new Uint8Array(1+256+12+data.length);envelope[0]=1;envelope.set(wrapped,1);envelope.set(iv,257);envelope.set(data,269);
   if(serial!==generation)return;
   sealed=encode64(envelope);button.disabled=false;message('Verification complete. Tap Send to Switch. If prompted, continue to the local address; only the encrypted result is sent.');
- }catch{message('Encryption could not start. Return to the Switch and try a new login.');}
+ }catch{valid=false;message('Could not finish '+step+'. Open this page in an up-to-date phone browser and start a new Switch login.');}
  finally{busy=false;}
 }
 button.addEventListener('click',()=>{
  if(finished||!sealed||!valid)return;
- finished=true;button.disabled=true;
+ finished=true;button.disabled=true;if(responseTimer)clearInterval(responseTimer);
  const form=document.createElement('form');form.method='POST';form.action=back;form.enctype='application/x-www-form-urlencoded';
  const field=document.createElement('input');field.type='hidden';field.name='payload';field.value=sealed;form.appendChild(field);document.body.appendChild(form);
  sealed='';form.submit();
 });
 function ready(){
- valid=params.get('v')==='1'&&/^[a-f0-9]{64}$/.test(state)&&sitekey.length>0&&sitekey.length<=95&&rqdata.length<=4095&&/^[A-Za-z0-9+/]+={0,2}$/.test(pub)&&pub.length<=900&&privateReturn(back)&&!!globalThis.crypto?.subtle;
+ valid=(tokenLimit===2048||tokenLimit===4095)&&params.get('v')==='1'&&/^[a-f0-9]{64}$/.test(state)&&sitekey.length>0&&sitekey.length<=95&&rqdata.length<=4095&&/^[A-Za-z0-9+/]+={0,2}$/.test(pub)&&pub.length<=900&&privateReturn(back)&&!!globalThis.crypto?.subtle;
  if(!valid){message('Invalid or unsupported verification request. Return to the Switch and start a new login.');return;}
  const widget=hcaptcha.render('challenge',{sitekey,theme:'dark',callback:seal,
   'error-callback':()=>message('The CAPTCHA provider could not load this challenge on this website. Return to the Switch; no verification was submitted.'),
-  'expired-callback':()=>{generation++;sealed='';button.disabled=true;message('The challenge expired. Return to the Switch and start a new login.');}});
- if(rqdata)hcaptcha.setData(widget,{rqdata});
+  'expired-callback':()=>{valid=false;generation++;if(responseTimer)clearInterval(responseTimer);sealed='';button.disabled=true;message('The challenge expired. Return to the Switch and start a new login.');}});
+ try{if(rqdata)hcaptcha.setData(widget,{rqdata});}catch{valid=false;message('This browser could not attach the Discord verification request. Start a new login in another phone browser.');return;}
+ // Read only a real user-completed provider result; never synthesize a token.
+ if(typeof hcaptcha.getResponse==='function')responseTimer=setInterval(()=>{
+  if(!finished&&!busy&&!sealed){const token=hcaptcha.getResponse(widget);if(token)seal(token);}
+ },1000);
 }
 </script><script src="https://js.hcaptcha.com/1/api.js?onload=ready&amp;render=explicit" async defer></script></body></html>

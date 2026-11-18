@@ -43,7 +43,7 @@ static Dnx2Account account;
 static unsigned char http_body[HTTP_BUF];
 static char captcha_headers[8192];
 static Dnx2Captcha captcha_challenge;
-static char captcha_solution[2049];
+static char captcha_solution[4096];
 static unsigned last_http_status;
 static unsigned last_discord_error;
 static int last_captcha_required;

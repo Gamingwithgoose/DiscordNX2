@@ -3,7 +3,7 @@ setlocal EnableExtensions
 cd /d "%~dp0"
 set "DISCORDNX2_ROOT=%CD%"
 echo DiscordNX2 NRO-only local build
-echo Includes direct phone CAPTCHA handoff. Phone and Switch must use the same Wi-Fi.
+echo System Wi-Fi browser test: hold R and press Y on Dashboard.
 set "BASH=C:\devkitPro\msys2\usr\bin\bash.exe"
 if not exist "%BASH%" goto fail
 echo Checking secure QR-login cryptography dependency...

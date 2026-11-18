@@ -12,6 +12,7 @@
 #include "native_login.h"
 #include "native_font.h"
 #include "browser_memory.h"
+#include "wifi_browser_probe.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -953,10 +954,31 @@ static void browser_memory_report(const char *stage,Result result) {
     diagf("browser memory: %s result=%08x\n",stage,result);
     (void)write_diagnostics();
 }
+static void wifi_browser_report(const char *stage,Result result) {
+    diagf("wifi browser: %s result=%08x\n",stage,result);
+    (void)write_diagnostics();
+}
 static void run_gui_action(int action) {
-    if(action==7) {
+    if(action==8) {
         diag_len=0;
-        diagf("DiscordNX2 v0.34 executable memory check - no network or account data\n");
+        diagf("DiscordNX2 v0.36 Wi-Fi browser launch test - no account data or network changes\n");
+        dnx2GraphicalAuthBegin();
+        dnx2GraphicalWifiBrowserStatus("Opening the system Wi-Fi browser...",0);
+        dnx2GraphicalAuthEnd();
+        int returned=dnx2WifiBrowserProbe(wifi_browser_report);
+        diagf("wifi browser: API completed=%u (not proof a page opened)\n",returned);
+        (void)write_diagnostics();
+        dnx2GraphicalAuthBegin();
+        int visible=dnx2GraphicalWifiBrowserStatus("Did you see the Example Domain page?",1);
+        int answer=0;
+        while(visible&&appletMainLoop()&&!(answer=dnx2GraphicalBrowserAnswer()))svcSleepThread(16000000LL);
+        diagf("wifi browser: user confirmed Example Domain page=%u answered=%u\n",answer==1,answer==1||answer==-1);
+        (void)write_diagnostics();
+        dnx2GraphicalAuthEnd();
+    }
+    else if(action==7) {
+        diag_len=0;
+        diagf("DiscordNX2 v0.36 executable memory check - no network or account data\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalBrowserCheckStatus("Checking executable memory...",0);
         int passed=dnx2BrowserMemoryCheck(browser_memory_report);
@@ -970,7 +992,7 @@ static void run_gui_action(int action) {
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.34 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.36 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();

@@ -18,6 +18,10 @@
 #ifndef DNX2_PHONE_CAPTCHA_PAGE_URL
 #define DNX2_PHONE_CAPTCHA_PAGE_URL "https://mmonsterpatch.gamingwithgoose.com/discordnx2-phone.html"
 #endif
+// Opt-in only while the normal public-jailbreak, on-console route is tested.
+#ifndef DNX2_ENABLE_PHONE_HANDOFF
+#define DNX2_ENABLE_PHONE_HANDOFF 0
+#endif
 static const char *failure="Verification was not completed.";
 static unsigned phone_error;
 unsigned dnx2CaptchaError(void){return phone_error;}
@@ -63,6 +67,11 @@ typedef struct {
 int dnx2CaptchaShow(const Dnx2Captcha *c,char *solution,size_t cap,unsigned local_ip,
                    Dnx2CaptchaProgress progress,Dnx2CaptchaCancel cancel) {
     phone_error=1;failure="Verification was not completed.";
+    if(!DNX2_ENABLE_PHONE_HANDOFF) {
+        failure="On-console CAPTCHA is not ready yet. Browser testing is in progress.";
+        if(solution&&cap)dnx2CaptchaWipe(solution,cap);
+        return 0;
+    }
     if(!solution||!cap)return 0;
     solution[0]=0;
     if(!c||strcmp(c->service,"hcaptcha")||!progress||!dnx2CaptchaPageUrl(DNX2_PHONE_CAPTCHA_PAGE_URL))return 0;
@@ -92,7 +101,7 @@ int dnx2CaptchaShow(const Dnx2Captcha *c,char *solution,size_t cap,unsigned loca
     if(!dnx2AuthCryptoPublicKey(s->pubkey,sizeof(s->pubkey))||
        !encode(c->sitekey,s->site,sizeof(s->site))||!encode(c->rqdata,s->data,sizeof(s->data))||
        !encode(s->pubkey,s->pub,sizeof(s->pub))||!encode(destination,s->back,sizeof(s->back))){failure="Phone verification request could not be encoded.";goto done;}
-    int count=snprintf(s->url,sizeof(s->url),"%s#v=1&state=%s&sitekey=%s&rqdata=%s&pub=%s&return=%s",
+    int count=snprintf(s->url,sizeof(s->url),"%s?page=35#v=1&limit=4095&state=%s&sitekey=%s&rqdata=%s&pub=%s&return=%s",
         DNX2_PHONE_CAPTCHA_PAGE_URL,s->state,s->site,s->data,s->pub,s->back);
     if(count<=0||(size_t)count>=sizeof(s->url)||count>2200) {
         failure="Challenge too large for a phone QR. No data was truncated.";goto done;

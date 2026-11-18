@@ -7,7 +7,7 @@
 #include <mbedtls/base64.h>
 #include <mbedtls/gcm.h>
 int dnx2PhoneDecrypt(const char *payload,size_t length,const char *state,char *out,size_t cap) {
-    unsigned char envelope[3072]={0},key[32]={0},plain[2114]={0};
+    unsigned char envelope[4608]={0},key[32]={0},plain[4161]={0};
     char encoded[DNX2_PHONE_PAYLOAD_MAX+4]={0},wrapped[345]={0},aad[87]={0};
     size_t bytes=0,key_size=0,encoded_size=length,wrapped_size=0;int ok=0;
     mbedtls_gcm_context gcm;mbedtls_gcm_init(&gcm);
@@ -28,14 +28,14 @@ int dnx2PhoneDecrypt(const char *payload,size_t length,const char *state,char *o
     wrapped[wrapped_size]=0;
     if(!dnx2AuthCryptoDecrypt(wrapped,key,sizeof(key),&key_size)||key_size!=32)goto done;
     size_t cipher_size=bytes-269-16;
-    if(cipher_size<66||cipher_size>2113)goto done;
+    if(cipher_size<66||cipher_size>4160)goto done;
     memcpy(aad,"DiscordNX2 CAPTCHA v1:",22);memcpy(aad+22,state,64);
     if(mbedtls_gcm_setkey(&gcm,MBEDTLS_CIPHER_ID_AES,key,256)||
        mbedtls_gcm_auth_decrypt(&gcm,cipher_size,envelope+257,12,(unsigned char*)aad,86,
                               envelope+bytes-16,16,envelope+269,plain))goto done;
     unsigned diff=0;for(size_t i=0;i<64;i++)diff|=plain[i]^(unsigned char)state[i];
     size_t token_size=cipher_size-65;
-    if(diff||plain[64]!='\n'||!token_size||token_size>2048||token_size>=cap)goto done;
+    if(diff||plain[64]!='\n'||!token_size||token_size>4095||token_size>=cap)goto done;
     for(size_t i=65;i<cipher_size;i++)if(plain[i]<33||plain[i]>126)goto done;
     memcpy(out,plain+65,token_size);out[token_size]=0;ok=1;
 done:

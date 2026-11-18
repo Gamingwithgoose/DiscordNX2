@@ -264,3 +264,18 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Publish isolated discordnx2-phone.html in existing community website (4823cfa). No server relay, Z: edits, jailbreak or plugin changes.
 - Changed native source passes compiler checks; host parser and actual WebCrypto/mbedTLS interoperability tests pass, including tampering/wrong-state rejection. Existing login regressions pass. No NRO or browser dependency build performed; user runs Build-NRO.bat.
 - Hardware phone delivery, provider domain/cross-device acceptance and final login remain unverified. Browser may warn about local HTTP navigation; payload is already encrypted. No CAPTCHA bypass or browser/origin spoofing.
+
+
+## v0.35 - phone verification button and result length
+
+- Fix silent rejection of hCaptcha results longer than 2048 bytes, which could leave Send to Switch disabled. Negotiate a 4095-byte maximum in the new QR and enlarge native buffers within the existing header limit; never truncate results.
+- Phone page shows explicit result-size and encryption-stage failures. Read completed provider responses as a callback fallback; no synthesized token or bypass. Old QR requests keep their 2048-byte bound and receive a useful error.
+- Add actual WebCrypto/mbedTLS tests for 4095-byte results, oversize rejection and legacy limits. Source checks only; user builds NRO.
+
+
+## v0.36 - direct system Wi-Fi browser launch test
+
+- User prioritizes self-contained operation with normal public jailbreak: no DNS/90DNS changes, PC host, custom payload or plugin replacement unless proved necessary.
+- Add opt-in Dashboard R+Y test using public webWifiCreate/webWifiShow, fixed Example Domain HTTPS URL and no connection-test override. Release and restore framebuffer, persist each stage, log API status separately from user confirmation that the actual page appeared.
+- Default phone handoff is disabled while the on-console route is tested; pending phone-page/button fixes remain local and are not deployed to the personal website. No real login/CAPTCHA is attempted by this test.
+- Source checks only, no NRO/browser/dependency build. No DNS, loader, payload, NSO or audio/network implementation changes. Hardware availability and hCaptcha compatibility remain unverified.

@@ -253,6 +253,9 @@ int dnx2GraphicalMenu(void) {
         analog_prior=analog;
         if(down & HidNpadButton_Plus)break;
         /* Deliberate test shortcut; no diagnostic tab or automatic login probes. */
+        if(tab==0 && (down&HidNpadButton_Y) && (padGetButtons(&pad)&HidNpadButton_R)) {
+            action=8;break;
+        }
         if(tab==0 && (down&HidNpadButton_X) && (padGetButtons(&pad)&HidNpadButton_R)) {
             action=7;break;
         }
@@ -297,7 +300,9 @@ int dnx2GraphicalMenu(void) {
 static Framebuffer auth_fb;
 static int auth_fb_ready=0,auth_hid_ready=0;
 static PadState auth_pad;
+static int browser_answer_armed;
 void dnx2GraphicalAuthBegin(void) {
+    browser_answer_armed=0;
     Result rc=hidInitialize();
     if(R_SUCCEEDED(rc)){
         auth_hid_ready=1;
@@ -353,4 +358,35 @@ void dnx2GraphicalBrowserCheckStatus(const char *message, int complete) {
     text_line(80,466,complete?"B: Back":"Please wait",C_WHITE,2,50);
     framebufferEnd(&auth_fb);
     pixels=NULL;
+}
+
+
+int dnx2GraphicalBrowserAnswer(void) {
+    if(!auth_hid_ready)return -2;
+    padUpdate(&auth_pad);
+    u64 held=padGetButtons(&auth_pad);
+    if(!browser_answer_armed) {
+        if(!(held&(HidNpadButton_A|HidNpadButton_B|HidNpadButton_Plus)))browser_answer_armed=1;
+        return 0;
+    }
+    u64 down=padGetButtonsDown(&auth_pad);
+    if(down&HidNpadButton_A)return 1;
+    if(down&(HidNpadButton_B|HidNpadButton_Plus))return -1;
+    return 0;
+}
+int dnx2GraphicalWifiBrowserStatus(const char *message,int question) {
+    if(!auth_fb_ready)return 0;
+    u32 stride=0;
+    pixels=(uint32_t*)framebufferBegin(&auth_fb,&stride);
+    if(!pixels)return 0;
+    stride_pixels=(int)(stride/4);text_right=1216;
+    rect(0,0,W,H,C_BG);brand(48,42);
+    text_line(132,62,"System browser test",C_WHITE,3,48);
+    block(48,156,1184,388,C_CARD);
+    text_line(80,196,message,C_WHITE,3,72);
+    text_line(80,276,question?"Only choose Yes if the page said Example Domain.":"This test opens a public page without signing in.",C_MUTED,2,90);
+    text_line(80,324,question?"An error dialog or blank screen counts as No.":"No DNS settings, loader or plugin changes are made.",C_MUTED,2,90);
+    text_line(80,398,"Results are saved to the hardware log.",C_MUTED,2,80);
+    text_line(80,466,question?"A: Yes    B: No":"Close the browser to return here.",C_WHITE,2,70);
+    framebufferEnd(&auth_fb);pixels=NULL;return 1;
 }
