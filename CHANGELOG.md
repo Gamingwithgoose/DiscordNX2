@@ -246,3 +246,10 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Replace the original direct mapping/cache adapter with installed libounce JIT APIs. The Switch 2 implementation supports loader-provided staging/publication callbacks, so absent legacy syscall hints must not gate this route.
 - Keep R+X opt-in, per-operation stage logging, RX verification, fixed 42/53 execution/replacement checks and checked closure. No dependency rebuild or NRO build performed; compiler and installed-library symbols checked.
 - Full browser and CAPTCHA integration remain unfinished. Resident NSO, audio and networking unchanged.
+
+
+## v0.33 - link required kaiHEN JIT hooks
+
+- v0.32 jitCreate safely reports 00004759, LibnxError_JitUnavailable. Found the app omitted -lkaihen required by the installed kaihen.h JIT instructions.
+- Link -lkaihen before -lounce_core. Its linker script includes kaihen-jit.o explicitly, supplying loader map/unmap/alias/publication hooks referenced weakly by libounce.
+- Verify hooks with a link check using cached application objects only; no NRO or dependency rebuild. User repeats normal Build-NRO.bat and Dashboard R+X. Actual JIT execution and CAPTCHA remain unverified; NSO unchanged.

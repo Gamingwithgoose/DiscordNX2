@@ -9,7 +9,9 @@ include $(DEVKITPRO)/libounce/switch2_cpu.mk
 ARCH := $(SWITCH2_CPU) -mtp=soft -fPIE
 CFLAGS := $(ARCH) -std=gnu11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -D__SWITCH__ -D__SWITCH2__ -I$(DEVKITPRO)/portlibs/switch2/include -I$(DEVKITPRO)/libounce/include
 LDFLAGS := $(ARCH) -specs=$(DEVKITPRO)/libounce/switch.specs -Wl,--gc-sections
-LIBS := -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -lounce_core -lm
+# libkaihen is a linker script that includes the JIT hook object explicitly.
+# libounce references these hooks weakly; its library alone cannot provide them.
+LIBS := -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -lkaihen -lounce_core -lm
 
 # devkitPro's maintained switch-mbedtls package is AArch64 and uses libnx
 # compatible libc. It is optional for compiling old hardware diagnostics,
@@ -56,7 +58,7 @@ $(BUILD)/captcha_browser.o: source/captcha_browser.c source/captcha.h | $(BUILD)
 $(BUILD)/$(TARGET).elf: $(BUILD)/browser_memory.o $(BUILD)/captcha.o $(BUILD)/captcha_browser.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(BUILD)/$(TARGET).nacp: | $(BUILD)
-	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.32" $@
+	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.33" $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).nacp assets/icon.jpg
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --icon=assets/icon.jpg --nacp=$(BUILD)/$(TARGET).nacp
 clean:
