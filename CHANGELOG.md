@@ -315,3 +315,13 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Embed unmodified OFL Noto Sans/Math/Symbols2/monochrome Emoji fonts with pinned provenance and license notices. Test actual styled mathematical letters, multilingual characters and emoji. Add pixel-aware wrapping; unsupported sequences/complex shaping still limited.
 - Source and font-assembly checks plus touch geometry, synthetic live-worker and actual-font rasterization tests passed. No NRO built. Normal public jailbreak, existing saved-session format, audio, networking and resident NSO preserved. Discord voice calling remains unfinished.
 - Final regression cycle: existing HTTP/WS/QR/CAPTCHA, encrypted-session persistence and client data tests pass. Bundled Noto Sans is the UI primary font so text rendering no longer depends on console font initialization. No NRO built.
+
+
+## v0.40 - in-place conversations, server icons and mobile input
+
+- User confirmed v0.39 touch works; photos identified full loading-screen switches on channel/send, unreadable rail initials and an oversized labeled fallback keyboard.
+- Keep the chat framebuffer alive for immutable background channel/send/refresh/catalog/image jobs. Apply results on UI thread only to matching context; block duplicate in-flight sends, preserve unconfirmed drafts, and apply empty histories. Login/native applet flows remain separate. No full loading/auth overlay for channel selection or sends.
+- Load actual server icons from fixed Discord CDN paths without account Authorization. Add bounded 48-entry RGBA cache, PNG decoder with pinned upstream license/provenance, shape clipping, larger fallback initials and full-name controller tooltip. Image cache remains RAM-only.
+- Replace fallback keyboard with compact full-width phone-style QWERTY, larger tightly spaced keys, separate number/symbol pages and smiley. Remove Touch QWERTY heading and instructional footers; use neutral gray chat styling. Done does not send.
+- Add Unicode/current-server emoji and server-sticker picker, explicit staged sends, bounded custom-emoji markup rendering and static PNG/APNG sticker previews. Honor unavailable entries/API permissions. GIF search, animated media, full attachment/rich-text support and voice calling remain unfinished.
+- Test actual production jobs with deferred/stale result fixtures, duplicate-send rejection, failure preservation, empty history, catalogs, unauthenticated CDN and real PNG limits. Verify mobile keyboard geometry, binary HTTP bodies and existing live/font/auth/session regressions. Changed-source AArch64 checks pass; no NRO built. Resident NSO, DNS/public jailbreak and established audio/network pipeline preserved.

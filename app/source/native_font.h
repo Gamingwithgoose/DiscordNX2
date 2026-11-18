@@ -5,6 +5,7 @@
 int dnx2FontInit(void);
 void dnx2FontExit(void);
 /* UTF-8 byte count fitting the pixel width; never splits a code point. */
+int dnx2FontWidth(const char *text,int size);
 int dnx2FontFit(const char *text,int width,int size,int maxchars);
 /* Returns 1 if native anti-aliased TrueType rendered; 0 requests bitmap fallback. */
 int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,

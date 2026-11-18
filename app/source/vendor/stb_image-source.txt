@@ -1,0 +1,2 @@
+https://github.com/nothings/stb/blob/9600522de53973336fa033a289858a4354cbb04c/stb_image.h
+Dual public-domain/MIT license is included in the header.

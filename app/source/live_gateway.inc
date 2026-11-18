@@ -118,7 +118,7 @@ static void live_worker(void *unused){
 done:
     if(!live_cancel()&&__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE)==1)live_set_mode(4);
     FILE *report=fopen("sdmc:/kaihen/discordnx2-live.txt","w");
-    if(report){fprintf(report,"DiscordNX2 v0.39 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
+    if(report){fprintf(report,"DiscordNX2 v0.40 live text updates - no account/channel/message/credential data\nGateway ready=%d dispatches=%u refreshes=%u mode=%d last_http=%u cancelled=%d\n",ready,dispatches,refreshes,__atomic_load_n(&live_mode,__ATOMIC_ACQUIRE),last_http_status,live_cancel());fclose(report);}
     tls_close(&gateway);if(rng)csrngExit();if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
     wipe(&ws_reader,sizeof(ws_reader));if(event){wipe(event,DNX2_WS_MAX+1);free(event);}if(result){wipe(result,sizeof(*result));free(result);}
 }
@@ -128,7 +128,7 @@ void dnx2LiveStop(void){
 }
 void dnx2LiveReset(void){dnx2LiveStop();wipe(live_pending,sizeof(live_pending));wipe(live_channel,sizeof(live_channel));wipe(live_guild,sizeof(live_guild));live_count=0;live_generation=live_applied=0;wipe(live_session,sizeof(live_session));live_sequence=-1;live_identify_after=0;live_set_mode(0);}
 void dnx2LiveStart(void){
-    if(live_running||!account.signed_in||account.selected_channel<0)return;
+    if(dnx2JobBusy()||live_running||!account.signed_in||account.selected_channel<0)return;
     int type=account.channels[account.selected_channel].type;if(type!=0&&type!=5)return;
     snprintf(live_channel,sizeof(live_channel),"%s",account.channels[account.selected_channel].id);
     snprintf(live_guild,sizeof(live_guild),"%s",account.servers[account.selected].id);snprintf(live_token,sizeof(live_token),"%s",session_token);

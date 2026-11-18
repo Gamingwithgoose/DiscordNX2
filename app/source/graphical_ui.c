@@ -11,6 +11,9 @@
 #include "session_store.h"
 #include "client_json.h"
 #include "chat_layout.h"
+#include "chat_assets.h"
+#include "chat_media_data.h"
+#include "mobile_keyboard.h"
 #include <switch/applets/swkbd.h>
 #include <stdlib.h>
 #include "native_font.h"
@@ -26,17 +29,17 @@
 
 #define W 1280
 #define H 720
-#define C_BG       RGBA8_MAXALPHA(18,20,28)
-#define C_SIDEBAR  RGBA8_MAXALPHA(27,30,42)
-#define C_CARD     RGBA8_MAXALPHA(37,41,57)
-#define C_CARD_HI  RGBA8_MAXALPHA(54,61,85)
-#define C_PRIMARY  RGBA8_MAXALPHA(100,93,229)
+#define C_BG       RGBA8_MAXALPHA(49,51,56)
+#define C_SIDEBAR  RGBA8_MAXALPHA(43,45,49)
+#define C_CARD     RGBA8_MAXALPHA(56,58,64)
+#define C_CARD_HI  RGBA8_MAXALPHA(64,66,73)
+#define C_PRIMARY  RGBA8_MAXALPHA(88,101,242)
 #define C_GREEN    RGBA8_MAXALPHA(65,196,120)
-#define C_WHITE    RGBA8_MAXALPHA(234,238,249)
-#define C_MUTED    RGBA8_MAXALPHA(150,160,180)
+#define C_WHITE    RGBA8_MAXALPHA(219,222,225)
+#define C_MUTED    RGBA8_MAXALPHA(148,155,164)
 #define C_WARN     RGBA8_MAXALPHA(242,175,86)
-#define C_DARK     RGBA8_MAXALPHA(10,14,22)
-#define C_LINE     RGBA8_MAXALPHA(68,74,92)
+#define C_DARK     RGBA8_MAXALPHA(30,31,34)
+#define C_LINE     RGBA8_MAXALPHA(63,65,71)
 
 static uint32_t *pixels;
 static int stride_pixels;
@@ -45,8 +48,9 @@ static char auth_notice[128];
 static int tab=0,sel=0,focus=0;
 static int message_expanded=0,message_offset=0;
 static char draft[513];
+static char pending_sticker[24],pending_sticker_name[129];
 const char *dnx2GraphicalDraft(void){return draft;}
-void dnx2GraphicalClearDraft(void){volatile char *p=draft;for(size_t i=0;i<sizeof(draft);i++)p[i]=0;}
+void dnx2GraphicalClearDraft(void){volatile char *p=draft;for(size_t i=0;i<sizeof(draft);i++)p[i]=0;memset(pending_sticker,0,sizeof(pending_sticker));memset(pending_sticker_name,0,sizeof(pending_sticker_name));}
 static void rect(int x,int y,int width,int height,uint32_t color) {
     if(!pixels||width<=0||height<=0)return;
     if(x<0){width+=x;x=0;}if(y<0){height+=y;y=0;}
@@ -170,6 +174,73 @@ static int touch_event(int *x,int *y,int *scroll){
     return 0;
 }
 static int selected_text(void){const Dnx2Account *a=dnx2Account();return a->signed_in&&a->selected_channel>=0&&(a->channels[a->selected_channel].type==0||a->channels[a->selected_channel].type==5);}
+static int media_open,media_tab,media_page,media_cursor;
+static const char *common_emoji[]={"\xf0\x9f\x98\x80","\xf0\x9f\x98\x82","\xf0\x9f\x98\x8a","\xf0\x9f\x98\x8d","\xf0\x9f\x98\x8e","\xf0\x9f\xa4\x94","\xf0\x9f\x98\xad","\xf0\x9f\x98\xa1","\xf0\x9f\x91\x8d","\xf0\x9f\x91\x8e","\xf0\x9f\x91\x8f","\xf0\x9f\x99\x8f","\xe2\x9d\xa4","\xf0\x9f\x94\xa5","\xf0\x9f\x8e\x89","\xf0\x9f\x92\xaf","\xf0\x9f\x90\xa5","\xf0\x9f\xa6\x86","\xf0\x9f\xaa\xbf","\xf0\x9f\x91\x80","\xf0\x9f\x8e\xae","\xe2\x9c\x85","\xe2\x9c\xa8","\xf0\x9f\x9a\x80"};
+static int media_count(void){const Dnx2MediaCatalog *m=dnx2MediaCatalog();const Dnx2Account *a=dnx2Account();if(media_tab&&(!m->loaded||!a->server_count||strcmp(m->guild,a->servers[a->selected].id)))return 0;return media_tab==0?24:media_tab==1?m->emoji_count:m->sticker_count;}
+static void image_draw(int x,int y,int w,int h,const unsigned char *rgba,int radius){
+    if(!rgba)return;
+    for(int j=0;j<h;j++)for(int i=0;i<w;i++){
+        if(radius){int xx=i<radius?radius-i-1:i>=w-radius?i-(w-radius):0;int yy=j<radius?radius-j-1:j>=h-radius?j-(h-radius):0;if(xx*xx+yy*yy>radius*radius)continue;}
+        int px=x+i,py=y+j;if(px<0||py<0||px>=W||py>=H)continue;
+        const unsigned char *s=rgba+4*((j*64/h)*64+i*64/w);uint32_t *d=pixels+py*stride_pixels+px,old=*d,v=0;
+        for(int c=0;c<3;c++)v|=((s[c]*s[3]+((old>>(8*c))&255)*(255-s[3])+127)/255)<<(8*c);
+        *d=v|0xff000000u;
+    }
+}
+static void message_wrap(int x,int y,const char *text,int lines,int columns){
+    const char *p=text;
+    for(int row=0;row<lines&&*p;row++){
+        int cursor=x;
+        for(int col=0;col<columns&&*p;col++){
+            char id[24],name[33];size_t token=dnx_custom_emoji(p,id,name);
+            if(token){
+                const unsigned char *image=dnx2MessageImage(2,id);char fallback[36];snprintf(fallback,sizeof(fallback),":%s:",name);
+                int width=image?24:dnx2FontWidth(fallback,2);if(cursor+width>text_right)break;
+                if(image)image_draw(cursor,y+row*23,21,21,image,0);else text_line(cursor,y+row*23,fallback,C_WHITE,2,36);
+                cursor+=width;p+=token;continue;
+            }
+            const char *start=p;dnx_utf8_next(&p);char value[5]={0};memcpy(value,start,(size_t)(p-start));int width=dnx2FontWidth(value,2);
+            if(cursor+width>text_right){p=start;break;}text_line(cursor,y+row*23,value,C_WHITE,2,1);cursor+=width;
+        }
+    }
+}
+static void media_begin(void){
+    if(dnx2JobKind()==11)return;
+    media_open=!media_open;media_page=media_cursor=0;
+    if(media_open){const Dnx2MediaCatalog *m=dnx2MediaCatalog();const Dnx2Account *a=dnx2Account();if(!m->loaded||strcmp(m->guild,a->servers[a->selected].id))dnx2JobStart(15,NULL,NULL);}
+}
+static void media_choose(int index){
+    const Dnx2MediaCatalog *m=dnx2MediaCatalog();if(index<0||index>=media_count())return;
+    char value[200];
+    if(media_tab==0)snprintf(value,sizeof(value),"%s",common_emoji[index]);
+    else if(media_tab==1){const Dnx2Media *e=&m->emoji[index];snprintf(value,sizeof(value),"<%s:%s:%s>",e->animated?"a":"",e->name,e->id);}
+    else {snprintf(pending_sticker,sizeof(pending_sticker),"%s",m->stickers[index].id);snprintf(pending_sticker_name,sizeof(pending_sticker_name),"%s",m->stickers[index].name);media_open=0;return;}
+    size_t n=strlen(draft),k=strlen(value);if(n+k<=512)memcpy(draft+n,value,k+1);media_open=0;
+}
+static void media_draw(void){
+    const Dnx2MediaCatalog *m=dnx2MediaCatalog();rounded(372,292,888,326,14,C_SIDEBAR);text_right=1248;
+    const char *tabs[]={"Emoji","Server","Stickers"};
+    for(int t=0;t<3;t++){if(media_tab==t)rounded(388+t*210,302,196,36,8,C_CARD_HI);text_line(410+t*210,311,tabs[t],media_tab==t?C_WHITE:C_MUTED,2,20);}
+    text_line(1218,310,"x",C_MUTED,2,2);
+    int first=media_page*24;
+    for(int cell=0;cell<24;cell++){
+        int index=first+cell;if(index>=media_count())break;int x=388+(cell%8)*106,y=348+(cell/8)*82;
+        if(index==media_cursor)rounded(x,y,94,76,10,C_CARD);
+        if(media_tab==0)text_line(x+26,y+24,common_emoji[index],C_WHITE,4,2);
+        else{
+            const unsigned char *image=dnx2ChatImage(media_tab==1?2:3,index);
+            if(image)image_draw(x+15,y+4,64,64,image,0);
+            else {const Dnx2Media *item=media_tab==1?&m->emoji[index]:&m->stickers[index];text_line(x+5,y+25,item->name,C_MUTED,1,10);}
+        }
+    }
+    if(!media_count()&&!dnx2JobBusy())text_line(402,410,"No items available in this server.",C_MUTED,2,70);
+}
+static void server_tooltip(void){
+    const Dnx2Account *a=dnx2Account();
+    if(focus==0&&server_cursor>=0&&server_cursor<a->server_count){
+        int y=98+(server_cursor%8)*62;text_right=700;rounded(92,y,600,52,10,C_CARD_HI);text_line(108,y+16,a->servers[server_cursor].name,C_WHITE,2,64);text_right=1256;
+    }
+}
 static void draw(const char *feedback,int view,int selection,int content_focus,int qr_preview){
     (void)feedback;(void)selection;(void)content_focus;(void)qr_preview;
     const Dnx2Account *a=dnx2Account();int home=view==0;
@@ -178,11 +249,13 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     for(int row=0;row<8;row++){
         int index=server_page*8+row;if(index>=a->server_count)break;int y=98+row*62;
         int active=!home&&index==a->selected;
-        rounded(15,y,58,52,active?15:22,active?C_PRIMARY:C_CARD);
+        rounded(18,y,52,52,active?15:26,active?C_PRIMARY:C_CARD);
         if(focus==0&&server_cursor==index)rounded(3,y+12,4,28,2,C_WHITE);
         char label[16]={0};const char *p=a->servers[index].name;size_t n=0;
         for(int i=0;i<2&&*p;i++){const char *start=p;dnx_utf8_next(&p);size_t k=(size_t)(p-start);if(n+k<sizeof(label)){memcpy(label+n,start,k);n+=k;}}
-        text_line(25,y+16,label,C_WHITE,2,2);
+        const unsigned char *icon=dnx2ChatImage(1,index);
+        if(icon)image_draw(18,y,52,52,icon,active?15:26);
+        else {label[0]=(char)toupper((unsigned char)label[0]);text_line(29,y+14,label,C_WHITE,3,2);}
     }
     rounded(8,602,32,34,8,C_CARD);rounded(48,602,32,34,8,C_CARD);text_line(18,610,"<",C_WHITE,2,1);text_line(58,610,">",C_WHITE,2,1);
     text_line(12,670,"Exit",C_MUTED,2,5);
@@ -198,7 +271,7 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         text_line(c->type==4?104:112,y+12,label,c->type==4?C_MUTED:C_WHITE,2,30);
     }
     rect(88,650,268,70,C_DARK);text_line(104,666,a->signed_in?a->display_name:"Signed out",C_WHITE,2,30);
-    text_line(104,693,"Home: account and saved login",C_MUTED,1,30);
+
     text_right=1256;
     if(home){
         text_line(392,46,"Welcome to DiscordNX2",C_WHITE,4,64);
@@ -206,37 +279,51 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         item(392,254,824,90,a->signed_in?"Log out":"Log in with QR code",a->signed_in?"Forget this account and saved login":"Approve your Switch login on your phone",focus==2&&sel==0);
         item(392,366,824,90,a->signed_in?"Remember login with PIN":"Unlock saved login",a->signed_in?"Save encrypted access for future launches":"Enter your saved-login PIN",focus==2&&sel==1);
         if(auth_notice[0])text_wrap(392,504,auth_notice,4,70);
-        return;
+        server_tooltip();return;
     }
     if(!a->signed_in){text_line(392,100,"Open Home to sign in.",C_MUTED,3,60);return;}
-    if(a->selected_channel<0){text_line(392,32,"Choose a channel",C_WHITE,3,60);text_wrap(392,158,a->notice[0]?a->notice:"Your channels are on the left. Tap a text channel to open the conversation.",4,70);return;}
+    if(a->selected_channel<0){text_line(392,32,"Choose a channel",C_WHITE,3,60);if(a->notice[0])text_wrap(392,158,a->notice,4,70);server_tooltip();return;}
     const Dnx2Channel *c=&a->channels[a->selected_channel];char heading[440];snprintf(heading,sizeof(heading),"%s%s",selected_text()?"# ":"Voice  ",c->name);
     text_line(380,26,heading,C_WHITE,3,72);line(356,76,924,C_LINE);
     if(selected_text()){
-        text_line(380,80,dnx2LiveStatus(),C_MUTED,1,70);
+        rounded(1234,30,8,8,4,dnx2JobBusy()?C_MUTED:!strcmp(dnx2LiveStatus(),"Live updates")?C_GREEN:C_WARN);
         if(message_expanded&&sel<a->message_count){
             const Dnx2Message *m=&a->messages[sel];text_line(380,112,m->author,C_PRIMARY,2,72);
             const char *text=m->content;for(int i=0;i<message_offset&&*text;i++)dnx_utf8_next(&text);
-            text_wrap(380,152,text,19,74);
+            message_wrap(380,152,text,19,74);
         }else for(int row=0;row<4;row++){
             int index=message_first+row;if(index>=a->message_count)break;int y=100+row*122;
             const Dnx2Message *m=&a->messages[index];
             if(focus==2&&sel==index)rounded(366,y,900,116,8,C_CARD);
-            text_line(382,y+8,m->author,C_PRIMARY,2,72);text_wrap(382,y+36,m->content,3,74);
+            text_line(382,y+8,m->author,C_PRIMARY,2,72);
+            if(m->sticker_id[0]){
+                const unsigned char *image=dnx2MessageImage(3,m->sticker_id);
+                if(image)image_draw(1170,y+30,64,64,image,0);
+                else text_line(1040,y+40,m->sticker_name,C_MUTED,2,20);
+                text_right=1136;
+            }
+            message_wrap(382,y+36,m->content,3,74);text_right=1256;
         }
-        if(!a->message_count)text_line(392,158,"No messages in this channel yet.",C_MUTED,2,72);
+        if(!a->message_count){
+            if(dnx2JobKind()==10){for(int i=0;i<3;i++){rounded(382,116+i*122,150,14,5,C_CARD_HI);rounded(382,148+i*122,600-i*90,12,4,C_CARD);}}
+            else text_line(392,158,"No messages in this channel yet.",C_MUTED,2,72);
+        }
         rounded(372,626,768,58,12,focus==3?C_CARD_HI:C_CARD);
-        text_line(390,644,draft[0]?draft:"Message this channel...",draft[0]?C_WHITE:C_MUTED,2,70);
-        rounded(1150,626,112,58,12,draft[0]?C_PRIMARY:C_CARD);text_line(1170,644,"Send",draft[0]?C_WHITE:C_MUTED,2,8);
+        char placeholder[460];snprintf(placeholder,sizeof(placeholder),pending_sticker[0]?"Sticker: %s":"Message #%s",pending_sticker[0]?pending_sticker_name:c->name);
+        text_right=pending_sticker[0]?1030:1076;text_line(390,644,draft[0]?draft:placeholder,draft[0]?C_WHITE:C_MUTED,2,70);text_right=1256;
+        text_line(1090,642,"\xe2\x98\xba",C_MUTED,3,2);
+        if(pending_sticker[0])text_line(1044,644,"x",C_MUTED,2,1);
+        rounded(1150,626,112,58,12,(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11?C_PRIMARY:C_CARD);text_line(1170,644,"Send",draft[0]||pending_sticker[0]?C_WHITE:C_MUTED,2,8);
         text_right=1060;
         if(keyboard_notice[0])text_line(380,600,keyboard_notice,C_WARN,1,90);
         else if(a->notice[0])text_line(380,600,a->notice,C_WARN,1,90);
-        text_right=1256;rounded(1080,590,180,30,8,C_CARD);text_line(1112,599,"QWERTY",C_MUTED,1,16);
-        text_line(380,697,"Tap to type    X: Keyboard    R: Send    Y: Refresh",C_MUTED,1,96);
+        text_right=1256;rounded(1080,590,180,30,8,C_CARD);text_line(1154,594,"\xe2\x8c\xa8",C_MUTED,3,2);
+        if(media_open)media_draw();
     }else{
         text_line(392,160,"Not connected",C_WARN,3,60);text_wrap(392,220,"Voice calls are still being implemented. Selecting this channel does not join a call.",4,72);
         text_line(392,360,"Members unavailable until voice is connected.",C_MUTED,2,72);
     }
+    server_tooltip();
 }
 static void draw_auth(const char *phase,const char *qr_url){
     text_right=1216;
@@ -271,37 +358,42 @@ static void draw_auth(const char *phase,const char *qr_url){
     rounded(64,630,240,54,12,C_CARD);text_line(84,648,"Cancel",C_WHITE,2,60);
 }
 static int fallback_keyboard(Framebuffer *fb,PadState *pad){
-    static const char *rows[]={"1234567890","qwertyuiop","asdfghjkl","zxcvbnm.,?","!@#&()-_:/"};
-    int row=1,column=0,upper=0,armed=0;
+    int cursor=10,page=0,upper=0,armed=0;
     for(;;){
+        DnxKey keys[40];int count=dnx_keys(keys,page,upper);if(cursor>=count)cursor=0;
         u32 pitch=0;pixels=(uint32_t*)framebufferBegin(fb,&pitch);if(!pixels)return 0;stride_pixels=(int)(pitch/4);
-        draw(NULL,tab,sel,focus,0);rect(356,278,924,442,C_SIDEBAR);text_right=1260;
-        text_line(380,292,"Touch QWERTY",C_WHITE,3,60);text_line(380,334,draft[0]?draft:"Write your message",C_WHITE,2,80);
-        for(int r=0;r<5;r++)for(int c=0;c<(int)strlen(rows[r]);c++){
-            int x=380+c*86,y=382+r*47;rounded(x,y,78,41,8,r==row&&c==column?C_PRIMARY:C_CARD);
-            char text[2]={upper?(char)toupper((unsigned char)rows[r][c]):rows[r][c],0};text_line(x+28,y+11,text,C_WHITE,2,1);
+        draw(NULL,tab,sel,focus,0);rect(0,418,W,302,RGBA8_MAXALPHA(28,29,33));text_right=1244;
+        rounded(372,354,888,56,12,C_CARD);text_line(390,374,draft[0]?draft:"Message...",C_WHITE,2,90);
+        for(int i=0;i<count;i++){
+            DnxKey *k=&keys[i];uint32_t color=k->action==DNX_KEY_TEXT||k->action==DNX_KEY_SPACE?RGBA8_MAXALPHA(79,81,88):RGBA8_MAXALPHA(46,48,54);
+            if(cursor==i)color=RGBA8_MAXALPHA(94,98,108);
+            if(k->action==DNX_KEY_DONE)color=C_PRIMARY;
+            rounded(k->x,k->y,k->w,k->h,7,color);
+            int label_width=(int)strlen(k->label)*11;if((unsigned char)k->label[0]>=128)label_width=22;
+            text_line(k->x+(k->w-label_width)/2,k->y+17,k->label,C_WHITE,3,12);
         }
-        const char *labels[]={"Shift","Space","Delete","Done"};
-        for(int c=0;c<4;c++){rounded(380+c*214,626,202,44,8,C_CARD);text_line(398+c*214,640,labels[c],C_WHITE,2,12);}
-        text_line(380,690,"A: Add    X: Space    Y: Shift    L: Delete    R: Done    B: Back",C_MUTED,1,110);
         framebufferEnd(fb);pixels=NULL;padUpdate(pad);u64 down=padGetButtonsDown(pad);int x=0,y=0,scroll=0,tap=touch_event(&x,&y,&scroll);
         if(!armed){if(!padGetButtons(pad)&&!touch_input.held)armed=1;svcSleepThread(16000000LL);continue;}
         if(down&(HidNpadButton_B|HidNpadButton_Plus))return 0;
-        if(down&HidNpadButton_AnyLeft)column=(column+(int)strlen(rows[row])-1)%(int)strlen(rows[row]);
-        if(down&HidNpadButton_AnyRight)column=(column+1)%(int)strlen(rows[row]);
-        if(down&HidNpadButton_AnyUp)row=(row+4)%5;
-        if(down&HidNpadButton_AnyDown)row=(row+1)%5;
-        if(column>=(int)strlen(rows[row]))column=(int)strlen(rows[row])-1;
-        int add=!!(down&HidNpadButton_A),space=!!(down&HidNpadButton_X),del=!!(down&HidNpadButton_L),done=!!(down&HidNpadButton_R);
-        if(down&HidNpadButton_Y)upper=!upper;
-        if(tap==1&&x>=380&&x<1240){
-            if(y>=382&&y<617){int r=(y-382)/47,c=(x-380)/86;if(r<5&&c<(int)strlen(rows[r])){row=r;column=c;add=1;}}
-            else if(y>=626&&y<670){int key=(x-380)/214;if(key==0)upper=!upper;else if(key==1)space=1;else if(key==2)del=1;else if(key==3)done=1;}
-        }
+        if(down&HidNpadButton_AnyLeft)cursor=dnx_key_move(keys,count,cursor,-1,0);
+        if(down&HidNpadButton_AnyRight)cursor=dnx_key_move(keys,count,cursor,1,0);
+        if(down&HidNpadButton_AnyUp)cursor=dnx_key_move(keys,count,cursor,0,-1);
+        if(down&HidNpadButton_AnyDown)cursor=dnx_key_move(keys,count,cursor,0,1);
+        int pressed=(down&HidNpadButton_A)?cursor:-1;
+        if(tap==1)pressed=dnx_key_hit(keys,count,x,y);
+        int action=pressed>=0?keys[pressed].action:-1;
+        if(down&HidNpadButton_X)action=DNX_KEY_SPACE;
+        if(down&HidNpadButton_Y)action=DNX_KEY_SHIFT;
+        if(down&HidNpadButton_L)action=DNX_KEY_DELETE;
+        if(down&HidNpadButton_R)action=DNX_KEY_DONE;
+        if(action==DNX_KEY_DONE)return 1;
+        if(action==DNX_KEY_EMOJI)return 2;
+        if(action==DNX_KEY_SHIFT){if(page)page=page==1?2:1;else upper=!upper;}
+        if(action==DNX_KEY_PAGE){page=page?0:1;cursor=0;}
         size_t n=strlen(draft);
-        if(del&&n){do{n--;}while(n&&((unsigned char)draft[n]&0xc0)==0x80);draft[n]=0;}
-        if((add||space)&&n<512){draft[n++]=space?' ':upper?(char)toupper((unsigned char)rows[row][column]):rows[row][column];draft[n]=0;}
-        if(done)return 1;
+        if(action==DNX_KEY_DELETE&&n){do{n--;}while(n&&((unsigned char)draft[n]&0xc0)==0x80);draft[n]=0;}
+        if(action==DNX_KEY_SPACE&&n<512){draft[n++]=' ';draft[n]=0;}
+        if(action==DNX_KEY_TEXT&&pressed>=0){size_t k=strlen(keys[pressed].label);if(n+k<=512){memcpy(draft+n,keys[pressed].label,k+1);if(!page)upper=0;}}
         svcSleepThread(16000000LL);
     }
 }
@@ -316,8 +408,9 @@ static int open_channel(int index){
     int type=a->channels[index].type;if(type==4)return 0;
     if(type!=0&&type!=5&&type!=2&&type!=13){snprintf(keyboard_notice,sizeof(keyboard_notice),"Forum threads are not available yet.");return 0;}
     if(index!=a->selected_channel)dnx2GraphicalClearDraft();
-    dnx2LiveStop();dnx2ChannelSelect(index);channel_cursor=index;tab=(type==0||type==5)?2:3;focus=2;message_expanded=0;message_offset=0;follow_latest=1;sel=0;keyboard_notice[0]=0;
-    return tab==2?10:0;
+    dnx2JobStop();dnx2LiveStop();dnx2ChannelSelect(index);channel_cursor=index;tab=(type==0||type==5)?2:3;focus=2;message_expanded=0;message_offset=0;follow_latest=1;sel=0;keyboard_notice[0]=0;
+    if(tab==2)dnx2JobStart(10,NULL,NULL);
+    return 0;
 }
 int dnx2GraphicalMenu(void){
     Result rc=hidInitialize();if(R_FAILED(rc))return -1;padConfigureInput(1,HidNpadStyleSet_NpadStandard);touch_init();
@@ -328,6 +421,18 @@ int dnx2GraphicalMenu(void){
     if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=dnx2Account()->message_count>4?dnx2Account()->message_count-4:0;}
     while(1){
         const Dnx2Account *a=dnx2Account();
+        int completed=dnx2JobApply();
+        if(completed){
+            if(completed==11&&!strcmp(draft,dnx2JobDraft())&&!strcmp(pending_sticker,dnx2JobSticker()))dnx2GraphicalClearDraft();
+            if((completed==10||completed==11)&&follow_latest)message_first=a->message_count>4?a->message_count-4:0;
+            dirty=1;
+        }
+        if(!dnx2JobBusy()&&a->signed_in&&a->server_count){
+            int requested=dnx2RequestImages(1,server_page*8,8);
+            if(!requested&&media_open&&media_tab)requested=dnx2RequestImages(media_tab==1?2:3,media_page*24,24);
+            if(!requested&&tab==2&&selected_text())requested=dnx2RequestMessageImages();
+            if(!requested&&tab==2&&selected_text())dnx2LiveStart();
+        }
         if(tab==2&&selected_text()){
             char anchor[24]={0};if(message_first<a->message_count)snprintf(anchor,sizeof(anchor),"%s",a->messages[message_first].id);
             if(!message_expanded&&dnx2LiveApply()){
@@ -350,6 +455,20 @@ int dnx2GraphicalMenu(void){
         if(tab==0&&(padGetButtons(&pad)&HidNpadButton_R)&&(down&HidNpadButton_X)){action=7;break;}
         if(tab==0&&(padGetButtons(&pad)&HidNpadButton_R)&&(down&HidNpadButton_Y)){action=8;break;}
         int choose_server=-2,choose_channel=-1,keyboard=0,send=0,account_action=-1;
+        if(media_open){
+            if(touch==2&&x>=372&&y>=292){int max=(media_count()-1)/24;media_page+=scroll;if(media_page<0)media_page=0;if(media_page>max)media_page=max;touch=0;dirty=1;}
+            if(touch==1&&x>=372&&y>=292&&y<618){
+                if(y>=302&&y<338){if(x>=1200)media_open=0;else {int t=(x-388)/210;if(t>=0&&t<3){media_tab=t;media_page=media_cursor=0;}}}
+                else if(y>=348&&y<594&&x>=388&&x<1236){int cell=(y-348)/82*8+(x-388)/106;if(cell>=0&&cell<24)media_choose(media_page*24+cell);}
+                touch=0;dirty=1;
+            }
+            if(down&HidNpadButton_B){media_open=0;down&=~HidNpadButton_B;dirty=1;}
+            if(down&HidNpadButton_L){media_tab=(media_tab+2)%3;media_page=media_cursor=0;down&=~HidNpadButton_L;dirty=1;}
+            if(down&HidNpadButton_R){media_tab=(media_tab+1)%3;media_page=media_cursor=0;down&=~HidNpadButton_R;dirty=1;}
+            int move=(down&HidNpadButton_AnyLeft)?-1:(down&HidNpadButton_AnyRight)?1:(down&HidNpadButton_AnyUp)?-8:(down&HidNpadButton_AnyDown)?8:0;
+            if(move){media_cursor+=move;if(media_cursor<0)media_cursor=0;if(media_cursor>=media_count())media_cursor=media_count()?media_count()-1:0;media_page=media_cursor/24;down&=~(HidNpadButton_AnyLeft|HidNpadButton_AnyRight|HidNpadButton_AnyUp|HidNpadButton_AnyDown);dirty=1;}
+            if(down&HidNpadButton_A){media_choose(media_cursor);down&=~HidNpadButton_A;dirty=1;}
+        }
         if(touch==2){
             if(x<88){server_page+=scroll;if(server_page<0)server_page=0;int max=(a->server_count-1)/8;if(server_page>max)server_page=max;}
             else if(x<356){channel_first+=scroll;if(channel_first<0)channel_first=0;int max=a->channel_count>12?a->channel_count-12:0;if(channel_first>max)channel_first=max;}
@@ -357,10 +476,12 @@ int dnx2GraphicalMenu(void){
             dirty=1;
         }
         if(touch==1){DnxHit hit=dnx_chat_hit(x,y,server_page,channel_first,message_first,tab==0,selected_text());
-            if(hit.kind==DNX_HOME){dnx2LiveStop();tab=0;focus=2;sel=0;dirty=1;}
+            if(hit.kind==DNX_HOME){dnx2JobStop();dnx2LiveStop();media_open=0;tab=0;focus=2;sel=0;dirty=1;}
             else if(hit.kind==DNX_SERVER)choose_server=hit.index;
             else if(hit.kind==DNX_CHANNEL){choose_channel=hit.index;focus=1;}
             else if(hit.kind==DNX_INPUT)keyboard=1;
+            else if(hit.kind==DNX_MEDIA){media_begin();dirty=1;}
+            else if(hit.kind==DNX_CLEAR_STICKER&&dnx2JobKind()!=11){if(pending_sticker[0])pending_sticker[0]=pending_sticker_name[0]=0;else keyboard=1;dirty=1;}
             else if(hit.kind==DNX_FALLBACK)keyboard=2;
             else if(hit.kind==DNX_SEND)send=1;
             else if(hit.kind==DNX_MESSAGE&&hit.index<a->message_count){if(!message_expanded)sel=hit.index;message_expanded=!message_expanded;message_offset=0;focus=2;dirty=1;}
@@ -387,22 +508,22 @@ int dnx2GraphicalMenu(void){
             else if(focus==3)keyboard=1;
             else if(selected_text()&&a->message_count){sel=message_first;message_expanded=!message_expanded;message_offset=0;dirty=1;}
         }
-        if(account_action>=0){dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}
+        if(account_action>=0){dnx2JobStop();dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}
             if(a->signed_in){dnx2AccountLogout();dnx2GraphicalClearDraft();tab=0;focus=2;dirty=1;}else{action=6;break;}}
-        if(choose_server>=0&&choose_server<a->server_count){dnx2LiveStop();dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;message_expanded=0;action=9;break;}
-        if(choose_channel>=0){int next=open_channel(choose_channel);dirty=1;if(next){action=next;break;}}
+        if(choose_server>=0&&choose_server<a->server_count&&dnx2JobKind()!=11){dnx2JobStop();dnx2LiveStop();media_open=0;dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;message_expanded=0;dnx2JobStart(9,NULL,NULL);dirty=1;}
+        if(choose_channel>=0&&dnx2JobKind()!=11){int next=open_channel(choose_channel);dirty=1;if(next){action=next;break;}}
         if((down&HidNpadButton_X)&&tab!=0&&selected_text())keyboard=1;
         if((down&HidNpadButton_R)&&tab!=0&&selected_text())send=1;
-        if((down&HidNpadButton_Y)&&tab!=0){action=selected_text()?10:9;break;}
-        if(keyboard&&selected_text()){
-            dnx2LiveStop();focus=3;
-            if(keyboard==2||keyboard_failed){fallback_keyboard(&fb,&pad);dirty=1;dnx2LiveStart();}
+        if((down&HidNpadButton_Y)&&tab!=0&&dnx2JobKind()!=11){dnx2JobStart(selected_text()?10:9,NULL,NULL);dirty=1;}
+        if(keyboard&&selected_text()&&dnx2JobKind()!=11){
+            dnx2JobStop();dnx2LiveStop();focus=3;
+            if(keyboard==2||keyboard_failed){int result=fallback_keyboard(&fb,&pad);if(result==2)media_begin();dirty=1;}
             else{action=14;break;}
         }
-        if(send&&selected_text()&&draft[0]){action=11;break;}
+        if(send&&selected_text()&&(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11){media_open=0;dnx2JobStart(11,draft,pending_sticker);dirty=1;}
         svcSleepThread(16000000LL);
     }
-    dnx2LiveStop();framebufferClose(&fb);hidExit();return action;
+    dnx2JobStop();dnx2LiveStop();framebufferClose(&fb);hidExit();return action;
 }
 
 /* Dedicated auth framebuffer. The normal menu releases its framebuffer before

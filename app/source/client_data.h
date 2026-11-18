@@ -10,7 +10,7 @@ static inline int dnx_id(const char *s){size_t n=strlen(s);if(n<15||n>22)return 
 static inline void dnx_guilds(Dnx2Account *a,const char *json){
     a->server_count=0;DnxJson root=dj_root(json),e;const char *p=NULL;
     while(a->server_count<DNX2_MAX_SERVERS&&dj_next(root,&p,&e)){
-        Dnx2Server g={0};if(dj_get(e,"id",g.id,sizeof(g.id))&&dnx_id(g.id)&&dj_get(e,"name",g.name,sizeof(g.name)))a->servers[a->server_count++]=g;
+        Dnx2Server g={0};if(dj_get(e,"id",g.id,sizeof(g.id))&&dnx_id(g.id)&&dj_get(e,"name",g.name,sizeof(g.name))){dj_get(e,"icon",g.icon,sizeof(g.icon));a->servers[a->server_count++]=g;}
     }
 }
 static inline int dnx_pbvar(const unsigned char **p,const unsigned char *end,uint64_t *n){
@@ -77,7 +77,9 @@ static inline void dnx_messages(Dnx2Account *a,const char *json){
         Dnx2Message m={0};dj_get(e,"id",m.id,sizeof(m.id));DnxJson author=dj_field(e,"author");
         if(!dj_get(author,"global_name",m.author,sizeof(m.author))||!m.author[0])dj_get(author,"username",m.author,sizeof(m.author));
         if(!dj_get(e,"content",m.content,sizeof(m.content)))snprintf(m.content,sizeof(m.content),"[Message is too long to display]");
-        if(!m.content[0])snprintf(m.content,sizeof(m.content),"[Attachment, embed or empty message]");
+        DnxJson stickers=dj_field(e,"sticker_items"),first;const char *cursor=NULL;
+        if(dj_next(stickers,&cursor,&first)){dj_get(first,"id",m.sticker_id,sizeof(m.sticker_id));dj_get(first,"name",m.sticker_name,sizeof(m.sticker_name));m.sticker_format=dj_int(first,"format_type",0);if(!dnx_id(m.sticker_id))m.sticker_id[0]=0;}
+        if(!m.content[0]&&!m.sticker_id[0])snprintf(m.content,sizeof(m.content),"[Attachment, embed or empty message]");
         a->messages[a->message_count++]=m;
     }
     for(int i=0;i<a->message_count/2;i++){Dnx2Message m=a->messages[i];a->messages[i]=a->messages[a->message_count-1-i];a->messages[a->message_count-1-i]=m;}

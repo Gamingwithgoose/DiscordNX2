@@ -51,6 +51,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,const 
     if(http_code==429){snprintf(out,cap,"{\"retry_after\":12}");return 0;}
     snprintf(out,cap,"[{\"id\":\"%d\",\"author\":{\"username\":\"fixture\"},\"content\":\"message %d\"}]",requests,requests);return http_code==200;
 }
+static int dnx2JobBusy(void){return 0;}
 static void svcSleepThread(long long n);
 #include "live_gateway.inc"
 static void svcSleepThread(long long n){(void)n;now+=16;if(now>7000)__atomic_store_n(&live_stop,1,__ATOMIC_RELEASE);}

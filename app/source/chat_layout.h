@@ -2,7 +2,7 @@
 #ifndef DNX2_CHAT_LAYOUT_H
 #define DNX2_CHAT_LAYOUT_H
 /* Shared drawing/touch geometry, in the configured 1280x720 touch range. */
-enum {DNX_HOME=1,DNX_SERVER,DNX_CHANNEL,DNX_INPUT,DNX_SEND,DNX_MESSAGE,DNX_PREVIOUS,DNX_NEXT,DNX_LOGIN,DNX_REMEMBER,DNX_EXIT,DNX_FALLBACK};
+enum {DNX_HOME=1,DNX_SERVER,DNX_CHANNEL,DNX_INPUT,DNX_SEND,DNX_MESSAGE,DNX_PREVIOUS,DNX_NEXT,DNX_LOGIN,DNX_REMEMBER,DNX_EXIT,DNX_FALLBACK,DNX_MEDIA,DNX_CLEAR_STICKER};
 typedef struct {int kind,index;} DnxHit;
 static inline DnxHit dnx_chat_hit(int x,int y,int server_page,int channel_first,int message_first,int home,int text){
     DnxHit hit={0,0};
@@ -19,7 +19,7 @@ static inline DnxHit dnx_chat_hit(int x,int y,int server_page,int channel_first,
         if(y>=100&&y<628){hit.kind=DNX_CHANNEL;hit.index=channel_first+(y-100)/44;}
     }else if(text){
         if(x>=1080&&y>=590&&y<620){hit.kind=DNX_FALLBACK;}
-        else if(y>=626&&y<684){hit.kind=x>=1150?DNX_SEND:DNX_INPUT;}
+        else if(y>=626&&y<684){hit.kind=x>=1150?DNX_SEND:x>=1080?DNX_MEDIA:x>=1040?DNX_CLEAR_STICKER:DNX_INPUT;}
         else if(y>=100&&y<588){hit.kind=DNX_MESSAGE;hit.index=message_first+(y-100)/122;}
     }
     return hit;

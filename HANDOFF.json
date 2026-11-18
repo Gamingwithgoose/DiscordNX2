@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.39-touch-native-keyboard-live-chat-fonts",
+  "version": "0.40-in-place-chat-icons-mobile-keyboard-media",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -73,7 +73,8 @@
       "remote-auth gateway DNS successful, TCP port443 and SSL handshake succeeded",
       "remote-auth WebSocket HTTP 403; no HELLO; user/account not involved"
     ],
-    "v037_login": "User confirmed: account connected and real server list displayed using the project-hosted phone CAPTCHA handoff. Names had question marks; ordering differed from Discord. Channel/text and persistence changes in v0.38 await hardware testing."
+    "v037_login": "User confirmed: account connected and real server list displayed using the project-hosted phone CAPTCHA handoff. Names had question marks; ordering differed from Discord. Channel/text and persistence changes in v0.38 await hardware testing.",
+    "v039_ui": "User confirmed touch works. Photos show channel navigation and account name; selecting channels/sending switches to full loading/auth overlay and flashes. User rejects unreadable two-character server initials and oversized labeled/symbol-heavy fallback keyboard. Supplied Discord server-icon rail as appearance reference."
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
   "latest_source_behavior": [
@@ -101,7 +102,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "v0.39 changed native modules passed strict AArch64 syntax checks; main retains one pre-existing audio signedness warning. Font embedding assembly checked without NRO linking. Production worker synthetic fixtures, touch geometry, actual font rasterization and existing HTTP/WS/CAPTCHA/session tests passed. No NRO or browser/dependency build; live Gateway acceptance, touch and native keyboard still require console testing.",
+  "build_validation": "Strict AArch64 syntax checks passed for changed client, UI, font and PNG decoder. New synthetic production job tests pass for deferred matching results, stale-context rejection, single-send/failure preservation, empty history, catalogs, unauthenticated CDN, actual PNG decode/size rejection and cleanup; mobile keyboard order/page/hit-size tests pass. Existing live worker, font, client data, saved-session, HTTP/WS/CAPTCHA regressions passed. No NRO or dependency build.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -126,11 +127,10 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": "Pull main, Build-NRO.bat, FTP only NRO (fonts embedded; no NSO/DNS/payload changes). Unlock existing v0.38 PIN or QR login. Tap server/channel, swipe, check Unicode name, leave conversation open and send a message from phone to check live/auto updates. Tap input to test native keyboard, Done should only edit draft; Send is explicit. If keyboard unavailable use QWERTY overlay. Report hardware and live logs, never session.bin/PIN/QR/message content.",
+  "next_user_workflow": "Pull main, Build-NRO.bat, FTP only NRO. Unlock existing saved login. Allow server icons to load, change text channels/send and confirm no full loading screen. Try compact keyboard/symbol pages/smiley, server emoji and sticker draft/explicit Send. Share sanitized hardware/live logs if needed, never token/PIN/session.bin/QR or private message content. Normal public jailbreak, NSO and DNS unchanged.",
   "next_developer_work": [
-    "Use next hardware feedback to verify native keyboard result, touch coordinates, font coverage and Live updates versus Auto refresh mode. Keep public jailbreak/NRO-only workflow.",
-    "Preserve tested QR/CAPTCHA account connection and PIN session format; no repeat probing of known unavailable browser.",
-    "Discord voice transport and live members remain a separate unfinished implementation; never equate selected channel with joined call."
+    "Use hardware feedback for in-place transitions, real icons, keyboard targets and server media authorization. Preserve working touch/login/PIN/audio/networking.",
+    "GIF search, animation/full media and Discord voice transport remain separate unfinished work; do not add fake actions or claim calls work."
   ],
   "implementation_base_head": "5c39f8c8d46ce262f3b277eb3536e400d3b61313",
   "v023_implementation": {
@@ -251,5 +251,13 @@
     "diagnostics": "sdmc:/kaihen/discordnx2-live.txt fixed ready/mode/event/refresh/http/cancel counters only; no IDs/names/message/PIN/token data. Existing hardware report includes native keyboard API result.",
     "validation": "v0.39 changed native modules passed strict AArch64 syntax checks; main retains one pre-existing audio signedness warning. Font embedding assembly checked without NRO linking. Production worker synthetic fixtures, touch geometry, actual font rasterization and existing HTTP/WS/CAPTCHA/session tests passed. No NRO or browser/dependency build; live Gateway acceptance, touch and native keyboard still require console testing.",
     "preserved": "Working auth/CAPTCHA and saved-session file format, audio pipeline, packet transport, resident NSO and normal public jailbreak/DNS. Voice calling remains unfinished."
+  },
+  "v040_implementation": {
+    "in_place": "Menu retains its framebuffer for server/channel changes, send, refresh, catalogs and images. One immutable-request networking job owns socket/SSL while live worker is stopped; results are staged off-account and applied by UI thread only for matching guild/channel. No auth/status framebuffer on these paths. POST is not retried; duplicate Send is blocked while pending; confirmed matching draft/sticker clears only after acknowledgement, failures preserve it. Empty history applies correctly; stale responses discarded.",
+    "icons": "Guild parsing retains icon hashes. Runtime TLS GET cdn.discordapp.com/icons/{id}/{hash}.png?size=64 with no Authorization header. 48-entry memory cache, partial batch publication, initial/missing artwork fallback and full-name controller tooltip. PNG-only stb_image decoder pinned to upstream commit; max compressed131072 bytes, dimensions512, normalized64x64 RGBA. Same safe cache for custom emoji and PNG/APNG sticker stills. No SD art cache or external arbitrary URL fetching.",
+    "keyboard": "No Touch QWERTY title. Compact full-width phone-style overlay, large 54px high keys with tight gaps, QWERTY letters, Shift, Backspace, Space, Done, smiley and separate ?123/#+=/ABC pages. Native system keyboard remains first option; fallback icon available. Done only commits draft. Remove instructional/sidebar footers and long placeholder text; neutral gray palette and rounded icon treatment.",
+    "media": "Common Unicode, selected-guild emoji and sticker picker. GET guilds/{id}/emojis and stickers; ignore unavailable entries; stage custom markup or sticker_ids. Send is explicit and account permissions apply. Recognize bounded valid incoming custom-emoji tokens and first sticker_items entry; load PNG/static APNG previews from fixed CDN. Unsupported Lottie/GIF previews use name fallback. No actual account messages or private server data accessed during tests.",
+    "remaining": "Actual console appearance, nonflashing transitions, CDN images, media selection/send and keyboard comfort require hardware test. GIF search/provider integration, animation, full attachments/rich text, forums/DMs and Discord voice calls are not implemented. Do not present placeholders as supported features.",
+    "validation": "Strict AArch64 syntax checks passed for changed client, UI, font and PNG decoder. New synthetic production job tests pass for deferred matching results, stale-context rejection, single-send/failure preservation, empty history, catalogs, unauthenticated CDN, actual PNG decode/size rejection and cleanup; mobile keyboard order/page/hit-size tests pass. Existing live worker, font, client data, saved-session, HTTP/WS/CAPTCHA regressions passed. No NRO or dependency build."
   }
 }

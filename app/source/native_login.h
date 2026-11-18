@@ -4,9 +4,9 @@
 #define DNX2_MAX_SERVERS 200
 #define DNX2_MAX_CHANNELS 512
 #define DNX2_MAX_MESSAGES 30
-typedef struct {char id[24];char name[401];} Dnx2Server;
+typedef struct {char id[24];char name[401];char icon[80];} Dnx2Server;
 typedef struct {char id[24],parent[24],name[401];int type,position;} Dnx2Channel;
-typedef struct {char id[24],author[321],content[8193];} Dnx2Message;
+typedef struct {char id[24],author[321],content[8193],sticker_id[24],sticker_name[129];int sticker_format;} Dnx2Message;
 typedef struct {
     int channel_count,selected_channel,message_count,channels_loaded,order_synced;
     char notice[160];

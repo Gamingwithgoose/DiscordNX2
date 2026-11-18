@@ -6,6 +6,8 @@
  */
 #include "native_login.h"
 #include "client_data.h"
+#include "chat_assets.h"
+#include "chat_media_data.h"
 #include "session_store.h"
 #include "auth_crypto.h"
 #include "captcha.h"
@@ -49,6 +51,7 @@ static char captcha_headers[8192];
 static Dnx2Captcha captcha_challenge;
 static char captcha_solution[4096];
 static unsigned last_http_status;
+static size_t last_http_body_size;
 static unsigned last_discord_error;
 static int last_captcha_required;
 static Dnx2WsReader ws_reader;
@@ -59,7 +62,7 @@ const Dnx2Account *dnx2Account(void){return &account;}
 void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
 void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;}}
 static void wipe(void *p,size_t n){volatile unsigned char *c=(volatile unsigned char*)p;while(n--)*c++=0;}
-void dnx2AccountClearMemory(void){dnx2LiveReset();wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
+void dnx2AccountClearMemory(void){dnx2ChatReset();dnx2LiveReset();wipe(&account,sizeof(account));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
 void dnx2AccountLogout(void){dnx2AccountClearMemory();dnx2SessionForget();}
 
 #ifdef DNX2_USE_MBEDTLS
@@ -166,7 +169,7 @@ static int ws_connect_to(TlsSession *s,const char *host,const char *path){
         "Upgrade: websocket\r\nConnection: Upgrade\r\n"
         "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n"
         "Origin: https://discord.com\r\n"
-        "User-Agent: DiscordNX2-native/0.39\r\n\r\n",path,host,key);
+        "User-Agent: DiscordNX2-native/0.40\r\n\r\n",path,host,key);
     if(len<=0||(size_t)len>=sizeof(req)||!tls_send(s,req,(size_t)len))return 0;
     unsigned char hdr[4096]={0};
     size_t length=0,where=0;
@@ -261,13 +264,13 @@ static int json_operation(const char *json,const char *op){
 static int http_request(TlsSession *s,const char *host,const char *method,
                         const char *path,const char *body,const char *token,
                         char *out,size_t cap){
-    last_http_status=0;last_discord_error=0;last_captcha_required=0;
+    last_http_body_size=0;last_http_status=0;last_discord_error=0;last_captcha_required=0;
     if(!tls_open(s,host))return 0;
     size_t bodylen=body?strlen(body):0;
     char req[12288];
     int len=snprintf(req,sizeof(req),
       "%s %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
-      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.38\r\n"
+      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.40\r\n"
       "Origin: https://discord.com\r\nReferer: https://discord.com/login\r\n"
       "Connection: close\r\n%s%s%s"
       "%sContent-Type: application/json\r\nContent-Length: %u\r\n\r\n",
@@ -286,8 +289,20 @@ static int http_request(TlsSession *s,const char *host,const char *method,
         Result rc=sslConnectionRead(&s->conn,out+used,(u32)(cap-1-used),&got);
         if(R_FAILED(rc)){svcSleepThread(8000000LL);continue;}
         if(got==0)break;
-        used+=got;
+        used+=got;out[used]=0;
+        char *header_end=strstr(out,"\r\n\r\n");
+        if(header_end){
+            const char *line=out;size_t body_at=(size_t)(header_end-out)+4;
+            while(line<header_end){
+                const char *end=strstr(line,"\r\n");if(!end||end>header_end)break;
+                if(starts_ci(line,"content-length:")){
+                    char *after=NULL;unsigned long size=strtoul(line+15,&after,10);
+                    if(after!=line+15&&size<cap&&body_at<=used&&size<=used-body_at)goto response_read;
+                }line=end+2;
+            }
+        }
     }
+response_read:
     out[used]=0;
     if(used>=12 && strncmp(out,"HTTP/1.",7)==0)last_http_status=(unsigned)strtoul(out+9,NULL,10);
     if(used<16 || last_http_status<100 || last_http_status>599)return 0;
@@ -327,7 +342,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
             unsigned long count=strtoul(out+read_at,NULL,16);
             if(count>cap || count>payload)return 0;
             read_at=(size_t)(line_end-out)+2;
-            if(count==0){out[write_at]=0;goto body_complete;}
+            if(count==0){out[write_at]=0;last_http_body_size=write_at;goto body_complete;}
             if(read_at+count+2>payload ||
                out[read_at+count]!='\r'||out[read_at+count+1]!='\n')return 0;
             memmove(out+write_at,out+read_at,count);
@@ -338,6 +353,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     }
     if(has_length && payload<expected_length)return 0;
     if(payload==0)return 0;
+    last_http_body_size=has_length?expected_length:payload;
 body_complete:
     if(last_http_status!=200){
         /* Only fixed categories and bounded public API error codes escape RAM.
@@ -442,6 +458,7 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
     return ok;
 }
 #include "live_gateway.inc"
+#include "chat_jobs.inc"
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
     dnx2AccountLogout();
@@ -635,6 +652,14 @@ fail:
     return 0;
 }
 #else
+int dnx2JobBusy(void){return 0;}int dnx2JobKind(void){return 0;}
+int dnx2JobStart(int op,const char *a,const char *b){(void)op;(void)a;(void)b;return 0;}
+int dnx2JobApply(void){return 0;}void dnx2JobStop(void){}void dnx2ChatReset(void){}
+const char *dnx2JobDraft(void){return "";}const char *dnx2JobSticker(void){return "";}
+int dnx2RequestImages(int t,int f,int n){(void)t;(void)f;(void)n;return 0;}
+const unsigned char *dnx2ChatImage(int t,int n){(void)t;(void)n;return NULL;}
+const Dnx2MediaCatalog *dnx2MediaCatalog(void){static Dnx2MediaCatalog m;return &m;}
+int dnx2RequestMessageImages(void){return 0;}const unsigned char *dnx2MessageImage(int t,const char *p){(void)t;(void)p;return NULL;}
 void dnx2LiveStart(void){}
 void dnx2LiveStop(void){}
 void dnx2LiveReset(void){}

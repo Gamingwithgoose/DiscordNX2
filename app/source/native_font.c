@@ -102,6 +102,11 @@ static CachedGlyph *glyph(int sz,uint32_t cp){
     }
     return g;
 }
+int dnx2FontWidth(const char *text,int size){
+    int width=0,sz=size<=2?0:size==3?1:2;if(!text)return 0;
+    const char *p=text;while(*p){uint32_t cp=dnx_utf8_next(&p);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;width+=font_state.initialized?glyph(sz,cp)->advance:6*size;}
+    return width;
+}
 int dnx2FontFit(const char *text,int width,int size,int maxchars){
     if(!text||width<1)return 0;
     int sz=size<=2?0:size==3?1:2,used=0;const char *p=text,*end=text;
