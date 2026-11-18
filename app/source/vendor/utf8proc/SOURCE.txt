@@ -1,0 +1,2 @@
+https://github.com/JuliaStrings/utf8proc/tree/f72a4023617e2d879f2ca93086fd02bc7e3149fe
+Unmodified upstream source and license; Unicode data license is included.

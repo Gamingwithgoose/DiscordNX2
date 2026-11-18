@@ -27,6 +27,6 @@ static void data_tests(void){
 }
 int main(void){string_tests();data_tests();
     char body[3200],content[100];assert(dnx_message_body("A \"quote\" \\ line\n",body,sizeof(body)));
-    assert(dj_get(dj_root(body),"content",content,sizeof(content))&&!strcmp(content,"A \"quote\" \\ line "));
+    assert(dj_get(dj_root(body),"content",content,sizeof(content))&&!strcmp(content,"A \"quote\" \\ line\n"));
     assert(strstr(body,"\"allowed_mentions\":{\"parse\":[]}"));assert(!dnx_message_body("",body,sizeof(body)));
 puts("PASS UTF-8 JSON, surrogate pairs, nested fields, server order protobuf, channel categories and chronological messages");}

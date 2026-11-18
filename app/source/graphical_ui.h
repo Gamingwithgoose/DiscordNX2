@@ -7,7 +7,6 @@
 int dnx2GraphicalMenu(void);
 const char *dnx2GraphicalDraft(void);
 void dnx2GraphicalClearDraft(void);
-int dnx2GraphicalNativeKeyboard(unsigned *result);
 int dnx2GraphicalPin(const char *title,char pin[9]);
 void dnx2GraphicalAuthBegin(void);
 void dnx2GraphicalAuthStatus(const char *stage,const char *qr_url);

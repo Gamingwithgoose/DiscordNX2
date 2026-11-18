@@ -39,9 +39,9 @@ static inline int dj_string(DnxJson j,char *out,size_t cap){
             if(c=='u'){uint32_t cp,low;if(end-p<4||!dj_u16(p,&cp))return 0;p+=4;
                 if(cp>=0xd800&&cp<=0xdbff){if(end-p<6||p[0]!='\\'||p[1]!='u'||!dj_u16(p+2,&low)||low<0xdc00||low>0xdfff)return 0;p+=6;cp=0x10000+((cp-0xd800)<<10)+low-0xdc00;}
                 else if(cp>=0xdc00&&cp<=0xdfff)return 0;
-                if(cp<32)cp=' ';
+                if(cp==0)return 0;
                 n=dj_utf8(cp,bytes);
-            }else {if(c=='n'||c=='r'||c=='t'||c=='b'||c=='f')c=' ';else if(c!='"'&&c!='\\'&&c!='/')return 0;bytes[0]=(char)c;}
+            }else {if(c=='n')c='\n';else if(c=='r')c='\r';else if(c=='t')c='\t';else if(c=='b')c='\b';else if(c=='f')c='\f';else if(c!='"'&&c!='\\'&&c!='/')return 0;bytes[0]=(char)c;}
         }else if(c>=128){const char *q=p-1;uint32_t cp=dnx_utf8_next(&q);if(q>end)return 0;p=q;n=dj_utf8(cp,bytes);}
         else {if(c<32)return 0;bytes[0]=(char)c;}
         if(used+n>=cap){out[used]=0;return 0;}memcpy(out+used,bytes,n);used+=n;

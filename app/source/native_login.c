@@ -8,6 +8,7 @@
 #include "client_data.h"
 #include "chat_assets.h"
 #include "chat_media_data.h"
+#include "voice_control.h"
 #include "session_store.h"
 #include "auth_crypto.h"
 #include "captcha.h"
@@ -370,6 +371,7 @@ static int parse_identity(const char *json){
     char username[129]={0},display[321]={0};
     if(!json_string(json,"username",username,sizeof(username)))return 0;
     (void)json_string(json,"global_name",display,sizeof(display));
+    dj_get(dj_root(json),"id",account.user_id,sizeof(account.user_id));
     snprintf(account.username,sizeof(account.username),"%s",username);
     snprintf(account.display_name,sizeof(account.display_name),"%s",display[0]?display:username);
     return 1;
@@ -458,6 +460,7 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
     return ok;
 }
 #include "live_gateway.inc"
+#include "voice_connect.inc"
 #include "chat_jobs.inc"
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
@@ -659,7 +662,9 @@ const char *dnx2JobDraft(void){return "";}const char *dnx2JobSticker(void){retur
 int dnx2RequestImages(int t,int f,int n){(void)t;(void)f;(void)n;return 0;}
 const unsigned char *dnx2ChatImage(int t,int n){(void)t;(void)n;return NULL;}
 const Dnx2MediaCatalog *dnx2MediaCatalog(void){static Dnx2MediaCatalog m;return &m;}
-int dnx2RequestMessageImages(void){return 0;}const unsigned char *dnx2MessageImage(int t,const char *p){(void)t;(void)p;return NULL;}
+int dnx2RequestMessageImages(int f,int n){(void)f;(void)n;return 0;}
+const Dnx2DecodedMedia *dnx2MessageMedia(const char *id){(void)id;return NULL;}
+const unsigned char *dnx2AuthorAvatar(const char *i,const char *a,const char *g,unsigned d){(void)i;(void)a;(void)g;(void)d;return NULL;}const unsigned char *dnx2MessageImage(int t,const char *p){(void)t;(void)p;return NULL;}
 void dnx2LiveStart(void){}
 void dnx2LiveStop(void){}
 void dnx2LiveReset(void){}

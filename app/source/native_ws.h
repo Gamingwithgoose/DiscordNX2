@@ -9,7 +9,7 @@
 typedef struct {
     unsigned char wire[DNX2_WS_MAX+14],message[DNX2_WS_MAX+1];
     size_t used,message_used,control_size;
-    int fragmented;
+    int fragmented;unsigned close_code;
 } Dnx2WsReader;
 /* 0 incomplete/continuation, 1 text, 2 ping, 3 pong, -1 invalid, -2 close.
  * Consume one complete frame; preserve both partial frames and fragments. */
@@ -23,7 +23,7 @@ static int dnx2WsNext(Dnx2WsReader *r,unsigned char *out,size_t cap){
     if(n>DNX2_WS_MAX || (op>=8 && (!fin||n>125)))return -1;
     if(r->used<h+(size_t)n)return 0;
     int result=0;
-    if(op==8)result=-2;
+    if(op==8){r->close_code=n>=2?((unsigned)p[h]<<8)|p[h+1]:0;result=-2;}
     else if(op==9||op==10){
         if(n>=cap)return -1;
         memcpy(out,p+h,(size_t)n);out[n]=0;r->control_size=(size_t)n;result=op==9?2:3;

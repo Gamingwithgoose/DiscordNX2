@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.40-in-place-chat-icons-mobile-keyboard-media",
+  "version": "0.41-avatars-media-unicode-phone-keyboard-voice-preflight",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -259,5 +259,19 @@
     "media": "Common Unicode, selected-guild emoji and sticker picker. GET guilds/{id}/emojis and stickers; ignore unavailable entries; stage custom markup or sticker_ids. Send is explicit and account permissions apply. Recognize bounded valid incoming custom-emoji tokens and first sticker_items entry; load PNG/static APNG previews from fixed CDN. Unsupported Lottie/GIF previews use name fallback. No actual account messages or private server data accessed during tests.",
     "remaining": "Actual console appearance, nonflashing transitions, CDN images, media selection/send and keyboard comfort require hardware test. GIF search/provider integration, animation, full attachments/rich text, forums/DMs and Discord voice calls are not implemented. Do not present placeholders as supported features.",
     "validation": "Strict AArch64 syntax checks passed for changed client, UI, font and PNG decoder. New synthetic production job tests pass for deferred matching results, stale-context rejection, single-send/failure preservation, empty history, catalogs, unauthenticated CDN, actual PNG decode/size rejection and cleanup; mobile keyboard order/page/hit-size tests pass. Existing live worker, font, client data, saved-session, HTTP/WS/CAPTCHA regressions passed. No NRO or dependency build."
+  },
+  "v041_implementation": {
+    "keyboard": "Tap composer/X opens phone-style keyboard directly. Remove native swkbd action and Keyboard closed notice. Delete whole graphemes; English keyboard layout, not multilingual IME.",
+    "profiles_media": "Parse author/user/default and guild avatars, member nickname and timestamp. Async unauthenticated fixed-CDN fetch. First attachment/embed image; bounded PNG/JPEG/GIF decode, 4 preview cache, small GIF animation <=12frames/256x256, others static first frame; <=512KiB/512x512 source, <=256x144 output. Video/WebP/GIF search/full rich media missing.",
+    "unicode": "Vendored pinned utf8proc MIT. Preserve JSON newlines and UTF8, reject embedded NUL. Grapheme editing/wrap/fit/scroll, per-cluster NFC display, zero-width combining advance. Original text retained. No bidi/complex shaping or joined/color emoji ligatures; not universal Unicode support.",
+    "voice": "Explicit connection test only; Gateway muted/deafened join, correctly scoped session/server events, validated Voice WSS v8 endpoint, truthful max_dave_protocol_version0, detect 4017, bounded best-effort leave and secret cleanup. No microphone, RTP, Opus or audio. Full request remains blocked on DAVE/MLS/crypto and Opus port. No payload/plugin changes.",
+    "validation": "All new production host Unicode/NFC/grapheme/metadata/media/GIF/voice fixtures pass. Existing chat job, live worker, keyboard, font, client, encrypted session, HTTP, WS, CAPTCHA and actual phone crypto regressions pass. Changed native modules plus vendored utf8proc pass strict AArch64 syntax checks. Main passes with its pre-existing audio signedness warning. No NRO/dependency build; hardware test pending.",
+    "hardware_test": [
+      "Build-NRO.bat; transfer only NRO. Existing NSO unchanged.",
+      "Tap input: phone keyboard, no native applet/closed notice; edit accents/emoji; verify nicknames, profile/server avatars.",
+      "Check image attachment, embed thumbnail, short GIF animation, send/receive and switching without flash.",
+      "Unicode accented/styled names; complex scripts/RTL may remain unsupported.",
+      "Voice connection test should report missing DAVE/Opus and leave; no audio expected."
+    ]
   }
 }

@@ -2,7 +2,7 @@
 
 > **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.40 source keeps channel changes and sends inside the conversation, loads real server icons, and adds a compact phone-style keyboard plus emoji/sticker selection. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.41 source adds chat avatars/nicknames, image and bounded animated-GIF previews, Unicode grapheme editing and accent normalization. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
@@ -12,11 +12,11 @@ DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.40 sourc
 | Native QR login | User confirmed successful account connection after the project-hosted phone CAPTCHA handoff in v0.37. |
 | Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. User confirmed account connection; individual future attempts may still be rejected or expire. |
 | Servers | Loads up to 200 real servers. Reads Discord folder/order settings and flattens folders in order; falls back to API order if unavailable. |
-| Channels / text | Text/announcement channels show the latest 30 messages. A foreground Gateway worker listens for message events and refreshes affected history; five-second automatic polling is the fallback. Tap input to request the native software keyboard; the fallback is a compact full-width phone-style QWERTY layout with separate symbol pages. |
-| Voice chat | Voice/stage channels can be selected, but joining calls, live members and sending/receiving Discord voice remain unfinished. |
-| Emoji / stickers | Common Unicode emoji and current-server emoji/sticker picker. Emoji PNG and PNG/APNG sticker first-frame previews; explicit Send for drafts/stickers. GIF search, animated playback and full rich media remain unfinished. |
+| Channels / text | Text/announcement channels show the latest 30 messages. A foreground Gateway worker listens for message events and refreshes affected history; five-second automatic polling is the fallback. Tap input to open the compact full-width phone-style QWERTY layout with separate symbol pages. |
+| Voice chat | Voice/stage channels expose an explicit connection test: briefly join muted/deafened, check the voice WebSocket and leave. No call audio or live members. DAVE/Opus integration remains blocked. |
+| Emoji / stickers | Common Unicode emoji and current-server emoji/sticker picker. Emoji PNG and PNG/APNG sticker first-frame previews; explicit Send for drafts/stickers. Posted PNG/JPEG/GIF images and embed image/thumbnail previews are supported within limits below. GIF search and full rich media remain unfinished. |
 | Saved login | Optional eight-digit PIN encrypts credentials on SD. Enter PIN on future launches instead of scanning QR; expiry/revocation may require login again. New in v0.38. |
-| Special characters | Embedded OFL Noto Sans, Math, Symbols 2 and monochrome Emoji supplement console fonts, including styled mathematical letters. Missing glyphs can still appear as boxes; complex shaping and combined/color emoji are incomplete. |
+| Special characters | Embedded OFL Noto Sans, Math, Symbols 2 and monochrome Emoji supplement console fonts, including styled mathematical letters. NFC accent normalization and grapheme-aware editing/wrapping keep combined characters together. Missing glyphs, complex shaping, right-to-left layout and joined/color emoji rendering remain incomplete. |
 | Audio and networking | Microphone capture/playback and separate transport/Gateway tests have passed hardware tests. These are not a working Discord call. |
 | C button | Not available through the tested controller APIs; no C-button push-to-talk or GameChat replacement. |
 | On-console browser | System browser attempts showed "This feature is unavailable". A compatible embedded browser is not included. |
@@ -92,9 +92,23 @@ The interface has three areas: a narrow **server rail** on the left, the selecte
 2. Tap a text/announcement channel in the channel sidebar. Swipe the sidebar to scroll categories and channels. With a controller, move Right to channels, choose a row and press A.
 3. New messages update automatically while the conversation is open. **Live updates** means Gateway Ready/Resume succeeded; message-create/update/delete events trigger history refresh. **Auto refresh (5 s)** means Gateway was unavailable and REST polling is active. A slow connection, rate limit or access failure can delay updates. A periodic resync also catches missed events. This is foreground-only, not a background plugin feature.
 4. Swipe the conversation or use Up/Down to read recent messages. New messages follow the bottom only if you were already at the bottom; older reading keeps an ID anchor where possible. Tap a message, or press A in the conversation, for expanded reading. B closes expanded reading; live snapshots wait until you return so the message does not change underneath you.
-5. Tap the **message box** at the bottom, or press X, to request the Switch software keyboard. Finishing the keyboard changes the draft only. **Tap Send or press R** to send it. Incoming updates do not send, clear or overwrite your draft. A failed/unconfirmed send preserves it; refresh/check before manually retrying.
-6. The native keyboard depends on system applet access in your homebrew environment. Its compatibility with this setup remains unverified. If it is unavailable, tap the **keyboard icon** above the input for the compact touch keyboard. Letter mode shows normal QWERTY rows; **?123** switches to numbers/symbols, **#+=** switches symbol sets, and **ABC** returns to letters. Touch Shift, Space, Delete or Done; controller equivalents are Y, X, L and R, with A adding the selected key. **Done does not send.** The smiley opens the media picker; B leaves the overlay with the draft intact.
-7. The native keyboard currently limits entry to 128 characters in a 512-byte UTF-8 draft. The fallback adds ASCII, up to the same byte limit. Automatic mention parsing is disabled. No older-history pagination is included beyond the latest 30 messages.
+5. Tap the **message box** at the bottom, or press X, to open the phone-style touch keyboard. **Tap Send or press R** after closing the keyboard to send the draft. Incoming updates never send or overwrite it. A failed/unconfirmed send preserves it; check history before retrying.
+6. Letter mode uses QWERTY rows. **?123** opens numbers/symbols, **#+=** switches symbol sets, and **ABC** returns to letters. Shift, Space, Delete and Done have touch buttons; controller equivalents are Y, X, L and R. **Done does not send.** The smiley opens the media picker; B leaves the overlay with the draft intact. Backspace deletes a complete Unicode grapheme, including joined emoji or combining accents.
+7. Drafts hold up to 512 UTF-8 bytes. The keyboard has an English letter layout plus emoji selection, not a full multilingual input method. Automatic mention parsing is disabled. History remains limited to the latest 30 messages.
+
+### Profiles, images and Unicode
+
+Messages show available nicknames, author avatars (including server-specific avatars), default-avatar fallback and UTC times. Images load in the background without replacing the conversation. Tap a message for a larger preview. PNG/JPEG and GIF attachment or embed image/thumbnail previews use approved Discord, Tenor and Giphy media hosts only; no account credential is sent to image hosts.
+
+Previews are limited to 512 KiB downloads and 512x512 decoded sources, resized to at most 256x144. Small GIFs (up to 12 frames and 256x256 source) animate; longer/larger GIFs show the first frame. Four media previews are cached in memory. Only the first image per message is shown. Video, WebP, arbitrary website embeds, full-resolution viewing and GIF search are not implemented.
+
+Unicode text is preserved in storage and messages. Display normalizes decomposed accents to NFC; wrapping, fitting and deletion respect grapheme boundaries. Font fallbacks cover many Unicode characters, but this renderer does not implement Arabic/Indic shaping, bidirectional layout or joined/color emoji ligatures. A grapheme staying intact does not guarantee its font can render it correctly.
+
+### Voice connection test and remaining blocker
+
+Select a voice channel and choose **Check voice connection**. This performs a brief muted/deafened Gateway and voice-WebSocket test, then attempts to leave automatically. It never opens the microphone or sends audio. The fixed-stage report is `/kaihen/discordnx2-voice.txt`; B cancels. A failed network connection can delay Discord observing the leave.
+
+Working calls require an Opus codec and Discord's DAVE encryption engine. Discord documents E2EE-only voice since March 1, 2026 ([voice protocol](https://docs.discord.com/developers/topics/voice-connections)); [libdave](https://github.com/discord/libdave) brings MLS and crypto dependencies that are not yet ported into this NRO. The connection test honestly advertises no DAVE support and reports rejection code 4017 where applicable. Existing microphone/PCM tests do not supply this missing Discord voice transport.
 
 ### Emoji, server emoji and stickers
 
@@ -114,7 +128,7 @@ Voice/stage selection displays the actual selected channel and disconnected stat
 | --- | --- |
 | Tap server / channel | Select and open it. |
 | Swipe server rail / channel sidebar / conversation | Scroll that area; a drag does not activate a row or Send. |
-| Tap message box / X | Request native keyboard; keyboard icon opens the compact fallback. |
+| Tap message box / X | Open the phone-style keyboard. |
 | Tap Send / R | Send the current nonempty draft. |
 | Left / Right | Change focus between rail, channels, conversation and input. |
 | Up / Down | Navigate or scroll the focused area. |
@@ -123,9 +137,9 @@ Voice/stage selection displays the actual selected channel and disconnected stat
 | B | Close expanded reading or move focus back. |
 | Plus / Exit | Close DiscordNX2. |
 
-Touch was confirmed in v0.39. It uses a 1280x720 output range matching the framebuffer. The new keyboard/picker targets and system keyboard still need hardware verification; docked use retains controller navigation. PIN save/unlock also has touch buttons and digit selection.
+Touch was confirmed in v0.39. It uses a 1280x720 output range matching the framebuffer. The latest keyboard/picker targets and previews still need hardware verification; docked use retains controller navigation. PIN save/unlock also has touch buttons and digit selection.
 
-Developer shortcuts remain on Home: **hold R + X** for the executable-memory check and **hold R + Y** for the Wi-Fi browser probe. Neither is needed for ordinary login. The Wi-Fi browser probe failed on the tested setup; a native software-keyboard attempt is separate from that browser test.
+Developer shortcuts remain on Home: **hold R + X** for the executable-memory check and **hold R + Y** for the Wi-Fi browser probe. Neither is needed for ordinary login. The Wi-Fi browser probe failed on the tested setup; the chat composer now uses its own phone-style keyboard.
 
 ## Temporary verification website
 
@@ -163,9 +177,9 @@ The default address is compiled into each NRO; moving hosting requires rebuildin
 | QR failed/expired | Cancel and start a new attempt. Phone approval is not proof the Switch received an account session. |
 | "This feature is unavailable" | This was observed in the system browser experiment. Use the temporary phone flow; changing DNS or replacing the NSO is not an established fix. |
 | Compiler/toolchain missing | Check devkitPro's install path and run Setup-Toolchain.bat if Switch 2 packages are absent. |
-| No voice audio or channel members | Voice calling is not implemented yet; channel selection does not start a call. |
+| No voice audio or channel members | Only the explicit connection test is implemented; DAVE/Opus call audio is still missing. |
 | Account/server name shows boxes | v0.39 embeds Unicode, Math, Symbols and monochrome Emoji fallbacks. Some combining sequences, scripts or emoji can still be unsupported. Share the character names/code points or an example display name, never login data. |
-| Keyboard does not open | Report the native-keyboard result in the hardware log. Use the keyboard icon for the compact fallback; no custom loader or NSO is supplied as a workaround. |
+| Keyboard does not open | Tap the message box or press X for the phone-style keyboard; no system keyboard applet is needed. |
 | Messages do not update immediately | Read the update status. Gateway fallback polls every five seconds; rate limits/network errors delay it. The live log records connection stages without message content. |
 | Server order differs | The app uses flattened Discord folder order when settings are available. It indicates when API order is being used instead. |
 | Saved login will not unlock | Check the PIN, network and final status. Retry from Home; if the token was revoked, use QR login again. |
@@ -204,4 +218,6 @@ Thanks to the ouncebrew, kaiHEN, devkitPro and upstream projects referenced in t
 
 `app/assets/fonts/` contains unmodified Noto fonts from Google Fonts under SIL Open Font License 1.1. Each font ships with its OFL notice, and `sources.json` records the exact upstream commit, source URLs and SHA-256 hashes. The fonts are embedded in the NRO; users do not need to copy font files to the SD card. Console-provided fonts are not redistributed. Monochrome glyph support does not provide full emoji sequence rendering or complex-script shaping.
 
-The PNG decoder in `app/source/vendor/stb_image.h` retains its upstream public-domain/MIT license; `stb_image-source.txt` records the exact source revision.
+The PNG/JPEG/GIF decoder in `app/source/vendor/stb_image.h` retains its upstream public-domain/MIT license; `stb_image-source.txt` records the exact source revision.
+
+Unicode segmentation and normalization use vendored utf8proc, pinned in `app/source/vendor/utf8proc/SOURCE.txt`, with its MIT license included. Run `sh tests/run-presentation-tests.sh` for grapheme/NFC, message metadata, URL validation, actual GIF decoding and synthetic production voice-signaling tests. These checks never contact a real account or start a call.

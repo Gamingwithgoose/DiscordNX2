@@ -5,6 +5,7 @@
  */
 #include "native_font.h"
 #include "client_json.h"
+#include "unicode_text.h"
 extern char font8x8_basic[128][8];
 #include <switch.h>
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -16,7 +17,7 @@ extern char font8x8_basic[128][8];
 typedef struct {
     unsigned char *bitmap;
     int xoff,yoff,w,h,advance;
-    uint32_t code;
+    uint32_t code;int ready;
 } CachedGlyph;
 extern const unsigned char dnx2_font_sans[],dnx2_font_math[],dnx2_font_symbols[],dnx2_font_emoji[];
 static struct {
@@ -80,15 +81,15 @@ static inline uint32_t blend(uint32_t src,uint32_t color,unsigned a){
 }
 static CachedGlyph *glyph(int sz,uint32_t cp){
     CachedGlyph *g=&font_state.glyphs[sz][cp%256];
-    if(g->code==cp&&g->advance)return g;
-    free(g->bitmap);memset(g,0,sizeof(*g));g->code=cp;
+    if(g->code==cp&&g->ready)return g;
+    free(g->bitmap);memset(g,0,sizeof(*g));g->code=cp;g->ready=1;
     stbtt_fontinfo *info=&font_state.info;
     if(!stbtt_FindGlyphIndex(info,(int)cp))for(int i=0;i<font_state.fallback_count;i++){
         if(stbtt_FindGlyphIndex(&font_state.fallback[i],(int)cp)){info=&font_state.fallback[i];break;}
     }
     float scale=stbtt_ScaleForPixelHeight(info,(float)heights[sz]);
     int advance=0,lsb=0;stbtt_GetCodepointHMetrics(info,(int)cp,&advance,&lsb);
-    g->advance=(int)(advance*scale+0.5f);if(g->advance<4)g->advance=4;
+    g->advance=(int)(advance*scale+0.5f);if(utf8proc_charwidth((utf8proc_int32_t)cp)==0)g->advance=0;else if(g->advance<4)g->advance=4;
     g->bitmap=stbtt_GetCodepointBitmap(info,0,scale,(int)cp,&g->w,&g->h,&g->xoff,&g->yoff);
     if(cp!=' '&&(!stbtt_FindGlyphIndex(info,(int)cp)||!g->bitmap||!g->w)){
         free(g->bitmap);int xs=heights[sz]/12,ys=heights[sz]/8;
@@ -100,45 +101,37 @@ static CachedGlyph *glyph(int sz,uint32_t cp){
             g->bitmap[y*g->w+x]=on?255:0;
         }
     }
+    if(utf8proc_charwidth((utf8proc_int32_t)cp)==0)g->advance=0;
     return g;
 }
 int dnx2FontWidth(const char *text,int size){
-    int width=0,sz=size<=2?0:size==3?1:2;if(!text)return 0;
-    const char *p=text;while(*p){uint32_t cp=dnx_utf8_next(&p);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;width+=font_state.initialized?glyph(sz,cp)->advance:6*size;}
-    return width;
+    if(!text)return 0;
+    int width=0,sz=size<=2?0:size==3?1:2;const char *p=text;
+    while(*p){const char *end=dnx_grapheme_end(p);char cluster[256];dnx_cluster_text(p,end,cluster);const char *q=cluster;
+        while(*q){uint32_t cp=dnx_utf8_next(&q);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;if(cp<32)cp=' ';width+=font_state.initialized?glyph(sz,cp)->advance:6*size;}p=end;
+    }return width;
 }
 int dnx2FontFit(const char *text,int width,int size,int maxchars){
     if(!text||width<1)return 0;
-    int sz=size<=2?0:size==3?1:2,used=0;const char *p=text,*end=text;
+    int used=0;const char *p=text,*fit=text;
     for(int i=0;*p&&i<maxchars;i++){
-        uint32_t cp=dnx_utf8_next(&p);int advance=font_state.initialized?glyph(sz,cp)->advance:6*size;
-        if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)advance=0;
+        const char *end=dnx_grapheme_end(p);char cluster[256];dnx_cluster_text(p,end,cluster);int advance=dnx2FontWidth(cluster,size);
         if(used+advance>width)break;
-        used+=advance;end=p;
-    }
-    return (int)(end-text);
+        used+=advance;fit=end;p=end;
+    }return (int)(fit-text);
 }
 int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
                 int x,int y,const char *str,uint32_t color,int size,int maxchars) {
     if(!font_state.initialized||!pixels||!str)return 0;
-    const int sz=size<=2?0:size==3?1:2;
-    const int baseline=y+heights[sz]-2;
-    int cursor=x;const char *p=str;
+    const int sz=size<=2?0:size==3?1:2,baseline=y+heights[sz]-2;int cursor=x;const char *p=str;
     for(int i=0;*p&&i<maxchars;i++){
-        uint32_t cp=dnx_utf8_next(&p);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;if(cp<32)cp=' ';
-        CachedGlyph *g=glyph(sz,cp);
-        if(cursor+g->advance>width)break;
-        if(g->bitmap && g->w>0&&g->h>0){
-            for(int gy=0;gy<g->h;gy++){
+        const char *end=dnx_grapheme_end(p);char cluster[256];dnx_cluster_text(p,end,cluster);
+        int advance=dnx2FontWidth(cluster,size);if(cursor+advance>width)break;const char *q=cluster;int pen=cursor;
+        while(*q){uint32_t cp=dnx_utf8_next(&q);if(cp==0xfe0e||cp==0xfe0f||cp==0x200d)continue;if(cp<32)cp=' ';CachedGlyph *g=glyph(sz,cp);
+            if(g->bitmap)for(int gy=0;gy<g->h;gy++){
                 int py=baseline+g->yoff+gy;if(py<0||py>=height)continue;
-                for(int gx=0;gx<g->w;gx++){
-                    int px=cursor+g->xoff+gx;if(px<0||px>=width)continue;
-                    unsigned a=g->bitmap[gy*g->w+gx];
-                    if(a)pixels[py*stride+px]=blend(pixels[py*stride+px],color,a);
-                }
-            }
-        }
-        cursor+=g->advance;if(cursor>=width)break;
-    }
-    return 1;
+                for(int gx=0;gx<g->w;gx++){int px=pen+g->xoff+gx;if(px<0||px>=width)continue;unsigned a=g->bitmap[gy*g->w+gx];if(a)pixels[py*stride+px]=blend(pixels[py*stride+px],color,a);}
+            }pen+=g->advance;
+        }cursor+=advance;p=end;
+    }return 1;
 }

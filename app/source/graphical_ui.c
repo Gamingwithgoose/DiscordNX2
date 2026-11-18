@@ -14,7 +14,7 @@
 #include "chat_assets.h"
 #include "chat_media_data.h"
 #include "mobile_keyboard.h"
-#include <switch/applets/swkbd.h>
+#include "unicode_text.h"
 #include <stdlib.h>
 #include "native_font.h"
 #include "brand_icon.h"
@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 
 #define W 1280
 #define H 720
@@ -151,7 +152,6 @@ static void text_wrap(int x,int y,const char *text,int lines,int columns){
 }
 static int server_cursor=-1,server_page=0,channel_cursor=0,channel_first=0;
 static int message_first=0,follow_latest=1;
-static int keyboard_failed;
 static char keyboard_notice[128];
 typedef struct {int held,start_x,start_y,last_y,moved;u64 sample;} TouchInput;
 static TouchInput touch_input;
@@ -187,6 +187,27 @@ static void image_draw(int x,int y,int w,int h,const unsigned char *rgba,int rad
         *d=v|0xff000000u;
     }
 }
+static uint64_t ui_ms(void){struct timespec t={0};clock_gettime(CLOCK_MONOTONIC,&t);return (uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000;}
+static int media_draw_image(int x,int y,int maxw,int maxh,const Dnx2DecodedMedia *media){
+    if(!media||!media->pixels||!media->width||!media->height)return 0;
+    int w=maxw,h=media->height*w/media->width;if(h>maxh){h=maxh;w=media->width*h/media->height;}if(w<1||h<1)return 0;
+    int frame=0,total=0;for(int i=0;i<media->frames;i++)total+=media->delays[i];
+    if(total&&media->frames>1){unsigned position=(unsigned)(ui_ms()%(unsigned)total);for(int i=0;i<media->frames;i++){if(position<(unsigned)media->delays[i]){frame=i;break;}position-=(unsigned)media->delays[i];}}
+    const unsigned char *rgba=media->pixels+(size_t)frame*media->width*media->height*4;
+    for(int j=0;j<h;j++)for(int i=0;i<w;i++){
+        int px=x+i,py=y+j;if(px<0||py<0||px>=W||py>=H)continue;
+        const unsigned char *s=rgba+4*((j*media->height/h)*media->width+i*media->width/w);uint32_t *d=pixels+py*stride_pixels+px,old=*d,v=0;
+        for(int c=0;c<3;c++)v|=((s[c]*s[3]+((old>>(8*c))&255)*(255-s[3])+127)/255)<<(8*c);
+        *d=v|0xff000000u;
+    }return h;
+}
+static void author_draw(int y,const Dnx2Message *m){
+    const unsigned char *avatar=dnx2AuthorAvatar(m->author_id,m->avatar,m->guild_avatar,m->default_avatar);
+    if(avatar)image_draw(380,y+8,40,40,avatar,20);
+    else {rounded(380,y+8,40,40,20,C_PRIMARY);const char *end=m->author;dnx_utf8_next(&end);char letter[5]={0};size_t n=(size_t)(end-m->author);if(n<sizeof(letter))memcpy(letter,m->author,n);text_line(391,y+17,letter,C_WHITE,2,1);}
+    text_right=1090;text_line(432,y+8,m->author,C_WHITE,2,72);text_right=1256;
+    if(strlen(m->timestamp)>=16){char when[16];snprintf(when,sizeof(when),"%.5s UTC",m->timestamp+11);text_line(1136,y+9,when,C_MUTED,1,12);}
+}
 static void message_wrap(int x,int y,const char *text,int lines,int columns){
     const char *p=text;
     for(int row=0;row<lines&&*p;row++){
@@ -199,7 +220,7 @@ static void message_wrap(int x,int y,const char *text,int lines,int columns){
                 if(image)image_draw(cursor,y+row*23,21,21,image,0);else text_line(cursor,y+row*23,fallback,C_WHITE,2,36);
                 cursor+=width;p+=token;continue;
             }
-            const char *start=p;dnx_utf8_next(&p);char value[5]={0};memcpy(value,start,(size_t)(p-start));int width=dnx2FontWidth(value,2);
+            const char *start=p;p=dnx_grapheme_end(p);char value[256];dnx_cluster_text(start,p,value);if(value[0]=='\n'||value[0]=='\r')break;int width=dnx2FontWidth(value,2);
             if(cursor+width>text_right){p=start;break;}text_line(cursor,y+row*23,value,C_WHITE,2,1);cursor+=width;
         }
     }
@@ -288,21 +309,25 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     if(selected_text()){
         rounded(1234,30,8,8,4,dnx2JobBusy()?C_MUTED:!strcmp(dnx2LiveStatus(),"Live updates")?C_GREEN:C_WARN);
         if(message_expanded&&sel<a->message_count){
-            const Dnx2Message *m=&a->messages[sel];text_line(380,112,m->author,C_PRIMARY,2,72);
-            const char *text=m->content;for(int i=0;i<message_offset&&*text;i++)dnx_utf8_next(&text);
-            message_wrap(380,152,text,19,74);
+            const Dnx2Message *m=&a->messages[sel];author_draw(104,m);
+            const char *text=m->content;for(int i=0;i<message_offset&&*text;i++)text=dnx_grapheme_end(text);
+            const Dnx2DecodedMedia *media=dnx2MessageMedia(m->media_id);int height=media_draw_image(432,158,760,330,media);
+            message_wrap(432,height?height+174:158,text,height?4:19,74);
         }else for(int row=0;row<4;row++){
             int index=message_first+row;if(index>=a->message_count)break;int y=100+row*122;
             const Dnx2Message *m=&a->messages[index];
             if(focus==2&&sel==index)rounded(366,y,900,116,8,C_CARD);
-            text_line(382,y+8,m->author,C_PRIMARY,2,72);
+            author_draw(y,m);
             if(m->sticker_id[0]){
                 const unsigned char *image=dnx2MessageImage(3,m->sticker_id);
                 if(image)image_draw(1170,y+30,64,64,image,0);
                 else text_line(1040,y+40,m->sticker_name,C_MUTED,2,20);
                 text_right=1136;
             }
-            message_wrap(382,y+36,m->content,3,74);text_right=1256;
+            const Dnx2DecodedMedia *media=dnx2MessageMedia(m->media_id);
+            if(media){media_draw_image(1048,y+34,200,80,media);text_right=1032;}
+            else if(m->media_id[0]){text_line(1060,y+40,"Image preview",C_MUTED,1,18);text_right=1032;}
+            message_wrap(432,y+36,m->content,3,74);text_right=1256;
         }
         if(!a->message_count){
             if(dnx2JobKind()==10){for(int i=0;i<3;i++){rounded(382,116+i*122,150,14,5,C_CARD_HI);rounded(382,148+i*122,600-i*90,12,4,C_CARD);}}
@@ -315,13 +340,14 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         if(pending_sticker[0])text_line(1044,644,"x",C_MUTED,2,1);
         rounded(1150,626,112,58,12,(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11?C_PRIMARY:C_CARD);text_line(1170,644,"Send",draft[0]||pending_sticker[0]?C_WHITE:C_MUTED,2,8);
         text_right=1060;
-        if(keyboard_notice[0])text_line(380,600,keyboard_notice,C_WARN,1,90);
-        else if(a->notice[0])text_line(380,600,a->notice,C_WARN,1,90);
+        if(a->notice[0])text_line(380,600,a->notice,C_WARN,1,90);
         text_right=1256;rounded(1080,590,180,30,8,C_CARD);text_line(1154,594,"\xe2\x8c\xa8",C_MUTED,3,2);
         if(media_open)media_draw();
     }else{
-        text_line(392,160,"Not connected",C_WARN,3,60);text_wrap(392,220,"Voice calls are still being implemented. Selecting this channel does not join a call.",4,72);
-        text_line(392,360,"Members unavailable until voice is connected.",C_MUTED,2,72);
+        text_line(392,150,"Voice channel",C_WHITE,3,60);
+        item(392,220,500,90,dnx2JobKind()==16?"Connecting...":"Check voice connection","",focus==2);
+        text_wrap(392,352,a->notice[0]?a->notice:"Encrypted voice audio is not available yet. This checks the Discord connection and then disconnects.",4,72);
+        text_line(392,480,"Microphone and voice audio are inactive.",C_MUTED,2,72);
     }
     server_tooltip();
 }
@@ -391,7 +417,7 @@ static int fallback_keyboard(Framebuffer *fb,PadState *pad){
         if(action==DNX_KEY_SHIFT){if(page)page=page==1?2:1;else upper=!upper;}
         if(action==DNX_KEY_PAGE){page=page?0:1;cursor=0;}
         size_t n=strlen(draft);
-        if(action==DNX_KEY_DELETE&&n){do{n--;}while(n&&((unsigned char)draft[n]&0xc0)==0x80);draft[n]=0;}
+        if(action==DNX_KEY_DELETE&&n){n=dnx_grapheme_previous(draft);draft[n]=0;}
         if(action==DNX_KEY_SPACE&&n<512){draft[n++]=' ';draft[n]=0;}
         if(action==DNX_KEY_TEXT&&pressed>=0){size_t k=strlen(keys[pressed].label);if(n+k<=512){memcpy(draft+n,keys[pressed].label,k+1);if(!page)upper=0;}}
         svcSleepThread(16000000LL);
@@ -400,7 +426,7 @@ static int fallback_keyboard(Framebuffer *fb,PadState *pad){
 static void scroll_messages(int delta){
     const Dnx2Account *a=dnx2Account();int max=a->message_count>4?a->message_count-4:0;
     if(message_expanded){message_offset+=delta*296;if(message_offset<0)message_offset=0;
-        const char *p=a->messages[sel].content;int count=0;while(*p){dnx_utf8_next(&p);count++;}if(message_offset>=count)message_offset=count>296?count-296:0;return;}
+        const char *p=a->messages[sel].content;int count=0;while(*p){p=dnx_grapheme_end(p);count++;}if(message_offset>=count)message_offset=count>296?count-296:0;return;}
     message_first+=delta;if(message_first<0)message_first=0;if(message_first>max)message_first=max;follow_latest=message_first==max;sel=message_first;
 }
 static int open_channel(int index){
@@ -416,7 +442,7 @@ int dnx2GraphicalMenu(void){
     Result rc=hidInitialize();if(R_FAILED(rc))return -1;padConfigureInput(1,HidNpadStyleSet_NpadStandard);touch_init();
     Framebuffer fb={0};rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc)){hidExit();return -1;}rc=framebufferMakeLinear(&fb);if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
-    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";
+    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;
     if(!dnx2Account()->signed_in)tab=0;
     if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=dnx2Account()->message_count>4?dnx2Account()->message_count-4:0;}
     while(1){
@@ -430,7 +456,7 @@ int dnx2GraphicalMenu(void){
         if(!dnx2JobBusy()&&a->signed_in&&a->server_count){
             int requested=dnx2RequestImages(1,server_page*8,8);
             if(!requested&&media_open&&media_tab)requested=dnx2RequestImages(media_tab==1?2:3,media_page*24,24);
-            if(!requested&&tab==2&&selected_text())requested=dnx2RequestMessageImages();
+            if(!requested&&tab==2&&selected_text())requested=dnx2RequestMessageImages(message_expanded?sel:message_first,message_expanded?1:4);
             if(!requested&&tab==2&&selected_text())dnx2LiveStart();
         }
         if(tab==2&&selected_text()){
@@ -443,6 +469,9 @@ int dnx2GraphicalMenu(void){
                 dirty=1;
             }
             const char *state=dnx2LiveStatus();if(state!=last_live){last_live=state;dirty=1;}
+        }
+        if(tab==2&&selected_text()&&ui_ms()-animation_tick>=80){
+            animation_tick=ui_ms();for(int i=message_first;i<a->message_count&&i<message_first+4;i++){const Dnx2DecodedMedia *media=dnx2MessageMedia(a->messages[i].media_id);if(media&&media->frames>1)dirty=1;}
         }
         if(dirty){u32 stride=0;pixels=(uint32_t*)framebufferBegin(&fb,&stride);if(!pixels){action=-1;break;}stride_pixels=(int)(stride/4);draw(NULL,tab,sel,focus,0);framebufferEnd(&fb);pixels=NULL;dirty=0;}
         padUpdate(&pad);u64 down=padGetButtonsDown(&pad);HidAnalogStickState stick=padGetStickPos(&pad,0);
@@ -489,7 +518,9 @@ int dnx2GraphicalMenu(void){
             else if(hit.kind==DNX_LOGIN)account_action=0;
             else if(hit.kind==DNX_REMEMBER)account_action=1;
             else if(hit.kind==DNX_EXIT)break;
+            if(!selected_text()&&tab==3&&x>=392&&x<892&&y>=220&&y<310&&!dnx2JobBusy()){dnx2JobStart(16,NULL,NULL);dirty=1;}
         }
+        if((down&HidNpadButton_B)&&dnx2JobKind()==16){dnx2JobStop();dirty=1;}
         if(down&HidNpadButton_B){if(message_expanded){message_expanded=0;message_offset=0;}else if(focus>0)focus--;else{dnx2LiveStop();tab=0;}dirty=1;}
         if(down&HidNpadButton_AnyLeft){if(focus>0)focus--;dirty=1;}
         if(down&HidNpadButton_AnyRight){if(focus<3)focus++;dirty=1;}
@@ -506,6 +537,7 @@ int dnx2GraphicalMenu(void){
             else if(tab==0)account_action=sel;
             else if(focus==1)choose_channel=channel_cursor;
             else if(focus==3)keyboard=1;
+            else if(tab==3&&!dnx2JobBusy()){dnx2JobStart(16,NULL,NULL);dirty=1;}
             else if(selected_text()&&a->message_count){sel=message_first;message_expanded=!message_expanded;message_offset=0;dirty=1;}
         }
         if(account_action>=0){dnx2JobStop();dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}
@@ -517,8 +549,7 @@ int dnx2GraphicalMenu(void){
         if((down&HidNpadButton_Y)&&tab!=0&&dnx2JobKind()!=11){dnx2JobStart(selected_text()?10:9,NULL,NULL);dirty=1;}
         if(keyboard&&selected_text()&&dnx2JobKind()!=11){
             dnx2JobStop();dnx2LiveStop();focus=3;
-            if(keyboard==2||keyboard_failed){int result=fallback_keyboard(&fb,&pad);if(result==2)media_begin();dirty=1;}
-            else{action=14;break;}
+            int result=fallback_keyboard(&fb,&pad);if(result==2)media_begin();dirty=1;
         }
         if(send&&selected_text()&&(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11){media_open=0;dnx2JobStart(11,draft,pending_sticker);dirty=1;}
         svcSleepThread(16000000LL);
@@ -661,29 +692,4 @@ int dnx2GraphicalPin(const char *title,char pin[9]) {
     }
 done:
     dnx2GraphicalAuthEnd();if(!ok)memset(pin,0,9);return ok;
-}
-
-int dnx2GraphicalNativeKeyboard(unsigned *result){
-    /* The normal menu closes its framebuffer and message worker first. */
-    if(result)*result=0;
-    Result rc=appletInitialize();if(R_FAILED(rc)){keyboard_failed=1;if(result)*result=rc;snprintf(keyboard_notice,sizeof(keyboard_notice),"System keyboard unavailable. Tap the input for touch QWERTY.");return -1;}
-    SwkbdConfig config;rc=swkbdCreate(&config,0);int created=R_SUCCEEDED(rc),ok=0;
-    char text[sizeof(draft)]={0};
-    if(created){
-        swkbdConfigMakePresetDefault(&config);swkbdConfigSetType(&config,SwkbdType_QWERTY);
-        swkbdConfigSetHeaderText(&config,"DiscordNX2 message");swkbdConfigSetGuideText(&config,"Write a message");
-        swkbdConfigSetOkButtonText(&config,"Done");swkbdConfigSetStringLenMax(&config,128);swkbdConfigSetStringLenMin(&config,0);
-        swkbdConfigSetInitialText(&config,draft);rc=swkbdShow(&config,text,sizeof(text));
-        if(R_SUCCEEDED(rc)){snprintf(draft,sizeof(draft),"%s",text);ok=1;keyboard_failed=0;keyboard_notice[0]=0;}
-        swkbdClose(&config);
-    }
-    appletExit();volatile char *p=text;for(size_t i=0;i<sizeof(text);i++)p[i]=0;
-    if(R_FAILED(rc)){
-        /* libnx/libounce return BadAppletExit for Cancel as well as an applet
-         * that failed to show. Keep the existing draft; never auto-send. */
-        keyboard_failed=rc!=MAKERESULT(Module_Libnx,LibnxError_LibAppletBadExit);
-        snprintf(keyboard_notice,sizeof(keyboard_notice),"Keyboard closed. Tap QWERTY if the system keyboard is unavailable.");
-    }
-    if(result)*result=rc;
-    return ok?1:R_FAILED(rc)?-1:0;
 }

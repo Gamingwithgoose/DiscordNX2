@@ -6,14 +6,14 @@
 #define DNX2_MAX_MESSAGES 30
 typedef struct {char id[24];char name[401];char icon[80];} Dnx2Server;
 typedef struct {char id[24],parent[24],name[401];int type,position;} Dnx2Channel;
-typedef struct {char id[24],author[321],content[8193],sticker_id[24],sticker_name[129];int sticker_format;} Dnx2Message;
+typedef struct {char id[24],author[321],content[8193],sticker_id[24],sticker_name[129];int sticker_format;char author_id[24],avatar[80],guild_avatar[80],timestamp[40],media_id[24],media_url[1536];unsigned default_avatar;} Dnx2Message;
 typedef struct {
     int channel_count,selected_channel,message_count,channels_loaded,order_synced;
     char notice[160];
     Dnx2Channel channels[DNX2_MAX_CHANNELS];
     Dnx2Message messages[DNX2_MAX_MESSAGES];
     int signed_in,server_count,selected;
-    char username[129],display_name[321];
+    char username[129],display_name[321],user_id[24];
     Dnx2Server servers[DNX2_MAX_SERVERS];
 } Dnx2Account;
 typedef void (*Dnx2AuthStatus)(const char *stage,const char *qr_url);

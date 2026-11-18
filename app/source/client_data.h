@@ -3,6 +3,7 @@
 #define DNX2_CLIENT_DATA_H
 #include "client_json.h"
 #include "native_login.h"
+#include "message_presentation.h"
 /* Order schema: discord-userdoccers/discord-protos, PreloadedUserSettings
  * field14 GuildFolders; folders field1; GuildFolder guild_ids field1 fixed64.
  * Read-only, flattened folders; never modifies Discord settings. */
@@ -75,11 +76,26 @@ static inline void dnx_messages(Dnx2Account *a,const char *json){
     a->message_count=0;DnxJson root=dj_root(json),e;const char *p=NULL;
     while(a->message_count<DNX2_MAX_MESSAGES&&dj_next(root,&p,&e)){
         Dnx2Message m={0};dj_get(e,"id",m.id,sizeof(m.id));DnxJson author=dj_field(e,"author");
-        if(!dj_get(author,"global_name",m.author,sizeof(m.author))||!m.author[0])dj_get(author,"username",m.author,sizeof(m.author));
+        DnxJson member=dj_field(e,"member");
+        if(!dj_get(member,"nick",m.author,sizeof(m.author))||!m.author[0])if(!dj_get(author,"global_name",m.author,sizeof(m.author))||!m.author[0])dj_get(author,"username",m.author,sizeof(m.author));
+        dj_get(author,"id",m.author_id,sizeof(m.author_id));dj_get(author,"avatar",m.avatar,sizeof(m.avatar));dj_get(member,"avatar",m.guild_avatar,sizeof(m.guild_avatar));dj_get(e,"timestamp",m.timestamp,sizeof(m.timestamp));
+        char discriminator[8]={0};dj_get(author,"discriminator",discriminator,sizeof(discriminator));m.default_avatar=dnx_default_avatar(m.author_id,discriminator);
+        DnxJson attachments=dj_field(e,"attachments"),attachment;const char *media_cursor=NULL;
+        while(dj_next(attachments,&media_cursor,&attachment)){
+            char content_type[64]={0};dj_get(attachment,"content_type",content_type,sizeof(content_type));
+            if(strncmp(content_type,"image/",6))continue;
+            if(dnx_message_media(attachment,m.media_url,sizeof(m.media_url))){dj_get(attachment,"id",m.media_id,sizeof(m.media_id));if(!dnx_id(m.media_id))snprintf(m.media_id,sizeof(m.media_id),"%s",m.id);break;}
+        }
+        if(!m.media_url[0]){DnxJson embeds=dj_field(e,"embeds"),embed;media_cursor=NULL;
+            while(dj_next(embeds,&media_cursor,&embed)){
+                DnxJson image=dj_field(embed,"image");if(!image.p)image=dj_field(embed,"thumbnail");
+                if(dnx_message_media(image,m.media_url,sizeof(m.media_url))){snprintf(m.media_id,sizeof(m.media_id),"%s",m.id);break;}
+            }
+        }
         if(!dj_get(e,"content",m.content,sizeof(m.content)))snprintf(m.content,sizeof(m.content),"[Message is too long to display]");
         DnxJson stickers=dj_field(e,"sticker_items"),first;const char *cursor=NULL;
         if(dj_next(stickers,&cursor,&first)){dj_get(first,"id",m.sticker_id,sizeof(m.sticker_id));dj_get(first,"name",m.sticker_name,sizeof(m.sticker_name));m.sticker_format=dj_int(first,"format_type",0);if(!dnx_id(m.sticker_id))m.sticker_id[0]=0;}
-        if(!m.content[0]&&!m.sticker_id[0])snprintf(m.content,sizeof(m.content),"[Attachment, embed or empty message]");
+        if(!m.content[0]&&!m.sticker_id[0]&&!m.media_id[0])snprintf(m.content,sizeof(m.content),"[Attachment, embed or empty message]");
         a->messages[a->message_count++]=m;
     }
     for(int i=0;i<a->message_count/2;i++){Dnx2Message m=a->messages[i];a->messages[i]=a->messages[a->message_count-1-i];a->messages[a->message_count-1-i]=m;}

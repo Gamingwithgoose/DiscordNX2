@@ -325,3 +325,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Replace fallback keyboard with compact full-width phone-style QWERTY, larger tightly spaced keys, separate number/symbol pages and smiley. Remove Touch QWERTY heading and instructional footers; use neutral gray chat styling. Done does not send.
 - Add Unicode/current-server emoji and server-sticker picker, explicit staged sends, bounded custom-emoji markup rendering and static PNG/APNG sticker previews. Honor unavailable entries/API permissions. GIF search, animated media, full attachment/rich-text support and voice calling remain unfinished.
 - Test actual production jobs with deferred/stale result fixtures, duplicate-send rejection, failure preservation, empty history, catalogs, unauthenticated CDN and real PNG limits. Verify mobile keyboard geometry, binary HTTP bodies and existing live/font/auth/session regressions. Changed-source AArch64 checks pass; no NRO built. Resident NSO, DNS/public jailbreak and established audio/network pipeline preserved.
+
+## v0.41 — 2026-11-18
+
+- Open phone-style keyboard directly from composer/X; remove native keyboard action and closed-keyboard instruction.
+- Display message nicknames, avatar/default/server avatars and UTC time; fetch artwork asynchronously without account credentials.
+- Render first posted image/embed preview, bounded PNG/JPEG and small animated GIF; larger animations use a first-frame preview. Video/WebP/GIF search remain unsupported.
+- Preserve Unicode/newlines; vendor pinned MIT utf8proc for grapheme-aware deletion/wrapping/scrolling and NFC display normalization. Complex-script shaping, RTL and joined/color emoji rendering remain incomplete.
+- Add explicit native voice connection test with muted/deafened join, scoped session/server events, TLS voice WebSocket, 4017 handling and best-effort automatic leave. This is not voice calling: Opus and DAVE/MLS crypto port remain required; microphone/audio never start.
+- Synthetic production-path media/Unicode/voice tests and existing chat/live/session tests pass; source syntax checked without an NRO build. User hardware build/test pending. Resident NSO, audio diagnostics, public loader and login encryption preserved.

@@ -40,6 +40,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,const 
     const char *response=strstr(path,"/emojis")?"[{\"id\":\"400000000000000001\",\"name\":\"goose\",\"animated\":true}]":strstr(path,"/stickers")?"[{\"id\":\"300000000000000001\",\"name\":\"Wave\",\"format_type\":1}]":strstr(path,"/guilds/")?"[{\"id\":\"200000000000000001\",\"name\":\"general\",\"type\":0,\"position\":1}]":empty_history?"[]":"[{\"id\":\"900000000000000001\",\"author\":{\"username\":\"fixture\"},\"content\":\"fresh\"}]";
     snprintf(out,cap,"%s",response);last_http_body_size=strlen(out);return !http_fail;
 }
+static void voice_control_preflight(const char *t,const char *g,const char *c,const char *u,char notice[160],int *stage,unsigned *code){(void)t;(void)g;(void)c;(void)u;snprintf(notice,160,"Engine unavailable");*stage=0;*code=0;}
 #include "chat_jobs.inc"
 static int run(void){job_worker(NULL);assert(!services);return dnx2JobApply();}
 int main(int argc,char **argv){
