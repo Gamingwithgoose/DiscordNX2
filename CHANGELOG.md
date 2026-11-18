@@ -129,3 +129,7 @@ I originally used Docker for the first build script because it was an easy way t
 Started the project with two pieces: a Switch 2 NRO for a basic diagnostic check and a kaiHEN NSO that runs as a separate plugin. Added Build.bat so I can pull the source, compile locally, and copy the files to my console. Nothing uses GitHub Actions.
 
 The NRO currently asks the plugin for a test reply and writes the result to the SD card. That's all it does so far. I want a real hardware result before I spend time on Discord voice, C-button handling, or audio. The first build still needs testing on the Switch 2.
+
+## November 17, 2026 - v0.22 first native QR-login attempt and fonts
+
+Replaced handmade 5x7 text with public-domain 8x8 fallback, added optional antialiased system TrueType rendering via pl:u and stb_truetype (no proprietary font distributed), implemented native memory-only RSA-2048/OAEP-SHA256 via devkitPro switch-mbedtls, direct remote-auth v2 WebSocket with Origin and Sec-WebSocket-Accept verification, decrypted nonce proof, fingerprint-bound live QR, mobile confirmation and ticket exchange over TLS, ephemeral user token, real account/guild metadata retrieval and graphical selection. Added Build-NRO.bat switch-mbedtls package bootstrap, logout, and stage-only sanitized auth diagnostics. Unofficial Discord protocol, CAPTCHA, dependency versions, and Switch2 font/audio service compatibility are not yet hardware-tested. Not guaranteed to log in. Resident NSO unchanged. Voice remains unimplemented.

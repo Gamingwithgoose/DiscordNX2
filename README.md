@@ -158,3 +158,20 @@ The MIT-licensed Project Nayuki QR library is now vendored and linked in `app/so
 ### v0.21 Remote Auth HTTP handshake troubleshooting
 
 Real Switch 2 tests showed HTTP 403 from remote-auth WebSocket despite functional TLS. v0.21 adds a standard `Origin: https://discord.com` header consistent with the TriCord WebSocket client and logs a small **allowlist of non-secret HTTP response metadata** on rejection to distinguish protocol rejection from edge protection. Run the Servers remote-auth test once and inspect the same hardware log. This does **not** implement QR login or account authentication.
+
+## v0.22 - Native QR login experiment and font upgrade
+
+This is the first *experimental* scan-to-sign-in attempt directly on Switch 2. It implements Discord's undocumented remote-auth v2 user protocol, which may violate Discord's Terms of Service and may trigger restrictions/CAPTCHA. Use a separate test account. No Windows companion application or developer app is needed for the native QR attempt.
+
+1. Pull main with GitHub Desktop. Run Build-NRO.bat. If missing, the batch automatically attempts to install devkitPro's maintained switch-mbedtls crypto package via pacman, changing the local devkitPro package installation. An unsuccessful install prevents a secure QR build.
+2. Transfer ONLY dist/DiscordNX2.nro. Do NOT change /kaihen/plugins/discordnx2.nso or restart kaiHEN.
+3. Open DiscordNX2 > Servers > SIGN IN WITH QR CODE. The console generates RSA-2048 in RAM, connects to Discord's remote-auth v2 WebSocket with the Origin header, decrypts the nonce challenge, verifies the server fingerprint, and displays a genuine session-bound QR. It never displays a static sample login code.
+4. Use Discord's own mobile QR scanner to scan and approve the login from your own Switch 2. B or Plus cancels. Discord may reject unofficial clients or require extra verification.
+5. If Discord returns a login ticket and token, DiscordNX2 fetches the real account name and up to 64 Discord server names from Discord's API, then immediately wipes its token buffers. Guild metadata remains in NRO RAM until logout or exit. No token, private key, ticket, or QR fingerprint is written to SD.
+6. Select a server using the graphical list. Voice, channels, messages, Opus/DAVE, and background microphone are still NOT implemented in v0.22.
+
+The sanitized /kaihen/discordnx2-hardware.txt report logs only fixed authentication stage descriptions, success state, and visible server count. Share this file on failure, but do NOT share raw tokens, tickets, QR URLs or phone confirmation codes.
+
+Font: DiscordNX2 first tries the console's built-in shared TrueType font via pl:u and stb_truetype, with antialiased glyph rendering. It distributes no proprietary font file. If the Switch 2 shared-font service is incompatible, it falls back to the bundled public-domain IBM VGA 8x8 glyph font, replacing the old 5x7 lettering.
+
+Build validation: v0.21 Remote Auth Gateway connection and v0.18 UI were real-hardware verified; v0.22 source changes have NOT been compiled on the user's devkitPro or tested on their Switch. The first build/login may reveal toolchain or Discord-protocol issues. This source is NOT a guarantee of successful sign-in. TLS peer and hostname validation are required. There is no claim of working voice chat in this revision.

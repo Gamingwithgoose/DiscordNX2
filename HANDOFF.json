@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.21-remote-auth-http-diagnostics",
+  "version": "0.22-native-qr-login-experimental-and-fonts",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -90,16 +90,23 @@
     "v0.19 opt-in local PC OAuth PKCE pairing: Windows Discord-Pair.bat authenticates and advertises discovery over UDP 39274; NRO requests metadata with six-digit on-screen code and explicit PC approval over TCP 39275",
     "Graphical Servers panel shows verified profile display name and actual Discord OAuth guild names/IDs, can select a server; actual Discord voice and channel lists remain disconnected. No Discord token sent to Switch.",
     "v0.20 removes v0.19 Windows pairing from active build/UI, adds direct Discord remote-auth TLS/WebSocket HELLO network probe and Project Nayuki MIT QR encoder + graphical renderer",
-    "v0.21 adds Origin https://discord.com to remote-auth WebSocket request matching TriCord handshake; logs only allowlisted safe HTTP response headers on failure"
+    "v0.21 adds Origin https://discord.com to remote-auth WebSocket request matching TriCord handshake; logs only allowlisted safe HTTP response headers on failure",
+    "v0.22: native unofficial Discord remote-auth QR login attempt using mbedTLS RSA-2048/OAEP-SHA256, fingerprint validation, masked WS, heartbeat, ticket exchange, ephemeral user token and actual user/guild REST metadata.",
+    "v0.22: anti-aliased shared system TrueType via pl:u/stb_truetype when available, public-domain 8x8 fallback. No font file distributed.",
+    "v0.22: Build-NRO.bat attempts to install switch-mbedtls through pacman if required; sanitized stage-only auth logs intentionally omit all credentials and QR URLs."
   ],
-  "build_validation": "v0.20 real hardware: 403 after valid TLS on remote-auth gateway; v0.21 adds origin and rejection classification, source only, not compiled/tested on user's devkitPro.",
+  "build_validation": "v0.21 REAL HARDWARE remote-auth WebSocket 101 + HELLO 41250ms; v0.18 GUI navigation verified. v0.22 source integration checks performed but NOT cross-compiled with user's devkitPro or tested on Switch2; login/font changes remain UNVERIFIED.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
     "audio capture buffer waits are bounded; no raw PCM saved",
     "loopback bsd:u may reject socket creation, binding, or localhost delivery",
     "existing README has historical initial setup steps; current v0.7 is NRO-only",
-    "no real continuous open mic in background until NSO code extended"
+    "no real continuous open mic in background until NSO code extended",
+    "v0.22 uses undocumented Discord user-account remote auth and may violate Terms; CAPTCHA/ban possible.",
+    "switch-mbedtls portlib compatibility and automatic package bootstrap are not yet locally verified.",
+    "pl:u system shared font service may fail on Switch2; public-domain bitmap fallback used.",
+    "Auth token is wiped after fetching identity and guild list; no persistent authenticated voice session exists."
   ],
   "discord_integration": {
     "constraint": "As of March 2026 Discord voice calls require DAVE E2EE; unsupported to claim Opus+simple UDP alone works.",
@@ -110,19 +117,22 @@
       "implement DAVE-capable voice handshake and RTP/E2EE with secure handling",
       "move tested audio/network engine to resident NSO with safe activation and a mute control",
       "test while game runs, then add C-button only when system input is understood"
-    ]
+    ],
+    "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Pull latest main and build with Build-NRO.bat; FTP only dist/DiscordNX2.nro",
-    "Run Servers -> TEST REMOTE AUTH CONNECTION once",
-    "Upload /kaihen/discordnx2-hardware.txt; inspect response status/allowlisted headers or 101/HELLO",
-    "No auth QR or voice in this build; do not create new account until real login exists"
+    "Pull main in GitHub Desktop, run Build-NRO.bat (may install switch-mbedtls), FTP only dist/DiscordNX2.nro",
+    "Do not replace resident /kaihen/plugins/discordnx2.nso or restart kaiHEN",
+    "Servers > SIGN IN WITH QR CODE; use a test Discord account and Discord mobile QR scanner for this first experimental sign-in",
+    "If login completes, verify actual account and server list, select one and optionally logout",
+    "If anything fails upload /kaihen/discordnx2-hardware.txt (stage-only); never share raw token, ticket, QR URL or code",
+    "Voice chat is NOT implemented in v0.22"
   ],
   "next_developer_work": [
-    "Implement secure RSA-2048 crypto dependencies, fingerprint binding and WebSocket heartbeat/nonce proof for Discord's unofficial remote-auth protocol",
-    "Obtain full approved device OAuth architecture if abandoning unofficial authentication; requires application and protected backend",
-    "Only show a real scannable authorization QR after session fingerprint is cryptographically validated",
-    "Implement account-token security, real guild REST/WebSocket, Opus/DAVE voice only after sign-in works",
-    "Improve fonts after auth test and preserve NSO until foreground voice validated"
+    "Fix native build/compiler and mbedTLS portlibs integration as first priority if user build fails",
+    "Diagnose real QR login stages including RSA, nonce proof, fingerprint, Discord mobile confirmation and CAPTCHA/rate-limits from sanitized log",
+    "Check shared TrueType pl:u availability and text readability on Switch2 hardware; adjust sizing as necessary",
+    "After real guild listing works, implement authenticated voice channels and foreground Opus/DAVE two-way transport",
+    "Preserve NSO until real foreground voice works and session lifecycle is secure"
   ]
 }
