@@ -39,6 +39,7 @@ static u64 dnx2MonotonicMs(void) {
 #define HTTP_BUF 131072
 static Dnx2Account account;
 static unsigned char http_body[HTTP_BUF];
+static unsigned last_http_status;
 static unsigned char ws_payload[WS_BUF+1];
 
 const Dnx2Account *dnx2Account(void){return &account;}
@@ -277,6 +278,7 @@ static int json_operation(const char *json,const char *op){
 static int http_request(TlsSession *s,const char *host,const char *method,
                         const char *path,const char *body,const char *token,
                         char *out,size_t cap){
+    last_http_status=0;
     if(!tls_open(s,host))return 0;
     size_t bodylen=body?strlen(body):0;
     char req[4096];
@@ -301,6 +303,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
         used+=got;
     }
     out[used]=0;
+    if(used>=12 && strncmp(out,"HTTP/1.",7)==0)last_http_status=(unsigned)strtoul(out+9,NULL,10);
     if(used<16 || !(strncmp(out,"HTTP/1.1 200 ",13)==0 ||
                      strncmp(out,"HTTP/1.0 200 ",13)==0))return 0;
     char *split=strstr(out,"\r\n\r\n");
@@ -389,13 +392,13 @@ static int fetch_profile(const char *token,Dnx2AuthStatus status){
     int ok=http_request(&https,API_HOST,"GET","/api/v10/users/@me",NULL,token,
                         (char*)http_body,sizeof(http_body));
     tls_close(&https);
-    if(!ok||!parse_identity((char*)http_body))return 0;
+    if(!ok||!parse_identity((char*)http_body)){status("ACCOUNT PROFILE COULD NOT BE LOADED",NULL);return 0;}
     wipe(http_body,sizeof(http_body));
     status("LOADING REAL DISCORD SERVERS",NULL);
     ok=http_request(&https,API_HOST,"GET","/api/v10/users/@me/guilds?limit=200",
                     NULL,token,(char*)http_body,sizeof(http_body));
     tls_close(&https);
-    if(!ok)return 0;
+    if(!ok){status("SERVER LIST COULD NOT BE LOADED",NULL);return 0;}
     parse_guilds((char*)http_body);
     wipe(http_body,sizeof(http_body));
     account.signed_in=1;
@@ -519,7 +522,12 @@ remote_cleanup:
                 access[n]=0;
                 success=fetch_profile((const char*)access,status);
             }
+            else status("LOGIN TOKEN RESPONSE INVALID OR DECRYPT FAILED",NULL);
             wipe(encrypted,sizeof(encrypted));wipe(access,sizeof(access));
+        }else {
+            char reason[96];
+            snprintf(reason,sizeof(reason),"PHONE APPROVED - SESSION EXCHANGE FAILED HTTP %u",last_http_status);
+            status(reason,NULL);
         }
         tls_close(&https);wipe(json,sizeof(json));
     }

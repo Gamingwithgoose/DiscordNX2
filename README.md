@@ -190,3 +190,8 @@ Actual Switch 2 test reached `GENERATING SECURE RSA-2048 SESSION`, `CONNECTING T
 Pull main with GitHub Desktop, run `Build-NRO.bat`, then FTP **only `dist/DiscordNX2.nro`**. Keep the installed resident NSO. This update fixes nonce-proof serialization capacity, adds Base64URL boundary selftests, packages your numeral-2 icon, and rounds the native menus. No PC companion or raw token is needed.
 
 Local NRO compilation and packet/nonce host tests passed. Open Servers > Sign in with QR code, scan with Discord mobile and approve using a test account. Confirm the real profile/server list. Live login and console appearance require hardware verification. Authentication remains unofficial; Discord voice is not implemented. If login fails, share only the stage-only hardware log, never QR URLs or credentials.
+
+
+### v0.24 appearance trial
+
+The NRO now embeds the supplied Pretendo font and updated icon without the numeral. Missing characters use bitmap fallback. Verification badges and development overlays are removed; controls and Diagnostics remain available. Pull main, run Build-NRO.bat and FTP only the NRO. Mobile approval has been reported but console account loading is unresolved; the stage-only log now identifies session-exchange HTTP, token, profile and guild failures.

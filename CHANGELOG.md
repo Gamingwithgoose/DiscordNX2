@@ -151,3 +151,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Preserve audio, Gateway diagnostics, controls, system font/fallback and resident NSO. Build-NRO.bat still builds NRO only.
 - Validation: clean native NRO compile/link/package passed; existing voice-packet host tests passed; production encoder host tests with mbedTLS 2.28.10 passed at 32/64/96/128/190 bytes, including exact/insufficient capacities and old failure reproduction. NRO icon and NACP verified. Hardware login and UI pending.
 - Pull main, Build-NRO.bat, FTP only dist/DiscordNX2.nro, inspect menus and run Servers > QR sign-in once. Phone approval, ticket exchange and real guilds remain unverified until console testing; no claim of successful login or Discord voice.
+
+
+## v0.24 - menu cleanup and Pretendo trial
+
+- Replace numeral-2 icon with updated user artwork in NRO and UI; move Switch 2 Native down 3px.
+- Remove verification badges, focus/status/build overlays and development copy; retain controls and explicit diagnostics.
+- Embed user-supplied Pretendo.ttf as default with fallback for missing digits/punctuation, system font and bitmap initialization fallback. Clip text to column width.
+- Mobile approval reported, console account loading still unresolved. Add safe HTTP status and token/profile/guild failure categories without logging response bodies or credentials.
+- Clean NRO build and host-rendered menu checks passed. Hardware font and post-approval login require testing. FTP only NRO; resident NSO unchanged.

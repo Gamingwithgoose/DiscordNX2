@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.23-native-qr-nonce-capacity-custom-brand-rounded-ui",
+  "version": "0.24-clean-ui-pretendo-font-trial",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -97,7 +97,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "v0.23 clean local devkitA64/libounce NRO build passed with installed switch-mbedtls. Existing packet host tests passed. Host nonce encoder boundary tests passed. NRO ASET icon bytes and NACP inspected. Hardware login/UI unverified. Existing main.c unused-function/signedness warnings remain.",
+  "build_validation": "Clean NRO build passed; production menu code rendered on host with embedded Pretendo, framebuffer sentinels passed. Console font/layout and login pending.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -123,10 +123,9 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Pull main in GitHub Desktop; run Build-NRO.bat; FTP ONLY dist/DiscordNX2.nro. Keep installed resident NSO.",
-    "Check custom icon and rounded menus; Servers > SIGN IN WITH QR CODE. Expect LOCAL RSA OAEP AND BASE64 SELFTEST PASSED then NONCE PROOF SENT - WAITING FOR QR.",
-    "Scan using Discord mobile on a test account, approve, verify real profile and guild list. If it fails, provide only the stage-only hardware log; never share QR URL or credentials.",
-    "Audio/Gateway tests remain optional regression checks; do not replace the NSO."
+    "Pull main; Build-NRO.bat; FTP only dist/DiscordNX2.nro; keep resident NSO.",
+    "Check no-numeral icon, Pretendo glyphs and cleaned menu spacing.",
+    "Retry QR approval and provide stage-only hardware log if console still fails to load profile/guilds."
   ],
   "next_developer_work": [
     "Fix native build/compiler and mbedTLS portlibs integration as first priority if user build fails",
@@ -144,5 +143,12 @@
     "unchanged": "Audio, packet transport, public Gateway probes, input routing, plugin/resident NSO source.",
     "remaining_blocker": "No Switch hardware/mobile session available to verify live nonce acceptance, fingerprint QR, phone approval, ticket exchange, identity and guild fetch. Undocumented protocol remains experimental; no CAPTCHA bypass. Existing WS receiver rejects fragmented text; guild names remain ASCII and list capped at 64.",
     "source_artwork_note": "The desktop source changed during this session to artwork without the numeral. Repository asset preserves the original attached numeral-2 artwork copied at implementation start."
+  },
+  "v024_implementation": {
+    "ui": "Removed focus/READY/build overlays and mic/gateway verification badges; moved Switch 2 Native down 3px; removed foundation/crypto implementation copy from main menus. Explicit Diagnostics tab and controls retained.",
+    "artwork": "Replaced NRO JPEG and embedded sprite with newly supplied no-numeral icon.",
+    "font": "User supplied Pretendo.ttf embedded in NRO and selected by default, rasterized with stb_truetype. Missing digits/punctuation use public-domain glyph fallback; system font and bitmap fallback retained for initialization failure.",
+    "login": "User reports mobile approval but no signed-in console. New desktop log not supplied; cannot identify cause. Added safe session-exchange HTTP code and profile/token/guild failure stages; no success claimed.",
+    "validation": "Clean NRO build passed; production menu code rendered on host with embedded Pretendo, framebuffer sentinels passed. Console font/layout and login pending."
   }
 }

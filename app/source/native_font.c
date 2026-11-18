@@ -4,6 +4,8 @@
  * Public-domain font8x8 is the safe fallback when pl:u is unavailable.
  */
 #include "native_font.h"
+#include "pretendo_font.h"
+extern char font8x8_basic[128][8];
 #include <switch.h>
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "vendor/stb_truetype.h"
@@ -29,16 +31,20 @@ static void destroy_cache(void) {
 }
 int dnx2FontInit(void) {
     if(font_state.initialized)return 1;
-    if(R_FAILED(plInitialize(PlServiceType_User)))return 0;
-    font_state.pl_live=1;
-    PlFontData font={0};
-    if(R_FAILED(plGetSharedFontByType(&font,PlSharedFontType_Standard)) ||
-       !font.address || font.size<64)goto fail;
-    unsigned char *data=(unsigned char*)font.address;
+    const unsigned char *data=pretendo_font;
+    int idx=stbtt_GetFontOffsetForIndex(data,0);
+    if(idx<0 || !stbtt_InitFont(&font_state.info,data,idx)) {
+        if(R_FAILED(plInitialize(PlServiceType_User)))return 0;
+        font_state.pl_live=1;
+        PlFontData font={0};
+        if(R_FAILED(plGetSharedFontByType(&font,PlSharedFontType_Standard)) ||
+           !font.address || font.size<64)goto fail;
+        data=(const unsigned char*)font.address;
+    }
     /* Avoid parsing non-font wrappers as a TTF. */
     if(!((data[0]==0&&data[1]==1&&data[2]==0&&data[3]==0)||
          memcmp(data,"OTTO",4)==0))goto fail;
-    int idx=stbtt_GetFontOffsetForIndex(data,0);
+    idx=stbtt_GetFontOffsetForIndex(data,0);
     if(idx<0||!stbtt_InitFont(&font_state.info,data,idx))goto fail;
     for(int sz=0;sz<3;sz++){
         float scale=stbtt_ScaleForPixelHeight(&font_state.info,(float)heights[sz]);
@@ -51,6 +57,15 @@ int dnx2FontInit(void) {
             if(g->advance<4)g->advance=4;
             g->bitmap=stbtt_GetCodepointBitmap(&font_state.info,0,scale,code,
                                                 &g->w,&g->h,&g->xoff,&g->yoff);
+            /* Pretendo omits digits and some punctuation. Keep labels complete. */
+            if(code!=' ' && (stbtt_FindGlyphIndex(&font_state.info,code)==0 || !g->bitmap || g->w==0)){
+                free(g->bitmap);
+                int xs=heights[sz]/12,ys=heights[sz]/8;
+                g->w=8*xs;g->h=8*ys;g->xoff=0;g->yoff=2-heights[sz];
+                g->advance=g->w+2;g->bitmap=calloc((size_t)g->w*g->h,1);
+                if(g->bitmap)for(int y=0;y<g->h;y++)for(int x=0;x<g->w;x++)
+                    g->bitmap[y*g->w+x]=(font8x8_basic[code][y/ys]&(1u<<(x/xs)))?255:0;
+            }
         }
     }
     font_state.initialized=1;
@@ -85,6 +100,7 @@ int dnx2FontDraw(uint32_t *pixels,int stride,int width,int height,
         unsigned char cp=(unsigned char)str[i];
         if(cp>=127||cp<32)cp='?';
         CachedGlyph *g=&font_state.glyphs[sz][cp];
+        if(cursor+g->advance>width)break;
         if(g->bitmap && g->w>0&&g->h>0){
             for(int gy=0;gy<g->h;gy++){
                 int py=baseline+g->yoff+gy;
