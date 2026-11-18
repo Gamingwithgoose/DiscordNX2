@@ -9,6 +9,7 @@
 #include "voice_packet.h"
 #include "discord_gateway_probe.h"
 #include "graphical_ui.h"
+#include "native_login.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -944,6 +945,11 @@ static void run_gui_action(int action) {
     else if(action==2)run_discord_only();
     else if(action==3)run_voice_only();
     else if(action==4)run_stress_only();
+    else if(action==6) {
+        dnx2GraphicalAuthBegin();
+        (void)dnx2NativeQrLogin(dnx2GraphicalAuthStatus,dnx2GraphicalAuthCancel);
+        dnx2GraphicalAuthEnd();
+    }
     else if(action==5) {
         diag_len=0;
         diagf("DiscordNX2 v0.20 Remote Auth Gateway only - NO ACCOUNT LOGIN\n");

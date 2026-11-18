@@ -5,6 +5,12 @@ set "DISCORDNX2_ROOT=%CD%"
 echo DiscordNX2 NRO-only local build
 set "BASH=C:\devkitPro\msys2\usr\bin\bash.exe"
 if not exist "%BASH%" goto fail
+echo Checking secure QR-login cryptography dependency...
+if not exist "C:\devkitPro\portlibs\switch\lib\libmbedcrypto.a" if not exist "C:\devkitPro\portlibs\switch2\lib\libmbedcrypto.a" (
+    echo Installing maintained devkitPro switch-mbedtls package for QR authentication.
+    "%BASH%" -lc "pacman -S --needed --noconfirm switch-mbedtls"
+    if errorlevel 1 goto fail
+)
 "%BASH%" -lc "cd \"$(cygpath -u \"$DISCORDNX2_ROOT\")\" && ./build-local.sh app"
 if errorlevel 1 goto fail
 if not exist "dist\DiscordNX2.nro" goto fail

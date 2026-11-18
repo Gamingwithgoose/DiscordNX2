@@ -10,6 +10,18 @@ ARCH := $(SWITCH2_CPU) -mtp=soft -fPIE
 CFLAGS := $(ARCH) -std=gnu11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -D__SWITCH__ -D__SWITCH2__ -I$(DEVKITPRO)/portlibs/switch2/include -I$(DEVKITPRO)/libounce/include
 LDFLAGS := $(ARCH) -specs=$(DEVKITPRO)/libounce/switch.specs -Wl,--gc-sections
 LIBS := -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -lounce_core
+
+# devkitPro's maintained switch-mbedtls package is AArch64 and uses libnx
+# compatible libc. It is optional for compiling old hardware diagnostics,
+# but REQUIRED for real QR login (no insecure substitute crypto).
+MBEDTLS_PREFIX := $(firstword $(foreach d,$(DEVKITPRO)/portlibs/switch2 $(DEVKITPRO)/portlibs/switch,$(if $(wildcard $(d)/lib/libmbedcrypto.a),$(d))))
+ifneq ($(MBEDTLS_PREFIX),)
+CFLAGS += -DDNX2_USE_MBEDTLS=1 -I$(MBEDTLS_PREFIX)/include
+LIBS := -L$(MBEDTLS_PREFIX)/lib -lmbedcrypto $(LIBS)
+else
+$(warning switch-mbedtls not installed; NRO builds but QR login will report missing crypto library)
+endif
+
 all: $(TARGET).nro
 $(BUILD):
 	mkdir -p $@
@@ -25,7 +37,11 @@ $(BUILD)/discord_remote_probe.o: source/discord_remote_probe.c source/discord_ga
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/qrcodegen.o: source/vendor/qrcodegen.c source/vendor/qrcodegen.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o
+$(BUILD)/auth_crypto.o: source/auth_crypto.c source/auth_crypto.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@
