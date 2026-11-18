@@ -429,6 +429,7 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     if(R_FAILED(socketInitialize(NULL)))goto fail;
     if(R_FAILED(sslInitialize(1))){socketExit();goto fail;}
     int success=0,network_ready=1;
+    char failure_reason[128]="QR login failed or expired";
     int qr_shown=0;
     char ticket[700]={0};
     TlsSession remote;
@@ -536,14 +537,15 @@ remote_cleanup:
             wipe(encrypted,sizeof(encrypted));wipe(access,sizeof(access));
         }else {
             char reason[96];
-            if(last_captcha_required)
-                status("DISCORD REQUIRES CAPTCHA - LOGIN STOPPED",NULL);
-            else if(last_http_status==429)
-                status("DISCORD RATE LIMITED LOGIN - TRY AGAIN LATER",NULL);
-            else {
-                snprintf(reason,sizeof(reason),"SESSION EXCHANGE FAILED HTTP %u DISCORD CODE %u",last_http_status,last_discord_error);
-                status(reason,NULL);
+            if(last_captcha_required){
+                snprintf(failure_reason,sizeof(failure_reason),"Discord requires CAPTCHA. This app cannot complete login yet.");
+            }else if(last_http_status==429){
+                snprintf(failure_reason,sizeof(failure_reason),"Discord rate limited login. Please try again later.");
+            }else {
+                snprintf(reason,sizeof(reason),"Session exchange failed: HTTP %u, Discord code %u",last_http_status,last_discord_error);
+                snprintf(failure_reason,sizeof(failure_reason),"%s",reason);
             }
+            status(failure_reason,NULL);
         }
         tls_close(&https);wipe(json,sizeof(json));
     }
@@ -556,7 +558,7 @@ network_cleanup:
     wipe(pubkey,sizeof(pubkey));
     dnx2AuthCryptoClose();
     if(success)status("SIGNED IN - REAL SERVER LIST LOADED",NULL);
-    else {dnx2AccountLogout();status("QR LOGIN FAILED OR EXPIRED",NULL);}
+    else {dnx2AccountLogout();status(failure_reason,NULL);}
     return success;
 fail:
     dnx2AuthCryptoClose();

@@ -209,3 +209,8 @@ Host regression test: run `sh tests/run-native-http-tests.sh` with Python and a 
 Dashboard contains login/logout. Servers lists actual cached guilds after successful login. Selecting a server opens Voice chat, which shows that server and honest disconnected channel/member states; live channel membership and Discord voice are not yet connected. Diagnostics and connectivity tests are removed from the active UI.
 
 Text is smaller and mixed case using the console shared font, with Pretendo and bitmap fallbacks. QR labels use full-width/padded bounds. Login progress is flushed to the stage-only hardware log before each wait, and TLS/WebSocket waits are bounded and cancelable. Pull main, Build-NRO.bat and FTP only the NRO. Live login still requires hardware verification.
+
+
+### Confirmed login blocker (v0.27)
+
+Real v0.26 hardware reaches phone approval, then Discord requires CAPTCHA at ticket redemption. The app cannot complete that challenge, so phone approval does not result in a Switch account session or server list. v0.27 preserves this explanation on Dashboard. Completing native login now requires a legitimate interactive challenge flow; no CAPTCHA bypass is implemented. Repeating the same QR test is not needed to establish this blocker.

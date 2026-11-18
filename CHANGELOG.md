@@ -179,3 +179,11 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add production WS tests for partial frames, fragments, binary ping, oversized/masked/orphan rejection. Existing HTTP regression tests pass. NRO build and host menu/auth rendering checks passed.
 - Server rows use real cached guilds after successful login. Voice displays selected server plus channel/member disconnected states; channel/member networking and Discord voice remain unimplemented. Live login and console appearance still need hardware verification.
 - Pull main, Build-NRO.bat, transfer only NRO, Dashboard > Log in. No resident NSO changes. Stage-only hardware log is now written during login even if a later wait fails.
+
+
+## v0.27 - preserve confirmed CAPTCHA blocker
+
+- v0.26 hardware log confirms QR and phone approval succeed; ticket exchange requires CAPTCHA and no account session is obtained.
+- Preserve the CAPTCHA, rate-limit or API rejection explanation through cleanup and on Dashboard instead of replacing it with generic QR failure/expiry.
+- Native app has no interactive CAPTCHA completion flow. This is the remaining authentication blocker, not a successful login. No bypass or fake server list added.
+- NRO build and HTTP/WS regression tests passed. No repeated hardware QR test needed merely to re-establish this blocker. Optional NRO-only update displays the accurate explanation; resident NSO unchanged.

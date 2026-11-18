@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.26-discord-only-ui-bounded-login",
+  "version": "0.27-confirmed-captcha-blocker",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -97,7 +97,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "Clean NRO build; production HTTP tests and native WS parser tests passed; host Dashboard/Servers/Voice/auth renders with system-font stand-in and framebuffer sentinels passed. Console font appearance and actual login completion remain unverified.",
+  "build_validation": "NRO build and HTTP/WS host regression tests passed. Successful live login not claimed.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -123,10 +123,9 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Pull main; run Build-NRO.bat; FTP ONLY dist/DiscordNX2.nro; resident NSO unchanged.",
-    "Open Dashboard > Log in with QR code. Scan and approve. B/+ cancel. Successful login should load account and Servers.",
-    "If login fails/stalls, stage-only /kaihen/discordnx2-hardware.txt is now saved during each stage, including before network waits.",
-    "Voice tab is an honest disconnected layout until channels, membership and voice session are implemented."
+    "No repeat QR test needed to establish the current blocker: real hardware already confirms CAPTCHA.",
+    "Optional UI update: pull main, Build-NRO.bat, FTP only NRO; now Dashboard retains the CAPTCHA explanation.",
+    "Next implementation work is a legitimate interactive challenge flow or a supported authentication design that can meet Discord requirements."
   ],
   "next_developer_work": [
     "Fix native build/compiler and mbedTLS portlibs integration as first priority if user build fails",
@@ -164,5 +163,11 @@
     "login": "Nonblocking TLS after verified handshake; bounded reads/writes and cancellation checks. WebSocket reader persists partial frames and reassembles fragments with interleaved ping/pong; malformed frames fail safely. Every sanitized login stage is flushed to hardware log before rendering/network waits. Timeout and connection-close stages added.",
     "validation": "Clean NRO build; production HTTP tests and native WS parser tests passed; host Dashboard/Servers/Voice/auth renders with system-font stand-in and framebuffer sentinels passed. Console font appearance and actual login completion remain unverified.",
     "hardware_evidence": "Latest user photos show pending_ticket stage after scan and badly clipped labels; log not updated because prior writer ran only after login returned. These fixes address confirmed code issues but no claim of successful account authorization."
+  },
+  "v027_implementation": {
+    "hardware_evidence": "v0.26 real hardware completes RSA, nonce, fingerprint QR, phone scan and phone confirmation. Ticket exchange detects CAPTCHA requirement. complete=0 visible_servers=0.",
+    "change": "Preserve CAPTCHA/rate-limit/API failure explanation through final cleanup and Dashboard notice; no longer overwrite confirmed CAPTCHA with generic failed/expired message.",
+    "remaining_blocker": "A legitimate interactive Discord CAPTCHA completion flow is required for this login attempt; current native framebuffer client cannot display/complete it. No CAPTCHA bypass, solver service, fake success, raw-token requirement or PC companion introduced. Account/guild loading cannot be validated until ticket exchange succeeds.",
+    "validation": "NRO build and HTTP/WS host regression tests passed. Successful live login not claimed."
   }
 }
