@@ -34,3 +34,6 @@ Retain Chromium NX's and Linux/LKL's GPL-2.0 license/source requirements when re
 ## v0.30 normal-app compatibility check
 
 The separate runtime probe passed on the user's console (boot, file roundtrip, shutdown, result 0). The next test is implemented directly in the normal DiscordNX2 source: Build-NRO.bat, then hold R and press X on Dashboard. This executes only fixed built-in instructions in a read/execute-only alias, replaces them and verifies the replacement, and cleans up. Results go to the existing `/kaihen/discordnx2-hardware.txt`; B returns to Dashboard. It runs once per process, so relaunch before retrying. It requires no browser dependencies or extra SD assets. Full browser rendering and CAPTCHA remain unfinished.
+
+
+v0.31 found no advertised legacy privileged syscalls and skipped them. v0.32 changes the normal-app code adapter to libounce's JIT API, whose Switch 2 interface supports loader-managed publication independently of those hints. Repeat normal Build-NRO.bat and Dashboard R+X to verify this route; no browser dependency rebuild is needed.

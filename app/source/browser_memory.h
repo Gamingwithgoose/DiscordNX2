@@ -6,15 +6,14 @@
 
 typedef void (*Dnx2BrowserMemoryLog)(const char *stage, Result result);
 
-/* Zero-initialize before Create. Owns a page-aligned heap buffer and a reserved executable alias. Never RWX.
- * Callers must stop executing the alias before replacing or destroying it.
- * On unmap failure, retain the allocation/reservation until process exit. */
+/* Zero-initialize before Create. libounce owns loader-specific JIT mappings.
+ * Keep all threads out of this code while writing, publishing or closing it.
+ * Preserve the descriptor if jitClose reports failure. */
 typedef struct {
-    void *source, *executable;
+    Jit jit;
+    void *executable;
     size_t size;
-    VirtmemReservation *reservation;
-    Handle process;
-    int mapped;
+    int live;
     Dnx2BrowserMemoryLog log;
 } Dnx2BrowserCode;
 Result dnx2BrowserCodeCreate(Dnx2BrowserCode *code, size_t size);
