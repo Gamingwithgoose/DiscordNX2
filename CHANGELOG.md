@@ -205,3 +205,10 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Log both Result and exit reason. Error-dialog exit 7/API failure keeps an explicit browser-unavailable explanation on Dashboard.
 - Embedded-browser assessment: no ready compatible engine installed; lightweight HTML rendering alone does not establish hCaptcha compatibility. No browser-engine port or phone relay is claimed.
 - NRO build and HTTP/WS/CAPTCHA regressions passed. Actual system-browser availability and successful login remain blocked/unverified. Resident NSO unchanged.
+
+
+## Native browser port groundwork - after v0.29
+
+- User selected entirely-on-console browser direction and withdrew phone relay; uncommitted relay backend discarded, no relay deployed and Z: server files untouched.
+- Add original libounce framebuffer/HID surface backend for pinned NetSurf/libnsfb interfaces and reproducible cross-compilation check. No system browser applet or original-Switch SDL graphics dependency in this adapter.
+- Adapter compiles with warnings as errors. This is not a full browser build or a CAPTCHA fix. HTML/JS/HTTPS engine integration, security and hCaptcha compatibility remain unfinished. Current Discord NRO and resident NSO unchanged; no new console test requested.

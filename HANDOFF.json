@@ -129,11 +129,8 @@
     "Never share browser callback URL, challenge fields, CAPTCHA solution, QR URL, tickets or tokens."
   ],
   "next_developer_work": [
-    "Fix native build/compiler and mbedTLS portlibs integration as first priority if user build fails",
-    "Diagnose real QR login stages including RSA, nonce proof, fingerprint, Discord mobile confirmation and CAPTCHA/rate-limits from sanitized log",
-    "Check shared TrueType pl:u availability and text readability on Switch2 hardware; adjust sizing as necessary",
-    "After real guild listing works, implement authenticated voice channels and foreground Opus/DAVE two-way transport",
-    "Preserve NSO until real foreground voice works and session lifecycle is secure"
+    "Continue browser-port engine integration and dependency build using local devkitPro/libounce; no hosted relay.",
+    "Do not ask user to rebuild unchanged Discord NRO as a browser test; only the port adapter object exists so far."
   ],
   "implementation_base_head": "5c39f8c8d46ce262f3b277eb3536e400d3b61313",
   "v023_implementation": {
@@ -185,5 +182,12 @@
     "embedded_browser_assessment": "Installed switch2 portlibs contain graphics/kaihen libraries, no ready browser engine. litehtml is an HTML/CSS renderer, not a full web platform. hCaptcha documents modern desktop/mobile browser support; a compatible embedded engine needs a separate port and compatibility validation. No embedded browser implemented or claimed.",
     "next_decision": "Asked user whether to explore phone-based verification handoff (no PC, but cross-device acceptance unverified) or maintain entirely-on-Switch CAPTCHA scope. No backend relay deployed without that direction.",
     "validation": "Native NRO build and existing HTTP/WS/CAPTCHA unit tests passed. Actual WebExitReason and browser compatibility still require console verification; no need to repeat login just to reconfirm the known unavailable browser."
+  },
+  "browser_port_status": {
+    "direction": "User revoked phone-relay preference: does not want to host a relay for community. Server files at Z:/[MMOnsterpatch Server]/ must remain untouched. Uncommitted relay files were removed; no relay was deployed.",
+    "source_assessment": "Inspected NetSurf Switch commit 3dabe65c245ab29a22f243e88d407caf2c09b5c2, Brewser and Chromium NX. NetSurf software framebuffer offers a bounded platform starting point; no hCaptcha support claimed.",
+    "implemented": "Original browser-port/switch2_surface.c uses libounce framebuffer and HID directly, implements real libnsfb surface interface and bypasses WebApplet/SDL. check-port.py cross-compiles against immutable upstream headers with -Werror.",
+    "validation": "Native adapter object cross-compilation passed. Not a linked/runnable browser NRO. Existing Discord NRO/source and NSO remain unchanged by this port step.",
+    "remaining": "NetSurf/QuickJS/dependency build, TLS and web security behavior, rendering, input/keyboard, ephemeral callback and actual user CAPTCHA acceptance still need implementation/hardware validation."
   }
 }
