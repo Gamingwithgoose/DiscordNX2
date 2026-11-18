@@ -195,3 +195,10 @@ Local NRO compilation and packet/nonce host tests passed. Open Servers > Sign in
 ### v0.24 appearance trial
 
 The NRO now embeds the supplied Pretendo font and updated icon without the numeral. Missing characters use bitmap fallback. Verification badges and development overlays are removed; controls and Diagnostics remain available. Pull main, run Build-NRO.bat and FTP only the NRO. Mobile approval has been reported but console account loading is unresolved; the stage-only log now identifies session-exchange HTTP, token, profile and guild failures.
+
+
+### v0.25 phone approval follow-through
+
+Phone approval alone does not mean the console has obtained an account session. The v0.24 hardware log showed HTTP400 at ticket redemption. The v0.25 request uses API v10 and explicit Discord origin/referer, and safely classifies rejected responses. Live account loading still requires console testing. A CAPTCHA requirement stops login; it is not bypassed. Share only the stage-only hardware report if login fails.
+
+Host regression test: run `sh tests/run-native-http-tests.sh` with Python and a host C compiler available. The test uses simulated TLS responses and no real account credentials.

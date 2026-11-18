@@ -40,6 +40,8 @@ static u64 dnx2MonotonicMs(void) {
 static Dnx2Account account;
 static unsigned char http_body[HTTP_BUF];
 static unsigned last_http_status;
+static unsigned last_discord_error;
+static int last_captcha_required;
 static unsigned char ws_payload[WS_BUF+1];
 
 const Dnx2Account *dnx2Account(void){return &account;}
@@ -278,13 +280,14 @@ static int json_operation(const char *json,const char *op){
 static int http_request(TlsSession *s,const char *host,const char *method,
                         const char *path,const char *body,const char *token,
                         char *out,size_t cap){
-    last_http_status=0;
+    last_http_status=0;last_discord_error=0;last_captcha_required=0;
     if(!tls_open(s,host))return 0;
     size_t bodylen=body?strlen(body):0;
     char req[4096];
     int len=snprintf(req,sizeof(req),
       "%s %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
-      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.22\r\n"
+      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.25\r\n"
+      "Origin: https://discord.com\r\nReferer: https://discord.com/login\r\n"
       "Connection: close\r\n%s%s%s"
       "Content-Type: application/json\r\nContent-Length: %u\r\n\r\n",
       method,path,host,
@@ -304,8 +307,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     }
     out[used]=0;
     if(used>=12 && strncmp(out,"HTTP/1.",7)==0)last_http_status=(unsigned)strtoul(out+9,NULL,10);
-    if(used<16 || !(strncmp(out,"HTTP/1.1 200 ",13)==0 ||
-                     strncmp(out,"HTTP/1.0 200 ",13)==0))return 0;
+    if(used<16 || last_http_status<100 || last_http_status>599)return 0;
     char *split=strstr(out,"\r\n\r\n");
     if(!split)return 0;
     size_t offset=(size_t)(split-out)+4;
@@ -342,7 +344,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,
             unsigned long count=strtoul(out+read_at,NULL,16);
             if(count>cap || count>payload)return 0;
             read_at=(size_t)(line_end-out)+2;
-            if(count==0){out[write_at]=0;return 1;}
+            if(count==0){out[write_at]=0;goto body_complete;}
             if(read_at+count+2>payload ||
                out[read_at+count]!='\r'||out[read_at+count+1]!='\n')return 0;
             memmove(out+write_at,out+read_at,count);
@@ -353,6 +355,16 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     }
     if(has_length && payload<expected_length)return 0;
     if(payload==0)return 0;
+body_complete:
+    if(last_http_status!=200){
+        /* Only fixed categories and bounded public API error codes escape RAM.
+         * Never expose message, captcha payload/sitekey, ticket or token. */
+        last_captcha_required=strstr(out,"\"captcha_key\"")!=NULL ||
+                              strstr(out,"\"captcha_sitekey\"")!=NULL;
+        unsigned code=0;
+        if(uint_field(out,"code",&code) && code<=999999)last_discord_error=code;
+        return 0;
+    }
     return 1;
 }
 static int parse_identity(const char *json){
@@ -506,14 +518,14 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
         }
     }
 remote_cleanup:
-    tls_close(&remote);
+    /* Redeem promptly before releasing our remote session. */
     if(ticket[0]&&qr_shown){
         TlsSession https={.socket_fd=-1,.returned_fd=-1};
         char json[1000];
         int len=snprintf(json,sizeof(json),"{\"ticket\":\"%s\"}",ticket);
         wipe(ticket,sizeof(ticket));
         if(len>0&&(size_t)len<sizeof(json) &&
-           http_request(&https,API_HOST,"POST","/api/v9/users/@me/remote-auth/login",
+           http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
                         json,NULL,(char*)http_body,sizeof(http_body))) {
             char encrypted[1100]={0};unsigned char access[1024]={0};
             size_t n=0;
@@ -526,11 +538,18 @@ remote_cleanup:
             wipe(encrypted,sizeof(encrypted));wipe(access,sizeof(access));
         }else {
             char reason[96];
-            snprintf(reason,sizeof(reason),"PHONE APPROVED - SESSION EXCHANGE FAILED HTTP %u",last_http_status);
-            status(reason,NULL);
+            if(last_captcha_required)
+                status("DISCORD REQUIRES CAPTCHA - LOGIN STOPPED",NULL);
+            else if(last_http_status==429)
+                status("DISCORD RATE LIMITED LOGIN - TRY AGAIN LATER",NULL);
+            else {
+                snprintf(reason,sizeof(reason),"SESSION EXCHANGE FAILED HTTP %u DISCORD CODE %u",last_http_status,last_discord_error);
+                status(reason,NULL);
+            }
         }
         tls_close(&https);wipe(json,sizeof(json));
     }
+    tls_close(&remote);
 network_cleanup:
     if(network_ready){sslExit();socketExit();}
     wipe(http_body,sizeof(http_body));wipe(ws_payload,sizeof(ws_payload));

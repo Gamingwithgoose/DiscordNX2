@@ -160,3 +160,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Embed user-supplied Pretendo.ttf as default with fallback for missing digits/punctuation, system font and bitmap initialization fallback. Clip text to column width.
 - Mobile approval reported, console account loading still unresolved. Add safe HTTP status and token/profile/guild failure categories without logging response bodies or credentials.
 - Clean NRO build and host-rendered menu checks passed. Hardware font and post-approval login require testing. FTP only NRO; resident NSO unchanged.
+
+
+## v0.25 - phone-approved ticket exchange
+
+- Hardware v0.24 confirms phone approval, followed by HTTP400 at ticket exchange; account/guild requests never started.
+- Align ticket endpoint with current reference client (API v10), include explicit Origin/Referer, retain honest app user agent, and redeem before local remote-session teardown.
+- Decode non-200 HTTP bodies to identify only fixed CAPTCHA/rate-limit categories and bounded numeric API error codes. Never print response messages, CAPTCHA fields, ticket/token or raw bodies. No CAPTCHA bypass or automatic retries.
+- Add production-path host HTTP regression tests; passed successful token framing, outgoing request, CAPTCHA, chunked API rejection, truncation, rate limiting and state reset. Clean NRO build passed; live login remains unverified.
+- Pull main, Build-NRO.bat, FTP only NRO, retry phone approval. If blocked, stage-only hardware report now distinguishes the rejection. Audio, menus, font, controls, Gateway probes and resident NSO unchanged.

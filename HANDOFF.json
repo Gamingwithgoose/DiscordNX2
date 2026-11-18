@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.24-clean-ui-pretendo-font-trial",
+  "version": "0.25-post-approval-ticket-exchange",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -97,7 +97,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "Clean NRO build passed; production menu code rendered on host with embedded Pretendo, framebuffer sentinels passed. Console font/layout and login pending.",
+  "build_validation": "Production HTTP path host tests cover outgoing ticket request, token success response, HTTP400 CAPTCHA detection, chunked HTTP400 API code, truncated body rejection, HTTP429 and error-state reset. NRO clean build passed.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -123,9 +123,9 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Pull main; Build-NRO.bat; FTP only dist/DiscordNX2.nro; keep resident NSO.",
-    "Check no-numeral icon, Pretendo glyphs and cleaned menu spacing.",
-    "Retry QR approval and provide stage-only hardware log if console still fails to load profile/guilds."
+    "Pull main, Build-NRO.bat, FTP only dist/DiscordNX2.nro; installed resident NSO unchanged.",
+    "Retry Servers > QR login and phone approval. Success means console profile and real guilds load.",
+    "If login fails, provide only /kaihen/discordnx2-hardware.txt. Expected precise failure: CAPTCHA required, rate limit, or SESSION EXCHANGE FAILED HTTP n DISCORD CODE n. Never share credentials/QR URLs."
   ],
   "next_developer_work": [
     "Fix native build/compiler and mbedTLS portlibs integration as first priority if user build fails",
@@ -150,5 +150,11 @@
     "font": "User supplied Pretendo.ttf embedded in NRO and selected by default, rasterized with stb_truetype. Missing digits/punctuation use public-domain glyph fallback; system font and bitmap fallback retained for initialization failure.",
     "login": "User reports mobile approval but no signed-in console. New desktop log not supplied; cannot identify cause. Added safe session-exchange HTTP code and profile/token/guild failure stages; no success claimed.",
     "validation": "Clean NRO build passed; production menu code rendered on host with embedded Pretendo, framebuffer sentinels passed. Console font/layout and login pending."
+  },
+  "v025_implementation": {
+    "hardware_evidence": "v0.24 real hardware passes RSA/Base64, fingerprint QR, phone scan and confirmation. Ticket exchange rejects with HTTP 400, before identity or guild fetch. Exact Discord rejection reason was discarded.",
+    "changes": "Use /api/v10 ticket endpoint matching current TriCord reference. Send explicit Discord origin/login referer with honest DiscordNX2 user agent. Redeem ticket before closing local remote session. Decode error HTTP bodies as well as success; expose only HTTP status, bounded numeric Discord code, fixed CAPTCHA/rate-limit categories. Never log message, captcha payload, ticket, token or bodies. No challenge bypass or automatic retry.",
+    "tests": "Production HTTP path host tests cover outgoing ticket request, token success response, HTTP400 CAPTCHA detection, chunked HTTP400 API code, truncated body rejection, HTTP429 and error-state reset. NRO clean build passed.",
+    "remaining_blocker": "Live ticket redemption still needs hardware verification. HTTP400 may be CAPTCHA or another API rejection; user report contains no response code beyond HTTP status, so do not claim exact root cause or successful account loading."
   }
 }
