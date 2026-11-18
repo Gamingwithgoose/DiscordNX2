@@ -14,6 +14,7 @@ int dnx2AuthCryptoAvailable(void);
 /* Fixed non-sensitive status: 0 OK, 1 no session, 2 invalid base64,
  * 3 ciphertext length mismatch, 4 RSA OAEP decrypt error, 5 QR proof error. */
 int dnx2AuthCryptoError(void);
+int dnx2AuthCryptoMbedError(void);
 /* Local public encrypt -> private decrypt test with randomized OAEP. */
 int dnx2AuthCryptoSelfTest(void);
 #endif

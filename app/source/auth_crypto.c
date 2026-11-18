@@ -28,6 +28,7 @@ typedef struct {
 } DnxCrypto;
 static DnxCrypto crypto;
 static int auth_crypto_error;
+static int auth_crypto_mbed_error;
 
 static int hw_entropy(void *ctx,unsigned char *out,size_t len,size_t *olen) {
     (void)ctx;
@@ -71,6 +72,7 @@ static int decode_base64(const char *str,unsigned char *out,size_t cap,size_t *d
 }
 int dnx2AuthCryptoAvailable(void){return 1;}
 int dnx2AuthCryptoError(void){return auth_crypto_error;}
+int dnx2AuthCryptoMbedError(void){return auth_crypto_mbed_error;}
 void dnx2AuthCryptoClose(void) {
     mbedtls_pk_free(&crypto.pk);
     mbedtls_ctr_drbg_free(&crypto.drbg);
@@ -81,6 +83,7 @@ void dnx2AuthCryptoClose(void) {
 int dnx2AuthCryptoOpen(void) {
     dnx2AuthCryptoClose();
     auth_crypto_error=0;
+    auth_crypto_mbed_error=0;
     mbedtls_pk_init(&crypto.pk);
     mbedtls_entropy_init(&crypto.entropy);
     mbedtls_ctr_drbg_init(&crypto.drbg);
@@ -122,6 +125,7 @@ int dnx2AuthCryptoFingerprint(char *out,size_t cap) {
 int dnx2AuthCryptoDecrypt(const char *cipher,unsigned char *plain,
                           size_t cap,size_t *plain_len) {
     auth_crypto_error=0;
+    auth_crypto_mbed_error=0;
     if(!crypto.active||!cipher||!plain||!plain_len) {
         auth_crypto_error=1;return 0;
     }
@@ -137,7 +141,9 @@ int dnx2AuthCryptoDecrypt(const char *cipher,unsigned char *plain,
          NULL,0,&olen,encrypted,plain,cap);
     if(rc!=0) {
         /* Expose category only, never ciphertext, nonce, or crypto buffers. */
-        auth_crypto_error=4;goto fail;
+        auth_crypto_error=4;
+        auth_crypto_mbed_error=rc;
+        goto fail;
     }
     *plain_len=olen;
     clear_volatile(encrypted,sizeof(encrypted));
@@ -166,6 +172,7 @@ int dnx2AuthCryptoSelfTest(void) {
     clear_volatile(cipher,sizeof(cipher));
     clear_volatile(result,sizeof(result));
     auth_crypto_error=ok?0:4;
+    auth_crypto_mbed_error=ok?0:ret;
     return ok;
 }
 /* Current v2 remote-auth field is "nonce": the decrypted RSA-OAEP
@@ -184,6 +191,7 @@ int dnx2AuthCryptoNonceProof(const char *cipher,char *proof,size_t proof_cap) {
 #else
 int dnx2AuthCryptoAvailable(void){return 0;}
 int dnx2AuthCryptoError(void){return 1;}
+int dnx2AuthCryptoMbedError(void){return 0;}
 int dnx2AuthCryptoSelfTest(void){return 0;}
 int dnx2AuthCryptoOpen(void){return 0;}
 void dnx2AuthCryptoClose(void){}

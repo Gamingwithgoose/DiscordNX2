@@ -407,7 +407,9 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     if(!dnx2AuthCryptoOpen()){status("SECURE RSA KEY GENERATION FAILED",NULL);return 0;}
     char fingerprint[80]={0},pubkey[900]={0};
     if(!dnx2AuthCryptoSelfTest()){
-        status("LOCAL RSA OAEP SELFTEST FAILED",NULL);goto fail;
+        char self_error[90];
+        snprintf(self_error,sizeof(self_error),"LOCAL RSA SELFTEST FAILED MBEDTLS %d",dnx2AuthCryptoMbedError());
+        status(self_error,NULL);goto fail;
     }
     status("LOCAL RSA OAEP SELFTEST PASSED",NULL);
     if(!dnx2AuthCryptoPublicKey(pubkey,sizeof(pubkey)) ||
@@ -456,7 +458,11 @@ int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
                 int error=dnx2AuthCryptoError();
                 if(error==2)status("NONCE ERROR: BASE64 DECODE FAILED",NULL);
                 else if(error==3)status("NONCE ERROR: CIPHERTEXT LENGTH",NULL);
-                else if(error==4)status("NONCE ERROR: RSA OAEP DECRYPT FAILED",NULL);
+                else if(error==4){
+                    char reason[90];
+                    snprintf(reason,sizeof(reason),"NONCE RSA OAEP FAILED MBEDTLS %d",dnx2AuthCryptoMbedError());
+                    status(reason,NULL);
+                }
                 else if(error==5)status("NONCE ERROR: PROOF ENCODE FAILED",NULL);
                 else status("NONCE ERROR: NO ACTIVE CRYPTO SESSION",NULL);
                 wipe(encrypted,sizeof(encrypted));
