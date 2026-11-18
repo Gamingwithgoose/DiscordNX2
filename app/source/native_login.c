@@ -56,7 +56,7 @@ static int starts_ci(const char *p,const char *prefix) {
 static void tls_close(TlsSession *s){
     if(s->conn_live)sslConnectionClose(&s->conn);
     if(s->context_live)sslContextClose(&s->ctx);
-    if(s->returned_fd>=0)close(s->returned_fd);
+    if(s->returned_fd>=0&&s->returned_fd!=s->socket_fd)close(s->returned_fd);
     if(s->socket_fd>=0)close(s->socket_fd);
     memset(s,0,sizeof(*s));
     s->socket_fd=-1;s->returned_fd=-1; /* make repeat cleanup safe */

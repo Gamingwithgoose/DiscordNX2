@@ -941,15 +941,24 @@ static void show_main_menu(const char *status) {
     consoleUpdate(NULL);
 }
 static void run_console_ui(void);
+static void dnx2AuthProgressAndReport(const char *phase,const char *qr_url) {
+    /* Only static status labels reach SD diagnostics. Never QR URLs, tokens, IDs. */
+    diagf("auth stage=%s\n",phase?phase:"UNKNOWN");
+    dnx2GraphicalAuthStatus(phase,qr_url);
+}
 static void run_gui_action(int action) {
     if(action==1)hardware_report();
     else if(action==2)run_discord_only();
     else if(action==3)run_voice_only();
     else if(action==4)run_stress_only();
     else if(action==6) {
+        diag_len=0;
+        diagf("DiscordNX2 v0.22 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
-        (void)dnx2NativeQrLogin(dnx2GraphicalAuthStatus,dnx2GraphicalAuthCancel);
+        int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();
+        diagf("auth session complete=%u visible_servers=%d\n",ok,(int)dnx2Account()->server_count);
+        (void)write_diagnostics();
     }
     else if(action==5) {
         diag_len=0;
