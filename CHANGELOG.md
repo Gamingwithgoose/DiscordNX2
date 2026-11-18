@@ -253,3 +253,14 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - v0.32 jitCreate safely reports 00004759, LibnxError_JitUnavailable. Found the app omitted -lkaihen required by the installed kaihen.h JIT instructions.
 - Link -lkaihen before -lounce_core. Its linker script includes kaihen-jit.o explicitly, supplying loader map/unmap/alias/publication hooks referenced weakly by libounce.
 - Verify hooks with a link check using cached application objects only; no NRO or dependency rebuild. User repeats normal Build-NRO.bat and Dashboard R+X. Actual JIT execution and CAPTCHA remain unverified; NSO unchanged.
+
+
+## v0.34 - encrypted direct phone CAPTCHA test
+
+- User confirmed v0.33 JIT test passes. Native Chromium still needs additional loader services; user requires normal public jailbreak compatibility and selected direct phone handoff. No loader/bootstrap/NSO update made.
+- Replace unavailable system-browser backend with second phone-camera QR after Discord app approval. Official hCaptcha remains user-completed on an isolated HTTPS static page; no community relay or PC companion.
+- Encrypt result using WebCrypto AES-256-GCM, RSA-2048 OAEP/SHA256 wrapped key and a fresh 256-bit state authenticated in AAD/plaintext. Only ciphertext reaches the Switch's private-LAN HTTP listener. Discord ticket/account token/private key stay native and RAM-only.
+- Bounded temporary listener, private-address checks, exact-path POST parser, strict length and transfer-encoding rejection, cancellation/timeouts/attempt limits, secret wiping and one same-ticket retry. Preserve specific failure text. Larger verification QR and sentence-case instructions distinguish phone camera from Discord scanner.
+- Publish isolated discordnx2-phone.html in existing community website (4823cfa). No server relay, Z: edits, jailbreak or plugin changes.
+- Changed native source passes compiler checks; host parser and actual WebCrypto/mbedTLS interoperability tests pass, including tampering/wrong-state rejection. Existing login regressions pass. No NRO or browser dependency build performed; user runs Build-NRO.bat.
+- Hardware phone delivery, provider domain/cross-device acceptance and final login remain unverified. Browser may warn about local HTTP navigation; payload is already encrypted. No CAPTCHA bypass or browser/origin spoofing.

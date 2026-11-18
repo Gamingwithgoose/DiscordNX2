@@ -45,20 +45,24 @@ $(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/native_font.o: source/native_font.c source/native_font.h source/pretendo_font.h source/vendor/stb_truetype.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-# Optional user-controlled HTTPS deployment of assets/captcha.html.
-ifneq ($(strip $(CAPTCHA_PAGE_URL)),)
-CFLAGS += -DDNX2_CAPTCHA_PAGE_URL='"$(CAPTCHA_PAGE_URL)"'
+# Optional user-controlled HTTPS deployment of assets/captcha-phone.html.
+ifneq ($(strip $(PHONE_CAPTCHA_PAGE_URL)),)
+CFLAGS += -DDNX2_PHONE_CAPTCHA_PAGE_URL='"$(PHONE_CAPTCHA_PAGE_URL)"'
 endif
 $(BUILD)/browser_memory.o: source/browser_memory.c source/browser_memory.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/captcha.o: source/captcha.c source/captcha.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/captcha_browser.o: source/captcha_browser.c source/captcha.h | $(BUILD)
+$(BUILD)/captcha_phone.o: source/captcha_phone.c source/captcha.h source/captcha_phone_wire.h source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/browser_memory.o $(BUILD)/captcha.o $(BUILD)/captcha_browser.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
+$(BUILD)/captcha_phone_wire.o: source/captcha_phone_wire.c source/captcha_phone_wire.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/captcha_phone_crypto.o: source/captcha_phone_crypto.c source/captcha_phone_wire.h source/auth_crypto.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/browser_memory.o $(BUILD)/captcha.o $(BUILD)/captcha_phone.o $(BUILD)/captcha_phone_wire.o $(BUILD)/captcha_phone_crypto.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(BUILD)/$(TARGET).nacp: | $(BUILD)
-	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.33" $@
+	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.34" $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).nacp assets/icon.jpg
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --icon=assets/icon.jpg --nacp=$(BUILD)/$(TARGET).nacp
 clean:

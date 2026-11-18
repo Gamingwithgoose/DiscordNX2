@@ -110,7 +110,7 @@ static void item(int x,int y,int w,int h,const char *name,
 static uint8_t qr_temp[qrcodegen_BUFFER_LEN_MAX];
 static uint8_t qr_data[qrcodegen_BUFFER_LEN_MAX];
 static int qr_render_url(int x,int y,int area,const char *url) {
-    if(!url || strncmp(url,"https://discord.com/",20)!=0)return 0;
+    if(!url || strncmp(url,"https://",8)!=0)return 0;
     if(!qrcodegen_encodeText(url,qr_temp,qr_data,qrcodegen_Ecc_MEDIUM,
                              qrcodegen_VERSION_MIN,qrcodegen_VERSION_MAX,
                              qrcodegen_Mask_AUTO,true))return 0;
@@ -190,11 +190,18 @@ static void draw_auth(const char *phase,const char *qr_url){
         text_line(100,234,"Open Discord on your phone",C_WHITE,3,50);
         text_line(100,294,"Go to Settings, then Scan QR code.",C_MUTED,2,60);
         text_line(100,338,"Approve this login on your phone.",C_MUTED,2,60);
+    }else if(qr_url && strncmp(qr_url,"https://",8)==0){
+        qr_render_url(754,196,420,qr_url);
+        text_right=718;
+        text_line(100,234,"Complete verification on your phone",C_WHITE,3,44);
+        text_line(100,294,"Scan this QR with your phone camera.",C_MUTED,2,52);
+        text_line(100,338,"Use the same Wi-Fi as your Switch.",C_MUTED,2,52);
+        text_line(100,382,"Solve the challenge, then tap Send to Switch.",C_MUTED,2,52);
     }else{
         text_line(100,234,"Connecting your account",C_WHITE,3,50);
         text_line(100,294,"Please wait. You can cancel with B.",C_MUTED,2,60);
     }
-    text_right=1180;
+    text_right=qr_url?718:1180;
     char readable[128];
     snprintf(readable,sizeof(readable),"%s",phase?phase:"Connecting");
     for(size_t i=0;readable[i];i++)readable[i]=(char)tolower((unsigned char)readable[i]);

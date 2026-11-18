@@ -527,7 +527,7 @@ remote_cleanup:
         char json[1000];
         int len=snprintf(json,sizeof(json),"{\"ticket\":\"%s\"}",ticket);
         wipe(ticket,sizeof(ticket));
-        int exchange_ok=0,browser_unavailable=0;
+        int exchange_ok=0,captcha_failed=0;
         if(len>0&&(size_t)len<sizeof(json)){
             exchange_ok=http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
                                     json,NULL,(char*)http_body,sizeof(http_body));
@@ -542,16 +542,22 @@ remote_cleanup:
                 tls_close(&https);
                 wipe(http_body,sizeof(http_body));
                 status("CAPTCHA REQUIRED - PREPARING USER VERIFICATION",NULL);
-                if(valid && dnx2CaptchaShow(&captcha_challenge,captcha_solution,sizeof(captcha_solution)) &&
+                struct sockaddr_in phone_interface={0};
+                socklen_t phone_interface_size=sizeof(phone_interface);
+                unsigned phone_ip=0;
+                if(getsockname(remote.socket_fd,(struct sockaddr*)&phone_interface,&phone_interface_size)==0 &&
+                   phone_interface.sin_family==AF_INET)phone_ip=phone_interface.sin_addr.s_addr;
+                if(valid && dnx2CaptchaShow(&captcha_challenge,captcha_solution,sizeof(captcha_solution),phone_ip,status,cancel) &&
                    dnx2CaptchaHeaders(&captcha_challenge,captcha_solution,captcha_headers,sizeof(captcha_headers))){
                     status("VERIFICATION COMPLETED - SUBMITTING TO DISCORD",NULL);
                     exchange_ok=http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
                                             json,NULL,(char*)http_body,sizeof(http_body));
                 }else {
-                    char browser_stage[100];
-                    snprintf(browser_stage,sizeof(browser_stage),"CAPTCHA BROWSER RESULT %08x EXIT %08x",dnx2CaptchaBrowserError(),dnx2CaptchaBrowserExit());
-                    browser_unavailable=dnx2CaptchaBrowserError()!=0 || dnx2CaptchaBrowserExit()==7;
-                    status(browser_stage,NULL);
+                    char phone_stage[100];
+                    snprintf(phone_stage,sizeof(phone_stage),"PHONE VERIFICATION RESULT %08x",dnx2CaptchaError());
+                    captcha_failed=1;
+                    snprintf(failure_reason,sizeof(failure_reason),"%s",valid?dnx2CaptchaFailure():"Invalid CAPTCHA challenge from Discord.");
+                    status(phone_stage,NULL);
                 }
                 wipe(captcha_headers,sizeof(captcha_headers));wipe(captcha_solution,sizeof(captcha_solution));
                 wipe(&captcha_challenge,sizeof(captcha_challenge));
@@ -569,8 +575,8 @@ remote_cleanup:
             wipe(encrypted,sizeof(encrypted));wipe(access,sizeof(access));
         }else {
             char reason[96];
-            if(browser_unavailable){
-                snprintf(failure_reason,sizeof(failure_reason),"System browser unavailable. CAPTCHA could not open.");
+            if(captcha_failed){
+                /* Keep the specific phone timeout/cancel/network explanation. */
             }else if(last_captcha_required){
                 snprintf(failure_reason,sizeof(failure_reason),"CAPTCHA was not completed or accepted. Check the login log.");
             }else if(last_http_status==429){

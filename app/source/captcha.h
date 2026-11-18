@@ -10,9 +10,11 @@ int dnx2CaptchaHeaders(const Dnx2Captcha *challenge,const char *solution,char *o
 int dnx2CaptchaReturn(const char *url,const char *state,char *solution,size_t cap);
 int dnx2CaptchaPageUrl(const char *base);
 void dnx2CaptchaWipe(void *ptr,size_t size);
-/* Returns 1 only for a user-completed browser result, 0 canceled/unavailable. */
-unsigned dnx2CaptchaBrowserError(void);
-/* ~0u if applet never supplied an exit reason; 7 is its error dialog. */
-unsigned dnx2CaptchaBrowserExit(void);
-int dnx2CaptchaShow(const Dnx2Captcha *challenge,char *solution,size_t cap);
+/* Direct encrypted phone result; ticket/account token stay on Switch. */
+typedef void (*Dnx2CaptchaProgress)(const char *stage,const char *qr_url);
+typedef int (*Dnx2CaptchaCancel)(void);
+unsigned dnx2CaptchaError(void);
+const char *dnx2CaptchaFailure(void);
+int dnx2CaptchaShow(const Dnx2Captcha *challenge,char *solution,size_t cap,
+                   unsigned local_ip,Dnx2CaptchaProgress progress,Dnx2CaptchaCancel cancel);
 #endif

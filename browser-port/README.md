@@ -37,3 +37,8 @@ The separate runtime probe passed on the user's console (boot, file roundtrip, s
 
 
 v0.31 found no advertised legacy privileged syscalls and skipped them. v0.32 changes the normal-app code adapter to libounce's JIT API, whose Switch 2 interface supports loader-managed publication independently of those hints. Repeat normal Build-NRO.bat and Dashboard R+X to verify this route; no browser dependency rebuild is needed.
+
+
+## Current direction: v0.34 direct phone handoff
+
+v0.33 JIT checks passed on hardware. The Chromium `nx2` branch (ae3db90e112975cf6e27789f149de12173172dff) additionally requires gx-memory RO commands; that referenced loader branch was unavailable, and these services are not assumed present in the normal public jailbreak. User requires public compatibility and selected direct encrypted phone verification. Native browser integration is deferred; no custom loader is deployed. Build-NRO.bat now builds the phone handoff using existing app dependencies, with no browser data image or new console component. See HANDOFF.json for the protocol and remaining hardware/provider checks.

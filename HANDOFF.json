@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.33-kaihen-jit-link",
+  "version": "0.34-direct-phone-captcha",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -11,7 +11,9 @@
     "DO NOT replace /kaihen/plugins/discordnx2.nso or restart kaiHEN during NRO testing",
     "Never use GitHub Actions, Docker or cloud builds",
     "Append changelog, do not erase history",
-    "Provide actionable hardware tests, not documentation-only pushes"
+    "Provide actionable hardware tests, not documentation-only pushes",
+    "Normal public ns2jb/kaiHEN compatibility required: no custom jailbreak/RO loader deployment. User selected direct phone CAPTCHA handoff instead.",
+    "No hosted community relay or PC companion. Existing static verification page is allowed."
   ],
   "tested_real_hardware": {
     "v02": [
@@ -97,7 +99,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "Validate the linker change using existing cached app object files only and inspect the four JIT hook definitions. No NRO or dependencies rebuilt. Console JIT access and CAPTCHA remain unverified.",
+  "build_validation": "AArch64 syntax checks passed with warnings as errors for changed phone/crypto/UI/login sources. Host HTTP parser tests, actual WebCrypto-to-mbedTLS encryption interoperability and tamper/state/key/version/truncation checks passed, including max2048-byte token. Existing HTTP/WS/CAPTCHA tests and old-page tests pass. No real CAPTCHA solved, full Discord login not confirmed. No NRO/browser/dependency build performed; small host test executables only.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -123,13 +125,14 @@
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
   "next_user_workflow": [
-    "Pull main; run Build-NRO.bat; FTP only dist/DiscordNX2.nro. Existing NSO unchanged.",
-    "On Dashboard hold R and press X once, then B to return. Send /kaihen/discordnx2-hardware.txt. Relaunch to repeat the memory check.",
-    "Normal QR login is unchanged; this update does not fix CAPTCHA or include a full browser."
+    "Pull main; run Build-NRO.bat; FTP only dist/DiscordNX2.nro. Keep normal public jailbreak and resident NSO.",
+    "Phone and Switch on same private IPv4 Wi-Fi. Dashboard > Log in; first QR scanned inside Discord app.",
+    "If verification QR appears, scan it with phone camera to open normal browser. Complete CAPTCHA, tap Send to Switch; browser may request continuation to local address. Check Switch for actual account/server results.",
+    "If login fails, share /kaihen/discordnx2-hardware.txt and phone error text only, not QR URLs, callback data, solutions or credentials."
   ],
   "next_developer_work": [
-    "Continue browser-port engine integration and dependency build using local devkitPro/libounce; no hosted relay.",
-    "Do not ask user to rebuild unchanged Discord NRO as a browser test; only the port adapter object exists so far."
+    "Inspect v0.34 real phone handoff stages; distinguish local connectivity, decryption, provider rejection and ticket lifetime. No further JIT/RO experiments needed for this test.",
+    "Keep public-jailbreak compatibility and no-relay constraint; no native-browser or custom loader success claim."
   ],
   "implementation_base_head": "5c39f8c8d46ce262f3b277eb3536e400d3b61313",
   "v023_implementation": {
@@ -183,7 +186,7 @@
     "validation": "Native NRO build and existing HTTP/WS/CAPTCHA unit tests passed. Actual WebExitReason and browser compatibility still require console verification; no need to repeat login just to reconfirm the known unavailable browser."
   },
   "browser_port_status": {
-    "direction": "Entirely on-console; no hosted relay. Z:/[MMOnsterpatch Server]/ untouched.",
+    "direction": "Native browser work deferred: user requires compatibility with normal public jailbreak and selected encrypted direct-LAN phone handoff. No RO/bootstrap/NSO updates made.",
     "source_assessment": "BrowseNX uses the unavailable system browser. NetSurf runtime audit blocks CAPTCHA use (insecure random, same-page postMessage, unsupported Workers). Chromium NX is the current candidate, not yet a complete Switch 2 port.",
     "implemented": "Native libnsfb adapter and 14 support libraries compiled. Added pinned LLVM AArch64 LKL build and libounce host adaptation; upstream Chromium ELF/memory/syscall/CDP/trampoline core compiled into static archive. Original separate runtime test NRO boots/checks/halt LKL when run on hardware.",
     "validation": "AArch64 kernel object and optional runtime NRO compiled/linked locally, not run. No browser rendering or CAPTCHA acceptance proven. Current Discord application and resident NSO unchanged.",
@@ -193,9 +196,17 @@
     },
     "build": "Build-Browser-Runtime.bat (Debian WSL + LLVM/kernel tools + Windows devkitPro/libounce). No Docker/Actions. Build-NRO.bat remains the existing app only.",
     "hardware_gate": "Separate dist/browser-runtime/DiscordNX2-Runtime-Test.nro; checks basic Linux boot, tmpfs file roundtrip and shutdown. Log sdmc:/discordnx2-browser-runtime.log. It does not log in or touch existing NSO.",
-    "remaining": "Executable memory check on hardware, full Chromium display/input/guest image, secure lifecycle and ephemeral CAPTCHA callback, provider acceptance. CAPTCHA login still blocked; app still has no embedded browser.",
+    "remaining": "Native Chromium needs additional fixed-address memory services beyond the passing JIT test. Upstream nx2 branch ae3db90e112975cf6e27789f149de12173172dff refers to unpublished gx-memory loader commands 65100-65103; branch unavailable during inspection. Existing MapJitImage PR is unmerged and not assumed part of public jailbreak. Do not build/deploy a custom loader for this user.",
     "runtime_hardware_result": "User supplied discordnx2-browser-runtime.txt: runtime boot, file checks and shutdown passed (result 0). Initial console/PCI warnings did not prevent those tests. This does not verify Chromium or guest executable memory.",
     "next_in_app_test": "v0.33 links -lkaihen before -lounce_core to include loader JIT hooks. Normal Build-NRO.bat, FTP only NRO, Dashboard R+X, send hardware log. No dependency rebuild or NSO change.",
-    "executable_memory_hardware_result": "v0.32 jitCreate returned 00004759 (LibnxError_JitUnavailable), safely logged and exited. app/Makefile omitted -lkaihen; the installed kaihen.h explicitly requires it. Installed libkaihen.a is a linker script INPUT(kaihen-jit.o), which supplies the weakly referenced __nx_jit_* hooks. Prior cached application ELF had no hook definitions."
+    "executable_memory_hardware_result": "v0.33 passed allocation, RX-only permission checks, execution of fixed code, replacement execution and cleanup through libounce/kaiHEN JIT."
+  },
+  "direct_phone_captcha": {
+    "flow": "After Discord phone QR approval, HTTP400 CAPTCHA shows second HTTPS QR for phone camera/browser. Static page renders official hCaptcha with exact sitekey/rqdata. User completes challenge and taps Send to Switch. A short-lived private-IP TCP listener receives one encrypted form POST; native decrypt validates 256-bit state and retries the same Discord ticket once with existing rqtoken/session headers.",
+    "transport": "WebCrypto AES-256-GCM, random 96-bit IV, 128-bit tag; AES key wrapped using active session RSA-2048 OAEP/SHA256 public key. AAD DiscordNX2 CAPTCHA v1: + state. Envelope version1 + 256-byte RSA + 12-byte IV + ciphertext/tag. Plaintext state + newline + bounded printable token. Local HTTP carries ciphertext only; no ticket, account token, private key or plaintext solution is sent over LAN or hosted on website.",
+    "bounds": "Listener binds only existing Discord socket private IPv4 address, random OS port; private-source peers, 150-second total wait, 3-second receive deadline, 8 invalid requests maximum, bounded Content-Length, no transfer-encoding or pipelining, exact POST path. Listener and secrets closed/wiped on success/cancel/error/timeout. QR limited to 2200 bytes; never truncate challenge data.",
+    "hosting": "https://mmonsterpatch.gamingwithgoose.com/discordnx2-phone.html; community main commit 4823cfa adds this isolated static file only. No relay/backend or Z: server changes. Live HTTP200 and byte-for-byte source match verified.",
+    "validation": "AArch64 syntax checks passed with warnings as errors for changed phone/crypto/UI/login sources. Host HTTP parser tests, actual WebCrypto-to-mbedTLS encryption interoperability and tamper/state/key/version/truncation checks passed, including max2048-byte token. Existing HTTP/WS/CAPTCHA tests and old-page tests pass. No real CAPTCHA solved, full Discord login not confirmed. No NRO/browser/dependency build performed; small host test executables only.",
+    "remaining_blockers": "Phone browser local HTTP form/navigation restrictions or permission prompts; Wi-Fi client isolation/VPN; provider domain restrictions for Discord dynamic sitekey; Discord rejecting cross-device challenge, expired ticket or solution. Do not spoof origin/browser identity or bypass challenge."
   }
 }
