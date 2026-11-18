@@ -214,3 +214,12 @@ Text is smaller and mixed case using the console shared font, with Pretendo and 
 ### Confirmed login blocker (v0.27)
 
 Real v0.26 hardware reaches phone approval, then Discord requires CAPTCHA at ticket redemption. The app cannot complete that challenge, so phone approval does not result in a Switch account session or server list. v0.27 preserves this explanation on Dashboard. Completing native login now requires a legitimate interactive challenge flow; no CAPTCHA bypass is implemented. Repeating the same QR test is not needed to establish this blocker.
+
+
+### v0.28 CAPTCHA browser trial
+
+The NRO now attempts to open a user-completed hCaptcha challenge at `https://mmonsterpatch.gamingwithgoose.com/discordnx2-captcha.html` after phone approval. This separate static page was added to the existing community site. It receives only CAPTCHA widget data in a URL fragment; Discord ticket and account token stay in the native app. A random state binds the return to the current attempt. The app retries the same ticket once using the returned solution and Discord request/session bindings, then wipes them.
+
+Pull main, Build-NRO.bat, FTP only dist/DiscordNX2.nro. Complete the browser challenge yourself if it opens. Console browser invocation, callback behavior, provider browser/domain compatibility and complete login remain unverified. If unavailable or rejected, share only the stage-only hardware report, never URLs or challenge/credential values. No solver service, hostname spoof or challenge bypass is implemented.
+
+Tests: `sh tests/run-native-http-tests.sh` (Python/host C compiler), `node tests/test_captcha_page.js` (synthetic callback only). Provider integration references: https://docs.hcaptcha.com/configuration and https://github.com/hCaptcha/react-hcaptcha. Optional builds can override CAPTCHA_PAGE_URL with a user-controlled HTTPS deployment of the same page; default uses the supplied community domain.

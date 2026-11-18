@@ -6,6 +6,7 @@
  */
 #include "native_login.h"
 #include "auth_crypto.h"
+#include "captcha.h"
 #include "native_ws.h"
 #include <switch.h>
 #include <switch/services/bsd.h>
@@ -40,6 +41,9 @@ static u64 dnx2MonotonicMs(void) {
 #define HTTP_BUF 131072
 static Dnx2Account account;
 static unsigned char http_body[HTTP_BUF];
+static char captcha_headers[8192];
+static Dnx2Captcha captcha_challenge;
+static char captcha_solution[2049];
 static unsigned last_http_status;
 static unsigned last_discord_error;
 static int last_captcha_required;
@@ -276,16 +280,16 @@ static int http_request(TlsSession *s,const char *host,const char *method,
     last_http_status=0;last_discord_error=0;last_captcha_required=0;
     if(!tls_open(s,host))return 0;
     size_t bodylen=body?strlen(body):0;
-    char req[4096];
+    char req[12288];
     int len=snprintf(req,sizeof(req),
       "%s %s HTTP/1.1\r\nHost: %s\r\nAccept: application/json\r\n"
-      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.25\r\n"
+      "Accept-Encoding: identity\r\nUser-Agent: DiscordNX2-native/0.28\r\n"
       "Origin: https://discord.com\r\nReferer: https://discord.com/login\r\n"
       "Connection: close\r\n%s%s%s"
-      "Content-Type: application/json\r\nContent-Length: %u\r\n\r\n",
+      "%sContent-Type: application/json\r\nContent-Length: %u\r\n\r\n",
       method,path,host,
       token?"Authorization: ":"",token?token:"",token?"\r\n":"",
-      (unsigned)bodylen);
+      captcha_headers,(unsigned)bodylen);
     if(len<=0||(size_t)len>=sizeof(req))return 0;
     int sent=tls_send(s,req,(size_t)len);
     wipe(req,sizeof(req));
@@ -523,9 +527,36 @@ remote_cleanup:
         char json[1000];
         int len=snprintf(json,sizeof(json),"{\"ticket\":\"%s\"}",ticket);
         wipe(ticket,sizeof(ticket));
-        if(len>0&&(size_t)len<sizeof(json) &&
-           http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
-                        json,NULL,(char*)http_body,sizeof(http_body))) {
+        int exchange_ok=0;
+        if(len>0&&(size_t)len<sizeof(json)){
+            exchange_ok=http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
+                                    json,NULL,(char*)http_body,sizeof(http_body));
+            if(!exchange_ok && last_http_status==400 && last_captcha_required){
+                memset(&captcha_challenge,0,sizeof(captcha_challenge));
+                int valid=json_string((char*)http_body,"captcha_service",captcha_challenge.service,sizeof(captcha_challenge.service)) &&
+                    json_string((char*)http_body,"captcha_sitekey",captcha_challenge.sitekey,sizeof(captcha_challenge.sitekey));
+                const char *keys[]={"captcha_rqdata","captcha_rqtoken","captcha_session_id"};
+                char *fields[]={captcha_challenge.rqdata,captcha_challenge.rqtoken,captcha_challenge.session_id};
+                size_t sizes[]={sizeof(captcha_challenge.rqdata),sizeof(captcha_challenge.rqtoken),sizeof(captcha_challenge.session_id)};
+                for(int i=0;i<3;i++)if(strstr((char*)http_body,keys[i])&&!json_string((char*)http_body,keys[i],fields[i],sizes[i]))valid=0;
+                tls_close(&https);
+                wipe(http_body,sizeof(http_body));
+                status("CAPTCHA REQUIRED - PREPARING USER VERIFICATION",NULL);
+                if(valid && dnx2CaptchaShow(&captcha_challenge,captcha_solution,sizeof(captcha_solution)) &&
+                   dnx2CaptchaHeaders(&captcha_challenge,captcha_solution,captcha_headers,sizeof(captcha_headers))){
+                    status("VERIFICATION COMPLETED - SUBMITTING TO DISCORD",NULL);
+                    exchange_ok=http_request(&https,API_HOST,"POST","/api/v10/users/@me/remote-auth/login",
+                                            json,NULL,(char*)http_body,sizeof(http_body));
+                }else {
+                    char browser_stage[100];
+                    snprintf(browser_stage,sizeof(browser_stage),"CAPTCHA BROWSER CLOSED OR UNAVAILABLE RESULT %08x",dnx2CaptchaBrowserError());
+                    status(browser_stage,NULL);
+                }
+                wipe(captcha_headers,sizeof(captcha_headers));wipe(captcha_solution,sizeof(captcha_solution));
+                wipe(&captcha_challenge,sizeof(captcha_challenge));
+            }
+        }
+        if(exchange_ok){
             char encrypted[1100]={0};unsigned char access[1024]={0};
             size_t n=0;
             if(json_string((char*)http_body,"encrypted_token",encrypted,sizeof(encrypted)) &&
@@ -538,7 +569,7 @@ remote_cleanup:
         }else {
             char reason[96];
             if(last_captcha_required){
-                snprintf(failure_reason,sizeof(failure_reason),"Discord requires CAPTCHA. This app cannot complete login yet.");
+                snprintf(failure_reason,sizeof(failure_reason),"CAPTCHA was not completed or accepted. Check the login log.");
             }else if(last_http_status==429){
                 snprintf(failure_reason,sizeof(failure_reason),"Discord rate limited login. Please try again later.");
             }else {
@@ -554,6 +585,7 @@ network_cleanup:
     if(network_ready){sslExit();socketExit();}
     wipe(http_body,sizeof(http_body));wipe(ws_payload,sizeof(ws_payload));
     wipe(&ws_reader,sizeof(ws_reader));active_cancel=NULL;
+    wipe(captcha_headers,sizeof(captcha_headers));wipe(captcha_solution,sizeof(captcha_solution));wipe(&captcha_challenge,sizeof(captcha_challenge));
     wipe(ticket,sizeof(ticket));wipe(fingerprint,sizeof(fingerprint));
     wipe(pubkey,sizeof(pubkey));
     dnx2AuthCryptoClose();

@@ -39,14 +39,22 @@ $(BUILD)/qrcodegen.o: source/vendor/qrcodegen.c source/vendor/qrcodegen.h | $(BU
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/auth_crypto.o: source/auth_crypto.c source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h source/native_ws.h | $(BUILD)
+$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h source/native_ws.h source/captcha.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/native_font.o: source/native_font.c source/native_font.h source/pretendo_font.h source/vendor/stb_truetype.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
+# Optional user-controlled HTTPS deployment of assets/captcha.html.
+ifneq ($(strip $(CAPTCHA_PAGE_URL)),)
+CFLAGS += -DDNX2_CAPTCHA_PAGE_URL='"$(CAPTCHA_PAGE_URL)"'
+endif
+$(BUILD)/captcha.o: source/captcha.c source/captcha.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/captcha_browser.o: source/captcha_browser.c source/captcha.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/captcha.o $(BUILD)/captcha_browser.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(BUILD)/$(TARGET).nacp: | $(BUILD)
-	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.27" $@
+	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.28" $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).nacp assets/icon.jpg
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --icon=assets/icon.jpg --nacp=$(BUILD)/$(TARGET).nacp
 clean:

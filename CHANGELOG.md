@@ -187,3 +187,13 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Preserve the CAPTCHA, rate-limit or API rejection explanation through cleanup and on Dashboard instead of replacing it with generic QR failure/expiry.
 - Native app has no interactive CAPTCHA completion flow. This is the remaining authentication blocker, not a successful login. No bypass or fake server list added.
 - NRO build and HTTP/WS regression tests passed. No repeated hardware QR test needed merely to re-establish this blocker. Optional NRO-only update displays the accurate explanation; resident NSO unchanged.
+
+
+## v0.28 - user-completed CAPTCHA browser integration
+
+- Implement bounded RAM-only CAPTCHA challenge parsing and one same-ticket resubmission with provider solution plus optional enterprise request/session headers.
+- Add native browser applet flow and exact callback URL validation bound to a random 256-bit state. Release/restore auth framebuffer; wipe challenge, solution, headers and browser config/reply.
+- Add static verification frontend using official hCaptcha widget and enterprise rqdata. Only CAPTCHA widget fields enter it; ticket and Discord account token remain native. No automatic solving, host spoofing or CAPTCHA bypass.
+- Hosted isolated page on user-supplied https://mmonsterpatch.gamingwithgoose.com/discordnx2-captcha.html via community repo commit 74feae5; HTTP200 verified. Existing site pages unchanged.
+- Native build/link, HTTP/WS/CAPTCHA regression tests and synthetic frontend tests pass. Browser-enabled compilation was checked too. Real Switch browser launch, provider domain/browser acceptance, callback and complete login still require hardware testing. No claim of successful CAPTCHA or login.
+- Pull main, Build-NRO.bat, FTP only NRO. Approve QR login, complete browser CAPTCHA yourself if it opens, then verify real account/servers or send stage-only report. NSO unchanged.
