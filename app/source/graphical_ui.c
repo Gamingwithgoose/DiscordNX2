@@ -8,6 +8,7 @@
 #include "graphical_ui.h"
 #include "vendor/qrcodegen.h"
 #include "native_login.h"
+#include "native_font.h"
 #include "vendor/font8x8_basic.h"
 #include <switch.h>
 #include <switch/display/framebuffer.h>
@@ -48,6 +49,7 @@ static void rect(int x,int y,int width,int height,uint32_t color) {
  * Independent horizontal metrics preserve sidebar and card layout widths. */
 static void text_line(int x,int y,const char *s,uint32_t color,int scale,int maxchars) {
     if(!s||scale<1)return;
+    if(dnx2FontDraw(pixels,stride_pixels,W,H,x,y,s,color,scale,maxchars))return;
     const int horizontal=scale>=3?2:1;
     const int advance=6*scale;
     for(int i=0;s[i]&&i<maxchars;i++) {

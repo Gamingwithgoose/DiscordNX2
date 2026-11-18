@@ -9,7 +9,7 @@ include $(DEVKITPRO)/libounce/switch2_cpu.mk
 ARCH := $(SWITCH2_CPU) -mtp=soft -fPIE
 CFLAGS := $(ARCH) -std=gnu11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -D__SWITCH__ -D__SWITCH2__ -I$(DEVKITPRO)/portlibs/switch2/include -I$(DEVKITPRO)/libounce/include
 LDFLAGS := $(ARCH) -specs=$(DEVKITPRO)/libounce/switch.specs -Wl,--gc-sections
-LIBS := -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -lounce_core
+LIBS := -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -lounce_core -lm
 
 # devkitPro's maintained switch-mbedtls package is AArch64 and uses libnx
 # compatible libc. It is optional for compiling old hardware diagnostics,
@@ -41,7 +41,9 @@ $(BUILD)/auth_crypto.o: source/auth_crypto.c source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o
+$(BUILD)/native_font.o: source/native_font.c source/native_font.h source/vendor/stb_truetype.h | $(BUILD)
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+$(BUILD)/$(TARGET).elf: $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@

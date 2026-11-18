@@ -10,6 +10,7 @@
 #include "discord_gateway_probe.h"
 #include "graphical_ui.h"
 #include "native_login.h"
+#include "native_font.h"
 
 #define DNX2_MAGIC 0x444e5832u
 typedef struct {
@@ -1047,6 +1048,8 @@ int main(void) {
                 reply, &status, &probe, &last);
     if (serviceIsActive(&hen)) serviceClose(&hen);
     if (serviceIsActive(&ro)) serviceClose(&ro);
+    (void)dnx2FontInit();
     run_ui();
+    dnx2FontExit();
     return 0;
 }
