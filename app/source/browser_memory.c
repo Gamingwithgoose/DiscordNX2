@@ -7,11 +7,21 @@
 
 #define PAGE_SIZE 0x1000u
 static Result invalid(void) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
+static Result unavailable(void) { return MAKERESULT(Module_Libnx, LibnxError_NotInitialized); }
+static void trace(Dnx2BrowserCode *c,const char *stage,Result rc) {
+    if(c->log)c->log(stage,rc);
+}
+static int permissions_advertised(void) {
+    return envIsSyscallHinted(0x5f) && envIsSyscallHinted(0x73) &&
+           envIsSyscallHinted(0x77) && envIsSyscallHinted(0x78);
+}
+
 
 Result dnx2BrowserCodeCreate(Dnx2BrowserCode *c, size_t size) {
     if (!c || !size || size > SIZE_MAX - (PAGE_SIZE - 1)) return invalid();
     // A live descriptor must be destroyed successfully before it can be reused.
     if (c->source || c->reservation || c->mapped) return invalid();
+    if (!permissions_advertised()) return unavailable();
     memset(c, 0, sizeof(*c));
     c->process = envGetOwnProcessHandle(); // borrowed: never close the loader's handle
     if (c->process == INVALID_HANDLE)
@@ -34,8 +44,10 @@ Result dnx2BrowserCodeCreate(Dnx2BrowserCode *c, size_t size) {
 
 static Result unmap(Dnx2BrowserCode *c) {
     if (!c->mapped) return 0;
+    trace(c,"Unmap executable alias begin",0);
     Result rc = svcUnmapProcessCodeMemory(c->process, (u64)c->executable,
                                           (u64)c->source, c->size);
+    trace(c,"Unmap executable alias end",rc);
     if (R_SUCCEEDED(rc)) c->mapped = 0;
     return rc;
 }
@@ -45,14 +57,26 @@ Result dnx2BrowserCodeWrite(Dnx2BrowserCode *c, const void *bytes, size_t length
         return invalid();
     Result rc = unmap(c);
     if (R_FAILED(rc)) return rc; // source is inaccessible while aliased
+    if (!permissions_advertised()) return unavailable();
+    trace(c,"Write fixed code bytes begin",0);
     memset(c->source, 0, c->size);
     memcpy(c->source, bytes, length);
-    armDCacheFlush(c->source, c->size);
+    trace(c,"Write fixed code bytes end",0);
+    // Use a checked kernel call rather than direct userspace cache instructions.
+    trace(c,"System data cache flush begin",0);
+    rc = svcFlushProcessDataCache(c->process,(uintptr_t)c->source,c->size);
+    trace(c,"System data cache flush end",rc);
+    if (R_FAILED(rc)) return rc;
+    trace(c,"Map executable alias begin",0);
     rc = svcMapProcessCodeMemory(c->process, (u64)c->executable, (u64)c->source, c->size);
+    trace(c,"Map executable alias end",rc);
     if (R_FAILED(rc)) return rc;
     c->mapped = 1;
+    trace(c,"Set read/execute permission begin",0);
     rc = svcSetProcessMemoryPermission(c->process, (u64)c->executable, c->size, Perm_Rx);
-    if (R_SUCCEEDED(rc)) armICacheInvalidate(c->executable, c->size);
+    trace(c,"Set read/execute permission end",rc);
+    // Code mapping/permission transitions perform kernel instruction-cache maintenance.
+    // The replacement test checks that the new instruction stream is observed.
     // Even if permission setup fails, mapped stays true until cleanup succeeds.
     return rc;
 }
@@ -81,10 +105,20 @@ int dnx2BrowserMemoryCheck(Dnx2BrowserMemoryLog log) {
     static int attempted;
     if (attempted) { log("Already tested; relaunch before another attempt", invalid()); return 0; }
     attempted = 1;
+    // A missing loader hint is treated conservatively, not proof of kernel support.
+    log("Loader advertises cache flush (SVC 5F)",envIsSyscallHinted(0x5f)?0:unavailable());
+    log("Loader advertises code permissions (SVC 73)",envIsSyscallHinted(0x73)?0:unavailable());
+    log("Loader advertises code mapping (SVC 77)",envIsSyscallHinted(0x77)?0:unavailable());
+    log("Loader advertises code unmapping (SVC 78)",envIsSyscallHinted(0x78)?0:unavailable());
+    if (!permissions_advertised()) {
+        log("Code-memory access not advertised; privileged calls skipped",unavailable());
+        return 0;
+    }
     Dnx2BrowserCode code = {0};
     log("Allocate executable-code storage", 0);
     Result rc = dnx2BrowserCodeCreate(&code, PAGE_SIZE);
     log("Allocate executable-code storage result", rc);
+    code.log=log;
     int passed = 0;
     if (R_SUCCEEDED(rc)) {
         // bti c; mov w0,#42; ret. BTI landing pad is a hint on earlier CPUs.

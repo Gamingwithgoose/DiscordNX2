@@ -230,3 +230,11 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Dashboard R+X explicitly runs one small check per launch: fixed built-in AArch64 returns 42, then rewritten code returns 53. Logs each stage immediately to the existing hardware report and shows a dedicated result screen. No diagnostics tab, automatic login test, account data or networking added.
 - Included in normal Build-NRO.bat; no Linux/browser dependency rebuild or extra SD assets. Native source is checked with the existing compiler; final NRO build left to user as requested.
 - CAPTCHA login and full Chromium integration remain unfinished. Audio, networking, normal login controls and resident NSO unchanged.
+
+
+## v0.31 - guard browser code-memory operations
+
+- v0.30 hardware allocated storage, then crashed inside memory setup before any test code ran. Exact failing operation is not yet known.
+- Check loader hints for privileged cache, mapping, unmapping and permission calls before allocating or calling them; report unavailable and skip when not advertised. Missing hints are not proof of kernel incompatibility.
+- Replace raw ARM cache operations with a checked system data-cache flush and kernel code mapping/permission transitions. Add stage checkpoints before/after individual operations so a crash retains the exact last step.
+- Source checks only; user builds with Build-NRO.bat and repeats Dashboard R+X. No dependency builds, audio/network/NSO changes or CAPTCHA success claim.

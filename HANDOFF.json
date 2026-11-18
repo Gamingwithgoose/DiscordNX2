@@ -3,7 +3,7 @@
   "date": "2026-11-17",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.30-browser-memory-check",
+  "version": "0.31-browser-memory-guard",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -97,7 +97,7 @@
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
     "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
   ],
-  "build_validation": "v0.30: syntax/type checks passed for changed native source with the installed AArch64 compiler; new executable-memory code checked with warnings as errors. Existing audio source has a pre-existing signedness warning. No NRO or dependencies built, per user request. Hardware memory execution remains unverified.",
+  "build_validation": "v0.31 changed source checked with installed AArch64 compiler; no NRO/dependency build. Hardware crash resolution unverified.",
   "key_risks": [
     "audout playback may fail despite successful init; bounded wait logs failure and stops output",
     "microphone amplitude has previously been near-silent (peak10) depending on test, possible inactive mic or silence",
@@ -195,6 +195,7 @@
     "hardware_gate": "Separate dist/browser-runtime/DiscordNX2-Runtime-Test.nro; checks basic Linux boot, tmpfs file roundtrip and shutdown. Log sdmc:/discordnx2-browser-runtime.log. It does not log in or touch existing NSO.",
     "remaining": "Executable memory check on hardware, full Chromium display/input/guest image, secure lifecycle and ephemeral CAPTCHA callback, provider acceptance. CAPTCHA login still blocked; app still has no embedded browser.",
     "runtime_hardware_result": "User supplied discordnx2-browser-runtime.txt: runtime boot, file checks and shutdown passed (result 0). Initial console/PCI warnings did not prevent those tests. This does not verify Chromium or guest executable memory.",
-    "next_in_app_test": "v0.30 Build-NRO.bat uses only existing normal toolchain; Dashboard hold R and press X. Tests fixed built-in AArch64 code with read/execute-only alias, remaps replacement code, verifies cache coherency, releases mapping/backing storage. Stage-only results saved to existing /kaihen/discordnx2-hardware.txt. No new dependencies, Linux build or browser image."
+    "next_in_app_test": "v0.31 R+X uses loader syscall hints to skip unadvertised privileged operations, checked system data-cache flush instead of raw ARM cache operations, and checkpoints before/after writing, flushing, mapping and setting permissions. A missing hint reports unavailable; it is not proof the kernel cannot support this operation.",
+    "executable_memory_hardware_result": "v0.30 log ends inside dnx2BrowserCodeWrite before mapping result; user confirms app crashes. Allocation passed. No guest/test code execution was reached. Exact failing cache/map operation remains unknown."
   }
 }
