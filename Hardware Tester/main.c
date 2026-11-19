@@ -105,6 +105,7 @@ static void browser_test(int which){
     }
     appletExit();
     report("BROWSER END %s\n",name);
+    (void)save_report();
 }
 int main(void){
     consoleInit(NULL);
@@ -131,19 +132,21 @@ int main(void){
         if(mode==0){
             if(down&HidNpadButton_Up)selection=(selection+3)%4;
             if(down&HidNpadButton_Down)selection=(selection+1)%4;
-            if(down&HidNpadButton_X){mode=1;report("INPUT MONITOR START\n");}
+            if(down&HidNpadButton_X){mode=1;report("INPUT MONITOR START\n");(void)save_report();}
             if(down&HidNpadButton_A){browser_test(selection);prior=0;}
         }else if(down&HidNpadButton_B){
-            mode=0;report("INPUT MONITOR END\n");
+            mode=0;report("INPUT MONITOR END\n");(void)save_report();
         }
-        if(down&HidNpadButton_Y)(void)save_report();\n        if((down&HidNpadButton_Plus) && (held&HidNpadButton_Minus)){
-            report("USER EXIT\n");break;
+        if(down&HidNpadButton_Y)(void)save_report();
+        if((down&HidNpadButton_Plus) && (held&HidNpadButton_Minus)){
+            report("USER EXIT\n");(void)save_report();break;
         }
         if((frame++%4)==0 || down || up){
             printf("\x1b[2J\x1b[H");
             puts("NS2 HARDWARE TESTER  v0.2");
             puts("--------------------------");
-            printf("HID=%08x  SD=%08x  events=%u\n",h,sd,event_count);
+            printf("HID=%08x  SD=%08x  save=%08x\n",h,sd_access,last_save);
+            printf("Events=%u  saved=%u\n",event_count,saved_events);
             if(mode==0){
                 puts("\nBrowser tests (UP/DOWN, A launch):");
                 for(int i=0;i<4;i++)printf("%c %s\n",selection==i?'>':' ',opts[i]);
@@ -163,7 +166,8 @@ int main(void){
                 puts("\nNOTE: If C opens GameChat without a mask change,");
                 puts("it may be intercepted by Horizon.");
             }
-            puts("\nLog: /switch/HardwareTester/report.txt");
+            printf("\nLog: SD:%s\n",save_path);
+            if(R_FAILED(last_save))puts("SAVE FAILED - copy codes above");
             consoleUpdate(NULL);
         }
         svcSleepThread(16000000LL);
