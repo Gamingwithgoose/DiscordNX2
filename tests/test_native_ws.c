@@ -5,7 +5,8 @@
 static Dnx2WsReader reader;
 static unsigned char out[8193];
 static void feed(const unsigned char *b,size_t n){memcpy(reader.wire+reader.used,b,n);reader.used+=n;}
-int main(void){
+static void voice_binary(void){Dnx2WsReader r={0};unsigned char out[80];r.allow_binary=1;unsigned char first[]={0x02,3,0,7,25};memcpy(r.wire,first,sizeof(first));r.used=sizeof(first);assert(dnx2WsNext(&r,out,sizeof(out))==0);unsigned char last[]={0x80,2,0,9};memcpy(r.wire,last,sizeof(last));r.used=sizeof(last);assert(dnx2WsNext(&r,out,sizeof(out))==4&&r.completed_size==5&&r.is_binary&&out[0]==0&&out[3]==0);}
+int main(void){voice_binary();
  const unsigned char text[]={0x81,5,'h','e','l','l','o'};
  for(size_t i=0;i<sizeof(text);i++){feed(text+i,1);int rc=dnx2WsNext(&reader,out,sizeof(out));assert(rc==(i==sizeof(text)-1?1:0));}
  assert(strcmp((char*)out,"hello")==0);

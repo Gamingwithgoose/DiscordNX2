@@ -115,8 +115,8 @@ static void job_worker(void *unused){
         }else snprintf(chat_job.notice,sizeof(chat_job.notice),"Send not confirmed. Check the channel before retrying.");
     }else if(chat_job.op==16){
         int stage=0;unsigned close_code=0;
-        voice_control_preflight(chat_job.token,chat_job.guild,chat_job.channel,chat_job.user,chat_job.notice,&stage,&close_code);
-        chat_job.ok=0; /* Signaling is not a working encrypted audio call. */
+        chat_job.ok=voice_control_session(chat_job.token,chat_job.guild,chat_job.channel,chat_job.user,chat_job.notice,&stage,&close_code);
+
     }else if(chat_job.op==15){
         snprintf(chat_job.media->guild,sizeof(chat_job.media->guild),"%s",chat_job.guild);
         snprintf(path,sizeof(path),"/api/v10/guilds/%s/emojis",chat_job.guild);
@@ -133,7 +133,7 @@ static void job_worker(void *unused){
 done:
     if(chat_job.op!=20){
         FILE *report=fopen("sdmc:/kaihen/discordnx2-hardware.txt","w");
-        if(report){fprintf(report,"DiscordNX2 v0.45 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
+        if(report){fprintf(report,"DiscordNX2 v0.46 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
     }
     if(!chat_job.ok&&!chat_job.notice[0])snprintf(chat_job.notice,sizeof(chat_job.notice),"Network request could not finish.");
     wipe(http_body,sizeof(http_body));if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
@@ -142,13 +142,13 @@ done:
 static int job_launch(void){
     if(chat_job.op==20){mutexLock(&live_mutex);if(live_accept_images){chat_job.delegated=1;chat_job.running=1;wipe(chat_job.token,sizeof(chat_job.token));__atomic_store_n(&delegated_images,1,__ATOMIC_RELEASE);mutexUnlock(&live_mutex);return 1;}mutexUnlock(&live_mutex);dnx2LiveStop();}
 
-    if(R_SUCCEEDED(threadCreate(&chat_job.thread,job_worker,NULL,NULL,128*1024,0x3b,-2))){
+    if(R_SUCCEEDED(threadCreate(&chat_job.thread,job_worker,NULL,NULL,512*1024,0x3b,-2))){
         if(R_SUCCEEDED(threadStart(&chat_job.thread))){chat_job.running=1;return 1;}threadClose(&chat_job.thread);
     }
     free(chat_job.data);free(chat_job.media);chat_job.data=NULL;chat_job.media=NULL;wipe(chat_job.token,sizeof(chat_job.token));snprintf(account.notice,sizeof(account.notice),"Request could not start.");return 0;
 }
 void dnx2JobStop(void){
-    if(chat_job.running){__atomic_store_n(&chat_job.stop,1,__ATOMIC_RELEASE);if(chat_job.delegated){while(!__atomic_load_n(&chat_job.done,__ATOMIC_ACQUIRE))svcSleepThread(1000000LL);}else{threadWaitForExit(&chat_job.thread);threadClose(&chat_job.thread);}if(chat_job.op==20)job_apply_images();chat_job.running=0;}
+    if(chat_job.running){__atomic_store_n(&chat_job.stop,1,__ATOMIC_RELEASE);if(chat_job.delegated){while(!__atomic_load_n(&chat_job.done,__ATOMIC_ACQUIRE))svcSleepThread(1000000LL);}else{threadWaitForExit(&chat_job.thread);threadClose(&chat_job.thread);}if(chat_job.op==20)job_apply_images();if(chat_job.op==16)snprintf(account.notice,sizeof(account.notice),"Voice disconnected.");chat_job.running=0;}
     if(chat_job.data){wipe(chat_job.data,sizeof(*chat_job.data));free(chat_job.data);chat_job.data=NULL;}
     if(chat_job.media){wipe(chat_job.media,sizeof(*chat_job.media));free(chat_job.media);chat_job.media=NULL;}
     for(int i=0;i<8;i++){dnx2FreeMedia(&chat_job.images[i].media);free(chat_job.images[i].roles);chat_job.images[i].roles=NULL;}

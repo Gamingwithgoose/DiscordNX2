@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.45-voice-confirmation-scope-ports-status",
+  "version": "0.46-foreground-dave-opus-voice",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -103,7 +103,8 @@
     "v0.22: anti-aliased shared system TrueType via pl:u/stb_truetype when available, public-domain 8x8 fallback. No font file distributed.",
     "v0.22: Build-NRO.bat attempts to install switch-mbedtls through pacman if required; sanitized stage-only auth logs intentionally omit all credentials and QR URLs.",
     "v0.22 compiler hotfix: replaced 11 instances of 3DS-only osGetTime() in native_login.c with dnx2MonotonicMs() using clock_gettime(CLOCK_MONOTONIC), preserving ms semantics.",
-    "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only."
+    "v0.22 nonce diagnostics: added self-test using in-memory RSA public encryption/private OAEP decrypt; distinguishes missing field, base64 error, ciphertext size, OAEP error and nonce proof encoding with static stages only.",
+    "v0.46 supersedes earlier no-DAVE/preflight-only descriptions: actual foreground DAVE/Opus engine is linked; hardware audio call unverified."
   ],
   "build_validation": "Strict AArch64 syntax checks passed for changed client, UI, font and PNG decoder. New synthetic production job tests pass for deferred matching results, stale-context rejection, single-send/failure preservation, empty history, catalogs, unauthenticated CDN, actual PNG decode/size rejection and cleanup; mobile keyboard order/page/hit-size tests pass. Existing live worker, font, client data, saved-session, HTTP/WS/CAPTCHA regressions passed. No NRO or dependency build.",
   "key_risks": [
@@ -130,10 +131,11 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": "Pull main, Build-NRO.bat, FTP only NRO. Unlock existing saved login. Allow server icons to load, change text channels/send and confirm no full loading screen. Try compact keyboard/symbol pages/smiley, server emoji and sticker draft/explicit Send. Share sanitized hardware/live logs if needed, never token/PIN/session.bin/QR or private message content. Normal public jailbreak, NSO and DNS unchanged.",
+  "next_user_workflow": "Pull main, run Build-NRO.bat (first voice dependency build cached in .local/voice), FTP ONLY dist/DiscordNX2.nro. Keep NSO/public jailbreak/DNS unchanged. Join ordinary voice with a second official-client member, verify two-way audio, mute/unmute and Leave/B. Share sanitized discordnx2-voice.txt if needed.",
   "next_developer_work": [
-    "Use hardware feedback for in-place transitions, real icons, keyboard targets and server media authorization. Preserve working touch/login/PIN/audio/networking.",
-    "GIF search, animation/full media and Discord voice transport remain separate unfinished work; do not add fake actions or claim calls work."
+    "Use hardware two-way-call report to verify DAVE/UDP/audio service timing; no hardware call is confirmed yet.",
+    "Implement live voice member list, adaptive jitter/PLC, echo cancellation, reliable reconnect and Stage approval; background voice remains separate unfinished NSO work.",
+    "Preserve login/chat/font/audio controls; continue remaining media/official-client parity work based on hardware feedback."
   ],
   "implementation_base_head": "5c39f8c8d46ce262f3b277eb3536e400d3b61313",
   "v023_implementation": {
@@ -316,5 +318,14 @@
     "ui": "Remove long encrypted-voice/test-then-disconnect paragraph and duplicated inactive-audio footer. Keep concise Voice calls are not supported in this version and accurate Check voice connection button; do not misrepresent unfinished DAVE/Opus.",
     "validation": "Synthetic production preflight fixtures cover omitted guild state, default and non-default endpoint ports, neither confirmation, state-only, invalid endpoint, cooldown/cancel, scoped rejection, cleanup and4017 handling. Strict AArch64 syntax plus HTTP/WS regressions checked before commit; NRO/hardware not built/tested.",
     "remaining": "DAVE/MLS crypto and Opus port remain absent; no actual call support. Selected-guild subscription/provider response and port allocation must be verified on hardware; next voice report identifies missing stage2 events."
+  },
+  "v046_implementation": {
+    "evidence": "User v0.45 hardware report reached Voice WSS then4017: hello/identified/ready mainGateway and both voice confirmations true. Actual DAVE/Opus missing; no more preflight-only fix.",
+    "engine": "Pinned official libdave b5463c4 + MLS++1cc50a1; OpenSSL3.5.9; Opus1.5.2; Monocypher4.0.2. Switch CSRNG used through OpenSSL RAND_METHOD, no deterministic/default RNG; upstream MLS payload logging disabled before session create. Ephemeral MLS keys; recognized identities only from authenticated voice opcode11; key commit/welcome transitions and sender ratchet switch on execute. No protocol0/plaintext fallback.",
+    "runtime": "Independent voice RFC6455 reader with binary+fragment handling and binary-safe lengths; large masked MLS sends. Voice Hello/seq_ack heartbeat/ACK and main Gateway heartbeat/ACK; validated UDP discovery and exactly one SelectProtocol; AES256GCM preferred, XChaCha20Poly1305 fallback. RTP/Opus+DAVE authenticated media; encrypted receive, replay checks, Opus decode, bounded 32-peer PCM mixing. Native48k stereo capture averaged mono then duplicated stereo encoder; native48k stereo output. Initial join muted/deafened; audio starts/unmutes only after group ratchet ready. Native services stop before freeing DMA buffers. Cancel/leave cleanup zeroes keys/audio and leaves Gateway best effort.",
+    "ui": "Join/Leave/Mute buttons; A joins/leaves, B disconnects, X mutes. Atomic connecting/discovery/MLS/live/muted state. Foreground voice screen owns call; navigation/exit stops it. No background call or live member list claim.",
+    "build": "NRO-only Build-NRO integration builds cached, SHA256-pinned dependencies; no vcpkg, Docker, Actions or browser build. Small documented libounce memalign/privilege adapters. License notices embedded in retained NRO section. Existing NSO/loader/auth untouched.",
+    "limits": "Hardware/provider two-way call pending. 32 remote peers, simple PCM queue/mixer; no adaptive jitter/PLC, echo cancellation, background calls, auto-resume or Stage speaker workflow. Empty group can wait for second member; abort after60sec without key.",
+    "validation": "Real two-client MLS proposals/commit/welcome and explicit execute, Opus+both transport ciphers roundtrip, tamper/replay and member removal tests under host ASan/UBSan; existing chat/font/session/Gateway/HTTP/WS/CAPTCHA regressions. Reproducible dependency setup and final NRO build checked. Hardware call unverified."
   }
 }

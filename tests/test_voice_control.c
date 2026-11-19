@@ -29,7 +29,7 @@ static int live_heartbeat(TlsSession *s){(void)s;return 1;}
 static int ws_text(TlsSession *s,const char *body){
     DnxJson root=dj_root(body),data=dj_field(root,"d");int op=dj_int(root,"op",-1);
     if(s->kind==1){if(op==14){subscriptions++;assert(dj_field(data,"channels").p);return 1;}assert(op==4&&subscriptions>0);DnxJson channel=dj_field(data,"channel_id");if(channel.p&&*channel.p=='n')leaves++;else joins++;assert(strstr(body,"\"self_mute\":true")&&strstr(body,"\"self_deaf\":true"));}
-    else {assert(op==0||op==3);if(op==0){voice_identifies++;assert(dj_int(data,"max_dave_protocol_version",-1)==0);}}
+    else {assert(op==0||op==3);if(op==0){voice_identifies++;assert(dj_int(data,"max_dave_protocol_version",-1)==1);}}
     return 1;
 }
 static int cancel(void){return cancelled;}
@@ -47,6 +47,11 @@ static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){
     }
     assert(strlen(event)<cap);strcpy((char*)out,event);return (int)strlen(event);
 }
+#define DNX2_VOICE_RUNTIME_EXTERNAL
+unsigned dnx_voice_max_version(void){return 1;}
+static int voice_media_session(TlsSession *v,TlsSession *g,const DnxVoiceCredentials *c,unsigned char *event,char notice[160],int *stage,unsigned *code,u64 interval,u64 beat){
+ (void)g;(void)c;(void)interval;(void)beat;int n;do{n=ws_receive(v,event,DNX2_WS_MAX+1,now+100);}while(n>0);if(n<0)*code=ws_reader.close_code;snprintf(notice,160,"DAVE test media stub");(void)stage;return 0;
+}
 #include "voice_connect.inc"
 int main(void){
     char host[256];assert(dnx_voice_host("voice-test.discord.media:443",host));assert(!dnx_voice_host("voice-test.discord.media.evil:443",host));assert(!dnx_voice_host("127.0.0.1:443",host));assert(dnx_voice_host("voice-test.discord.media:1234",host));unsigned port;assert(dnx_voice_endpoint("voice-test.discord.media:80",host,&port)&&port==443);assert(!dnx_voice_endpoint("voice-test.discord.media:0",host,&port));assert(!dnx_voice_endpoint("voice-test.discord.media:65536",host,&port));assert(!dnx_voice_endpoint("voice-test.discord.media:443@evil",host,&port));
@@ -58,15 +63,15 @@ int main(void){
     assert(!dnx_voice_event(&scope,"VOICE_STATE_UPDATE",dj_root("{\"guild_id\":\"100000000000000001\",\"channel_id\":null,\"user_id\":\"300000000000000001\",\"session_id\":\"x\"}"))&&scope.self_disconnected==1);
     assert(strstr(dnx_voice_confirmation_status(&scope),"disconnected"));scope=(DnxVoiceCredentials){.have_server=1};assert(strstr(dnx_voice_confirmation_status(&scope),"voice state"));
     char notice[160];int stage;unsigned close_code;active_cancel=cancel;
-    voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);
+    voice_control_session("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);
     assert(stage==4&&close_code==4017&&joins==1&&leaves==1&&voice_identifies==1&&!rng);assert(strstr(notice,"DAVE")&&!live_token[0]);
     main_frame=voice_frame=joins=leaves=voice_identifies=0;invalid_endpoint=1;
-    voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(stage==2&&joins==1&&leaves==1&&voice_identifies==0&&!rng);
+    voice_control_session("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(stage==2&&joins==1&&leaves==1&&voice_identifies==0&&!rng);
     main_frame=voice_frame=joins=leaves=voice_identifies=0;invalid_endpoint=0;live_session[0]=0;live_sequence=-1;u64 allowed=now+1000;live_identify_after=allowed;
-    voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(now>=allowed&&joins==1&&leaves==1);
-    main_frame=voice_frame=joins=leaves=0;live_session[0]=0;live_identify_after=now+1000;cancelled=1;voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(!joins&&!leaves&&!rng&&strstr(notice,"cancelled"));
+    voice_control_session("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(now>=allowed&&joins==1&&leaves==1);
+    main_frame=voice_frame=joins=leaves=0;live_session[0]=0;live_identify_after=now+1000;cancelled=1;voice_control_session("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(!joins&&!leaves&&!rng&&strstr(notice,"cancelled"));
     cancelled=0;invalid_endpoint=0;live_identify_after=0;
-    for(int which=2;which<=7;which++){if(which==5||which==6)continue;scenario=which;main_frame=voice_frame=joins=leaves=voice_identifies=0;voice_control_preflight("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(joins==1&&leaves==1&&!rng);
+    for(int which=2;which<=7;which++){if(which==5||which==6)continue;scenario=which;main_frame=voice_frame=joins=leaves=voice_identifies=0;voice_control_session("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);assert(joins==1&&leaves==1&&!rng);
         if(which==3)assert(stage==2&&!voice_identifies&&strstr(notice,"neither"));
         else if(which==4)assert(stage==2&&!voice_identifies&&strstr(notice,"did not provide"));
         else assert(stage==4&&voice_identifies==1);
@@ -77,5 +82,5 @@ int main(void){
     assert(!dnx_voice_event(&c,"VOICE_SERVER_UPDATE",dj_root("{\"guild_id\":\"100000000000000002\",\"endpoint\":\"voice-test.discord.media\",\"token\":\"x\"}"))&&!c.have_server);
     assert(!dnx_voice_event(&c,"VOICE_SERVER_UPDATE",dj_root("{\"guild_id\":\"100000000000000001\",\"endpoint\":null,\"token\":\"x\"}"))&&c.null_endpoint==1&&strstr(dnx_voice_confirmation_status(&c),"allocating"));
     c.null_endpoint=0;c.have_server=1;assert(strstr(dnx_voice_confirmation_status(&c),"account's voice state"));
-    puts("PASS production voice signaling: scoped and guild-less states, missing confirmations, guild subscription, approved TLS ports, muted join, honest no-DAVE identify, 4017 handling, guaranteed leave attempt and credential cleanup; no audio path");
+    puts("PASS production voice signaling: scoped and guild-less states, missing confirmations, guild subscription, approved TLS ports, muted join, linked DAVE version identify, 4017 handling, guaranteed leave attempt and credential cleanup; isolated media stub");
 }

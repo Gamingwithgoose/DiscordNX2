@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #ifndef DNX2_VOICE_CONTROL_H
 #define DNX2_VOICE_CONTROL_H
+#include "voice_engine.h"
 #include "client_data.h"
 typedef struct {char guild[24],channel[24],user[24],session[160],token[512],host[256];unsigned port,state_seen,self_seen,server_seen,server_scoped,invalid_endpoint,null_endpoint,self_disconnected;int have_state,have_server;} DnxVoiceCredentials;
 static inline int dnx_voice_atom(const char *s){if(!s||!*s)return 0;for(;*s;s++)if((unsigned char)*s<33||(unsigned char)*s>126||*s=='"'||*s=='\\')return 0;return 1;}
@@ -51,7 +52,7 @@ static inline const char *dnx_voice_confirmation_status(const DnxVoiceCredential
 }
 static inline int dnx_voice_identify_body(const DnxVoiceCredentials *c,char *out,size_t cap){
     if(!c->have_state||!c->have_server||!dnx_id(c->user)||!dnx_voice_atom(c->session)||!dnx_voice_atom(c->token))return 0;
-    /* This build has no DAVE/Opus engine: never advertise support it lacks. */
-    int n=snprintf(out,cap,"{\"op\":0,\"d\":{\"server_id\":\"%s\",\"user_id\":\"%s\",\"session_id\":\"%s\",\"token\":\"%s\",\"max_dave_protocol_version\":0}}",c->guild,c->user,c->session,c->token);return n>0&&(size_t)n<cap;
+    /* Advertise the engine linked into this NRO. */
+    int n=snprintf(out,cap,"{\"op\":0,\"d\":{\"server_id\":\"%s\",\"user_id\":\"%s\",\"session_id\":\"%s\",\"token\":\"%s\",\"max_dave_protocol_version\":%u}}",c->guild,c->user,c->session,c->token,dnx_voice_max_version());return n>0&&(size_t)n<cap;
 }
 #endif

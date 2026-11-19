@@ -7,6 +7,7 @@ fi
 if [ ! -x "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-gcc" ]; then
  echo "devkitA64 cross-compiler missing"; exit 1
 fi
+bash "$(dirname "$0")/tools/voice/build.sh"
 case "${1:-all}" in
  app) make app-only ;;
  all) make all ;;

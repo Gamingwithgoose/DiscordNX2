@@ -393,8 +393,9 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         if(profile_open)profile_draw();
     }else{
         text_line(392,150,"Voice channel",C_WHITE,3,60);
-        unsigned wait=dnx2VoiceWaitSeconds();char status[80];snprintf(status,sizeof(status),wait?"Waiting to reconnect (%u s)":"Connecting...",wait);item(392,220,650,90,dnx2JobKind()==16?status:"Check voice connection","",focus==2);
-        text_wrap(392,352,a->notice[0]?a->notice:"Voice calls are not supported in this version.",4,72);
+        unsigned wait=dnx2VoiceWaitSeconds();char status[80];snprintf(status,sizeof(status),wait?"Waiting to reconnect (%u s)":"Connecting...",wait);item(392,220,650,90,dnx2JobKind()==16?"Leave voice":"Join voice","",focus==2);
+        if(dnx2JobKind()==16){unsigned state=dnx2VoiceState();const char *call=state==4?"Connected":state==5?"Microphone muted":state==3?"Establishing encrypted voice":state==2?"Connecting audio transport":status;text_line(392,328,call,C_WHITE,3,72);if(state>=4)item(392,402,650,72,dnx2VoiceMuted()?"Unmute microphone":"Mute microphone","",0);}
+        if(dnx2JobKind()!=16)text_wrap(392,352,a->notice[0]?a->notice:"Join this voice channel to talk.",4,72);
     }
     server_tooltip();
 }
@@ -504,12 +505,13 @@ int dnx2GraphicalMenu(void){
     Result rc=hidInitialize();if(R_FAILED(rc))return -1;padConfigureInput(1,HidNpadStyleSet_NpadStandard);touch_init();
     Framebuffer fb={0};rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc)){hidExit();return -1;}rc=framebufferMakeLinear(&fb);if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
-    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;unsigned voice_wait=0;
+    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;unsigned voice_wait=0,voice_status=0;
     if(!dnx2Account()->signed_in)tab=0;
     if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=message_bottom();}
     while(1){
         const Dnx2Account *a=dnx2Account();
         unsigned wait=dnx2VoiceWaitSeconds();if(wait!=voice_wait){voice_wait=wait;dirty=1;}
+        unsigned state=dnx2VoiceState();if(state!=voice_status){voice_status=state;dirty=1;}
         int completed=dnx2JobApply();
         if(completed){
             if(completed==9||completed==23){const char *last=dnx2LastChannel();for(int i=0;i<a->channel_count;i++)if(last[0]&&!strcmp(last,a->channels[i].id)){channel_first=i>5?i-5:0;open_channel(i);break;}}
@@ -591,8 +593,9 @@ int dnx2GraphicalMenu(void){
             else if(hit.kind==DNX_LOGIN)account_action=0;
             else if(hit.kind==DNX_REMEMBER)account_action=1;
             else if(hit.kind==DNX_EXIT)break;
-            if(!selected_text()&&tab==3&&x>=392&&x<892&&y>=220&&y<310&&!dnx2JobBusy()){dnx2JobStart(16,NULL,NULL);dirty=1;}
+            if(!selected_text()&&tab==3&&x>=392&&x<1042){if(y>=220&&y<310){if(dnx2JobKind()==16)dnx2JobStop();else if(!dnx2JobBusy())dnx2JobStart(16,NULL,NULL);dirty=1;}else if(y>=402&&y<474&&dnx2VoiceState()>=4){dnx2VoiceToggleMute();dirty=1;}}
         }
+        if((down&HidNpadButton_X)&&dnx2JobKind()==16){dnx2VoiceToggleMute();dirty=1;}
         if((down&HidNpadButton_B)&&dnx2JobKind()==16){dnx2JobStop();dirty=1;}
         if(down&HidNpadButton_B){if(message_expanded){message_expanded=0;message_offset=0;}else if(focus>0)focus--;else{dnx2LiveStop();tab=0;}dirty=1;}
         if(down&HidNpadButton_AnyLeft){if(focus>0)focus--;dirty=1;}
@@ -610,7 +613,7 @@ int dnx2GraphicalMenu(void){
             else if(tab==0)account_action=sel;
             else if(focus==1)choose_channel=channel_cursor;
             else if(focus==3)keyboard=1;
-            else if(tab==3&&!dnx2JobBusy()){dnx2JobStart(16,NULL,NULL);dirty=1;}
+            else if(tab==3){if(dnx2JobKind()==16)dnx2JobStop();else if(!dnx2JobBusy())dnx2JobStart(16,NULL,NULL);dirty=1;}
             else if(selected_text()&&a->message_count){sel=message_first;message_expanded=!message_expanded;message_offset=0;dirty=1;}
         }
         if(account_action>=0){dnx2JobStop();dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}

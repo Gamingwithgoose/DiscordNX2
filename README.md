@@ -1,8 +1,8 @@
 # DiscordNX2
 
-> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Discord voice calling, live voice member lists and background Discord calls are not implemented. Full official-client parity is not available.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
+> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Encrypted voice calling is implemented for foreground testing, but has not yet been confirmed on Switch hardware. Live voice member lists and background calls remain unfinished. Full official-client parity is not available.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.45 source adds reply context, author profile cards, server nickname/role-color lookups, guild tags and resolved mentions, basic inline text styles, and existing direct/group-DM conversations. Image-preview requests now preserve source proportions instead of forcing portrait media into landscape dimensions. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.46 source adds foreground DAVE/Opus encrypted voice, alongside reply context, author profile cards, server nickname/role-color lookups, guild tags and resolved mentions, basic inline text styles, and existing direct/group-DM conversations. Image-preview requests now preserve source proportions instead of forcing portrait media into landscape dimensions. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
@@ -13,7 +13,7 @@ DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.45 sourc
 | Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. User confirmed account connection; individual future attempts may still be rejected or expire. |
 | Servers | Loads up to 200 real servers. Reads Discord folder/order settings and flattens folders in order; falls back to API order if unavailable. |
 | Channels / text | Text/announcement channels and existing DMs show the latest 30 messages. A foreground Gateway worker applies complete incoming messages and deletions directly, and refreshes history for partial edits or resync; five-second automatic polling is the fallback. Tap input to open the compact full-width phone-style QWERTY layout with separate symbol pages. |
-| Voice chat | Voice/stage channels expose an explicit connection test: briefly join muted/deafened, check the voice WebSocket and leave. No call audio or live members. DAVE/Opus integration remains blocked. |
+| Voice chat | Foreground Join / Leave / Mute with upstream DAVE MLS encryption, Opus audio, authenticated UDP and native microphone/playback. Local encrypted round-trip and NRO build tested; real console call pending. Stage speaking, live member lists and background calls remain unfinished. |
 | Emoji / stickers | Common Unicode emoji and current-server emoji/sticker picker. Emoji PNG and PNG/APNG sticker first-frame previews; explicit Send for drafts/stickers. Posted PNG/JPEG/GIF images and embed image/thumbnail previews are supported within limits below. GIF search and full rich media remain unfinished. |
 | Saved login | Optional eight-digit PIN encrypts credentials on SD. Enter PIN on future launches instead of scanning QR; expiry/revocation may require login again. New in v0.38. |
 | Special characters | Embedded OFL Noto Sans, Math, Symbols 2 and monochrome Emoji supplement console fonts, including styled mathematical letters. NFC accent normalization and grapheme-aware editing/wrapping keep combined characters together. Missing glyphs, complex shaping, right-to-left layout and joined/color emoji rendering remain incomplete. |
@@ -37,7 +37,7 @@ The current test uses the normal public jailbreak. It requires no custom payload
 1. Install devkitPro using its official instructions. The batch files expect its default location, `C:\devkitPro`.
 2. In GitHub Desktop, clone [Gamingwithgoose/DiscordNX2](https://github.com/Gamingwithgoose/DiscordNX2), or select the existing checkout and pull `main`.
 3. If the Switch 2 compiler is missing, run **Setup-Toolchain.bat**. It asks before running ounce-devkit's installer, which can add its package repository/signing key and install packages into devkitPro. This is PC toolchain setup, not a new console payload.
-4. Run **Build-NRO.bat**. It checks for the maintained `switch-mbedtls` crypto library and attempts to install it through devkitPro's package manager if missing. Internet is needed for that first dependency installation.
+4. Run **Build-NRO.bat**. It checks for the maintained `switch-mbedtls` crypto library and attempts to install it through devkitPro's package manager if missing. Internet is needed for that first dependency installation. Voice additionally needs MSYS2 `cmake`, `ninja`, `perl`, `make` and `curl`. The first build downloads hash-checked, pinned source archives and compiles the static voice libraries into `.local/voice/`; this takes several minutes. Subsequent builds reuse that cache. If a build reports a missing tool, install it with devkitPro MSYS2 `pacman -S --needed cmake ninja perl make curl`, then retry. It does not build a browser or replace global crypto libraries.
 5. Wait for **NRO built**. The output is **`dist/DiscordNX2.nro`**.
 
 All NRO compilation happens on your PC. No Docker or cloud NRO build is used. Ordinary MSYS2 alone does not supply the Switch 2 compiler. If devkitPro is installed elsewhere, adjust the batch file's paths to match your installation.
@@ -104,11 +104,17 @@ Previews accept downloads below 1 MiB and sources up to 2048x2048 (4 megapixels)
 
 Unicode text is preserved in storage and messages. Display normalizes decomposed accents to NFC; wrapping, fitting and deletion respect grapheme boundaries. Font fallbacks cover many Unicode characters, but this renderer does not implement Arabic/Indic shaping, bidirectional layout or joined/color emoji ligatures. A grapheme staying intact does not guarantee its font can render it correctly.
 
-### Voice connection test and remaining blocker
+### Test encrypted voice (v0.46)
 
-Select a voice channel and choose **Check voice connection**. This performs a brief muted/deafened Gateway and voice-WebSocket test, then attempts to leave automatically. It never opens the microphone or sends audio. The fixed-stage report is `/kaihen/discordnx2-voice.txt`; B cancels. A failed network connection can delay Discord observing the leave.
+1. Use a normal **voice** channel you can join and speak in. Have a second person join using official Discord; the first test needs a real MLS group with another participant.
+2. Select **Join voice**. The app connects muted/deafened, discovers Discord UDP, negotiates DAVE keys, then starts native microphone/playback and removes the initial mute/deafen. It never sends plaintext media. Allow up to a minute for group setup.
+3. Once **Connected** appears, test speech in both directions. Tap **Mute microphone** or press **X** to mute/unmute. Headphones help avoid speaker feedback; echo cancellation is not implemented.
+4. Tap **Leave voice**, press **A** on the call button, or press **B** to disconnect. Leaving this screen, changing channels/servers, logging out, closing the app or exiting also stops the foreground call. The resident NSO is unchanged and does not continue this call while playing a game.
+5. If joining fails or audio is silent, share `/kaihen/discordnx2-voice.txt`. It records stage, close code and packet/key-transition counts, without account/channel IDs or credentials. Stage5 means UDP discovery; stage6 means protocol/MLS setup; stage7 means local audio started. Stage7 alone does not prove the other person heard audio.
 
-Working calls require an Opus codec and Discord's DAVE encryption engine. Discord documents E2EE-only voice since March 1, 2026 ([voice protocol](https://docs.discord.com/developers/topics/voice-connections)); [libdave](https://github.com/discord/libdave) brings MLS and crypto dependencies that are not yet ported into this NRO. The connection test honestly advertises no DAVE support and reports rejection code 4017 where applicable. Existing microphone/PCM tests do not supply this missing Discord voice transport.
+The engine uses pinned [Discord libdave](https://github.com/discord/libdave), MLS++, OpenSSL 3 and Opus, with Monocypher for XChaCha20-Poly1305. Both advertised transport modes are authenticated; there is no legacy/unencrypted fallback. Group membership comes from authenticated Discord voice signaling. Keys, audio buffers and voice credentials are cleared on disconnect. There is no new browser, relay, DNS setting, NSO or jailbreak loader requirement.
+
+This is an initial foreground implementation: up to32 remote participants, bounded PCM queues and simple mixing; adaptive jitter recovery, echo cancellation, call resumption, Stage speaker approval, live member lists and background calls remain unfinished. Network/provider acceptance and audio timing must still be tested on hardware. A 4017 response means Discord did not accept the advertised DAVE negotiation; send the updated report rather than assuming success.
 
 ### Emoji, server emoji and stickers
 
@@ -120,7 +126,7 @@ Image downloads are restricted to fixed Discord CDN paths, use TLS without the a
 
 **GIF search, animated-media playback, general attachment previews and full Discord rich-text rendering are not implemented in this build.** There is no fake GIF-search control. These features require additional provider/media work.
 
-Voice/stage selection displays the actual selected channel and disconnected state. **It does not join a voice call.** Categories are headings. Forums/media channels are listed but thread browsing, DMs, general attachment/embedded media, edits/deletes from this UI and live voice members remain unfinished. Discord permissions and rate limits apply.
+Voice selection opens the foreground call controls described above. Stage speaker approval and live voice members remain unfinished. Categories are headings; forum thread browsing and message editing from this UI remain unfinished. Discord permissions and rate limits apply.
 
 ## Touch and controller controls
 
@@ -255,3 +261,8 @@ This revision subscribes to the selected guild before the muted/deafened join re
 The report now distinguishes state/server events seen and matched, null allocation endpoints, rejected endpoints, disconnected self state and whether the leave request was sent. No identifying payloads or credentials are logged. If the check still stops, share the updated `/kaihen/discordnx2-voice.txt`.
 
 The screen now states the limitation briefly: voice calls are not supported in this version. The button still checks signaling and leaves. DAVE/Opus call audio remains unimplemented. The [voice connection protocol](https://docs.discord.com/developers/topics/voice-connections#retrieving-voice-server-information) requires both confirmation events, and the [voice-state object](https://docs.discord.com/developers/resources/voice#voice-state-object) marks guild ID optional. Runtime acceptance in this unofficial client remains unverified for these changes.
+
+
+### v0.46 validation
+
+DAVE MLS group creation/commit/welcome, explicit transition gating, stereo Opus encode/decode, both AEAD transport modes, authenticated encrypted audio round-trips, tamper/replay rejection and member removal have host tests in `tests/run-voice-tests.sh` (host OpenSSL3 development files required). The NRO links with the Switch compiler. These checks establish implementation/build correctness, not a successful live Discord call. Voice dependency notices are in `licenses/voice/` and embedded in the NRO.

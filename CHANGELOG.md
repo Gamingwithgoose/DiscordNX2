@@ -368,3 +368,13 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Begin a full confirmation wait after join; avoid duplicate Ready/Resume join requests. Distinguish absent/state-only/server-only/pending allocation/invalid endpoint/self-disconnected outcomes and log fixed event/leave counters without private data.
 - Replace verbose voice warning/footer with a concise, accurate unavailable-calls message. DAVE/Opus audio is still unfinished; this is not a working call implementation.
 - Extend synthetic voice fixtures for scope, missing events and port handling; preserve cancellation and automatic leave. No NRO, NSO, dependency or loader build.
+
+
+## v0.46 — 2026-11-18
+
+- Implement foreground Discord encrypted voice with upstream libdave/MLS++, Opus, OpenSSL and Monocypher; advertise the linked DAVE version instead of zero. No plaintext/legacy media fallback.
+- Add binary MLS WebSocket signaling, group transitions, authenticated UDP discovery/AEAD RTP transport, native microphone capture, encrypted send/receive, Opus decode and bounded multi-user playback.
+- Replace connection-test-only UI with Join, Leave and Mute, controller A/B/X controls and live connection stages. Calls stop on navigation/exit; background voice, Stage approval and live member lists remain unfinished.
+- Keep voice keys ephemeral, suppress upstream sensitive logs, use Switch CSRNG, validate recognized membership, reject tampered/replayed frames, wipe keys/audio on cleanup and retain best-effort leave.
+- Cache hash-pinned voice dependency builds under .local/voice; embed license notices. Public jailbreak, DNS, resident NSO, login and existing audio probes unchanged.
+- Verify actual two-client encrypted audio roundtrips under both ciphers, MLS transitions and Opus, plus existing regressions and an NRO link/build. This does NOT establish hardware call success; two-way Switch/official-client testing is required.

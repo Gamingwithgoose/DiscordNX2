@@ -8,7 +8,9 @@
 #include "client_data.h"
 #include "chat_assets.h"
 #include "chat_media_data.h"
+#include "voice_engine.h"
 #include "voice_control.h"
+#include <openssl/rand.h>
 #include "channel_memory.h"
 #include <sys/stat.h>
 #include "session_store.h"
@@ -228,38 +230,39 @@ static int ws_connect_to_port(TlsSession *s,const char *host,unsigned port,const
 static int ws_connect_to(TlsSession *s,const char *host,const char *path){return ws_connect_to_port(s,host,443,path);}
 static int ws_connect(TlsSession *s){return ws_connect_to(s,REMOTE_HOST,"/?v=2");}
 static int ws_send(TlsSession *s,unsigned opcode,const char *data,size_t len){
-    if(len>4096)return 0;
-    unsigned char header[8],mask[4];
+    if(len>262144 || (opcode>=8&&len>125))return 0;
+    unsigned char header[14],mask[4],tmp[512];
     if(!random_bytes(mask,sizeof(mask)))return 0;
     size_t hn=0;header[hn++]=0x80|(unsigned char)opcode;
     if(len<126)header[hn++]=(unsigned char)(0x80|len);
-    else {header[hn++]=0xfe;header[hn++]=(unsigned char)(len>>8);header[hn++]=(unsigned char)len;}
+    else if(len<=65535){header[hn++]=0xfe;header[hn++]=(unsigned char)(len>>8);header[hn++]=(unsigned char)len;}
+    else {header[hn++]=0xff;for(int i=7;i>=0;i--)header[hn++]=(unsigned char)((uint64_t)len>>(8*i));}
     memcpy(header+hn,mask,4);hn+=4;
     if(!tls_send(s,header,hn))return 0;
-    unsigned char tmp[4096];
-    for(size_t i=0;i<len;i++)tmp[i]=(unsigned char)data[i]^mask[i%4];
-    int ok=tls_send(s,tmp,len);wipe(tmp,sizeof(tmp));return ok;
+    for(size_t off=0;off<len;){size_t n=len-off;if(n>sizeof(tmp))n=sizeof(tmp);for(size_t i=0;i<n;i++)tmp[i]=(unsigned char)data[off+i]^mask[(off+i)%4];if(!tls_send(s,tmp,n)){wipe(tmp,sizeof(tmp));return 0;}off+=n;}
+    wipe(tmp,sizeof(tmp));return 1;
 }
 static int ws_text(TlsSession *s,const char *msg){
     return ws_send(s,1,msg,strlen(msg));
 }
-static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){
+static int ws_receive_reader(TlsSession *s,Dnx2WsReader *reader,unsigned char *out,size_t cap,u64 deadline){
     while(dnx2MonotonicMs()<deadline){
         if(active_cancel&&active_cancel())return -2;
-        size_t before=ws_reader.used;
-        int result=dnx2WsNext(&ws_reader,out,cap);
+        size_t before=(*reader).used;
+        int result=dnx2WsNext(&(*reader),out,cap);
         if(result<0)return result;
-        if(result==1)return (int)strlen((char*)out);
-        if(result==2){if(!ws_send(s,10,(char*)out,ws_reader.control_size))return -1;}
-        if(ws_reader.used<before)continue;
-        if(ws_reader.used==sizeof(ws_reader.wire))return -1;
-        int n=tls_get(s,ws_reader.wire+ws_reader.used,sizeof(ws_reader.wire)-ws_reader.used);
-        if(n>0)ws_reader.used+=(size_t)n;
+        if(result==1||result==4)return (int)reader->completed_size;
+        if(result==2){if(!ws_send(s,10,(char*)out,(*reader).control_size))return -1;}
+        if((*reader).used<before)continue;
+        if((*reader).used==sizeof((*reader).wire))return -1;
+        int n=tls_get(s,(*reader).wire+(*reader).used,sizeof((*reader).wire)-(*reader).used);
+        if(n>0)(*reader).used+=(size_t)n;
         else if(n==0)return -2;
         else svcSleepThread(8000000LL);
     }
     return 0; /* keep partial frame for next poll */
 }
+static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){return ws_receive_reader(s,&ws_reader,out,cap,deadline);}
 static int json_string(const char *body,const char *key,char *out,size_t cap){return dj_get(dj_root(body),key,out,cap);}
 static int uint_field(const char *body,const char *key,unsigned *out){
     char name[80];snprintf(name,sizeof(name),"\"%s\"",key);
