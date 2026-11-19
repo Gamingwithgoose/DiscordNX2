@@ -3,12 +3,12 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.48-empty-voice-local-mic-icons",
+  "version": "0.49-voice-avatars-pin-choice-optional-resident",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
     "GitHub Desktop pull, double-click Build-NRO.bat, transfer only dist/DiscordNX2.nro via FTP",
-    "DO NOT replace /kaihen/plugins/discordnx2.nso or restart kaiHEN during NRO testing",
+    "Normal NRO updates preserve installed NSO. v0.49 has an explicitly optional resident voice NSO for background-game testing, installed under the same plugin name at the next normal public startup; never auto-deploy or hot reload.",
     "No custom GitHub Actions workflows, Docker or cloud NRO builds. User explicitly authorized GitHub Pages managed static deployment.",
     "Append changelog, do not erase history",
     "Provide actionable hardware tests, not documentation-only pushes",
@@ -350,5 +350,12 @@
     "diagnostics": "Add fixed outgoing key-package and incoming external-sender/proposal/commit/welcome/execute counts without provider payloads, IDs or keys. Existing capture/sample/level/packet/mute counters preserved.",
     "validation": "Host empty-channel policy tests one-hour no-peer lifetime, local audio readiness, mute and actual peer timeout; native audio/mute and independent lifetime regressions; real DAVE/Opus tests assert no speech packet without ratchet and both-cipher encrypted roundtrip once shared keys exist. NRO compile/link verified. Two-way hardware audio remains unconfirmed; report alone cannot establish earlier v046 behavior.",
     "preserved": "Normal public loader, installed NSO, login, chat navigation, cached pinned libraries; no dependency rebuild."
+  },
+  "v049_implementation": {
+    "user_feedback": "User says v0.48 seems to work perfectly fine. No explicit confirmation of two-way audio during a game; do not infer it. Wants larger names, real avatars with thin speaking ring, 4/8 PIN, background voice while gaming.",
+    "changes": "Larger names, avatar metadata/CDN/default fallback, speaking outline; selectable4/8 PIN v2 AES-GCM authenticated length, legacyv1 eight-digit reader. Separate optional resident NSO with own DAVE/Opus/native device owner and bounded scalar IPC, in-memory staged token timeout/wipe, snapshots, mute/disconnect, NRO exit detach and reopening adoption. Foreground/probe builds preserved.",
+    "workflow": "Ordinary Build-NRO.bat / NRO FTP for UI/PIN. Optional Build-Resident-Voice.bat outputs dist/resident-voice/discordnx2.nso; back up/replace same installed plugin file, next NORMAL public jailbreak startup; updated NRO Y: Background transfers/reconnects call once. No duplicate plugin, special loader, PC relay or DNS change.",
+    "verification": "Local application + optional and legacy NSO compile/link; host PIN4/8 + actual prior implementation fixture, avatar/CDN, native audio/members, production local/resident lifecycle handoff/exit/adopt/stop, malformed chunk/snapshot bounds/staging expiry tests. Hardware background audio/game resource sharing unverified.",
+    "next_hardware": "Test member names/pictures/green ring; old saved PIN then new4-digit relaunch. Optional NSO: join, Y Background, exit NRO, launch game, real receive/send, reopen and mute/unmute/disconnect. Capture stage-only voice report on failure. Background plugin heap64MiB; starts no call at boot."
   }
 }

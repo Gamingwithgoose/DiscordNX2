@@ -962,7 +962,7 @@ static void wifi_browser_report(const char *stage,Result result) {
 static void run_gui_action(int action) {
     if(action==8) {
         diag_len=0;
-        diagf("DiscordNX2 v0.48 Wi-Fi browser launch test - no account data or network changes\n");
+        diagf("DiscordNX2 v0.49 Wi-Fi browser launch test - no account data or network changes\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalWifiBrowserStatus("Opening the system Wi-Fi browser...",0);
         dnx2GraphicalAuthEnd();
@@ -979,7 +979,7 @@ static void run_gui_action(int action) {
     }
     else if(action==7) {
         diag_len=0;
-        diagf("DiscordNX2 v0.48 executable memory check - no network or account data\n");
+        diagf("DiscordNX2 v0.49 executable memory check - no network or account data\n");
         dnx2GraphicalAuthBegin();
         dnx2GraphicalBrowserCheckStatus("Checking executable memory...",0);
         int passed=dnx2BrowserMemoryCheck(browser_memory_report);
@@ -993,7 +993,7 @@ static void run_gui_action(int action) {
     else if(action==4)run_stress_only();
     else if(action==6) {
         diag_len=0;
-        diagf("DiscordNX2 v0.48 QR login stage-only diagnostics - no credentials or account data\n");
+        diagf("DiscordNX2 v0.49 QR login stage-only diagnostics - no credentials or account data\n");
         dnx2GraphicalAuthBegin();
         int ok=dnx2NativeQrLogin(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         dnx2GraphicalAuthEnd();
@@ -1001,7 +1001,7 @@ static void run_gui_action(int action) {
         (void)write_diagnostics();
     }
     else if(action>=9&&action<=11){
-        diag_len=0;diagf("DiscordNX2 v0.48 channel/text operation=%d - no message content or credentials\n",action);
+        diag_len=0;diagf("DiscordNX2 v0.49 channel/text operation=%d - no message content or credentials\n",action);
         int ok=0;dnx2GraphicalAuthBegin();
         if(action==9)ok=dnx2LoadChannels(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
         else if(action==10)ok=dnx2LoadMessages(dnx2AuthProgressAndReport,dnx2GraphicalAuthCancel);
@@ -1016,11 +1016,11 @@ static void run_gui_action(int action) {
         (void)write_diagnostics();
     }
     else if(action==12||action==13){
-        diag_len=0;diagf("DiscordNX2 v0.48 saved-login operation - no PIN or credentials\n");
+        diag_len=0;diagf("DiscordNX2 v0.49 saved-login operation - no PIN or credentials\n");
         char pin[9]={0},confirm[9]={0};
-        if(dnx2GraphicalPin(action==12?"Choose a login PIN":"Unlock saved login",pin)){
+        if(dnx2GraphicalPinForLength(action==12?"Choose a login PIN":"Unlock saved login",pin,action==12?0:dnx2SessionPinDigits())){
             if(action==12){
-                int matched=dnx2GraphicalPin("Confirm your login PIN",confirm)&&!memcmp(pin,confirm,8);
+                int matched=dnx2GraphicalPinForLength("Confirm your login PIN",confirm,(int)strlen(pin))&&!strcmp(pin,confirm);
                 dnx2GraphicalAuthBegin();
                 int saved=matched&&dnx2RememberSession(pin);
                 dnx2AuthProgressAndReport(saved?"Login saved. Enter your PIN on the next launch.":matched?"Could not save login to the SD card.":"PINs did not match. Login was not saved.",NULL);
@@ -1137,7 +1137,7 @@ int main(void) {
     (void)dnx2FontInit();
     if(dnx2SessionExists())run_gui_action(13);
     run_ui();
-    dnx2AccountClearMemory();
+    dnx2VoiceAppExit();dnx2AccountClearMemory();
     dnx2FontExit();
     return 0;
 }

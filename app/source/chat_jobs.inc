@@ -129,7 +129,7 @@ static void job_worker(void *unused){
 done:
     if(chat_job.op!=20){
         FILE *report=fopen("sdmc:/kaihen/discordnx2-hardware.txt","w");
-        if(report){fprintf(report,"DiscordNX2 v0.48 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
+        if(report){fprintf(report,"DiscordNX2 v0.49 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
     }
     if(!chat_job.ok&&!chat_job.notice[0])snprintf(chat_job.notice,sizeof(chat_job.notice),"Network request could not finish.");
     wipe(http_body,sizeof(http_body));if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
@@ -183,6 +183,20 @@ int dnx2RequestImages(int type,int first,int count){
     }
     if(!used||!job_begin(20)){free(requests);return 0;}
     memcpy(chat_job.images,requests,(size_t)used*sizeof(*requests));free(requests);chat_job.image_count=used;return job_launch();
+}
+int dnx2RequestVoiceImages(void){
+ if(chat_job.running||!account.signed_in)return 0;
+ Dnx2VoiceMember members[33];int count=dnx2VoiceMembers(members,33);ChatImage *requests=calloc(8,sizeof(*requests));if(!requests)return 0;int used=0;
+ for(int i=0;i<count&&used<8;i++){
+  const Dnx2VoiceMember *m=&members[i];if(!dnx_id(m->id))continue;
+  char fallback[16];snprintf(fallback,sizeof(fallback),"%u",m->default_avatar);
+  int type=dnx_asset_hash(m->guild_avatar)&&dnx_id(m->guild)?7:dnx_asset_hash(m->avatar)?4:8;
+  const char *hash=type==7?m->guild_avatar:type==4?m->avatar:fallback;if(image_slot(type,m->id,hash)>=0)continue;
+  ChatImage *image=&requests[used++];image->type=type;snprintf(image->id,24,"%s",m->id);snprintf(image->hash,80,"%s",hash);
+  if(type==7)snprintf(image->path,sizeof(image->path),"/guilds/%s/users/%s/avatars/%s.png?size=64",m->guild,m->id,hash);
+  else if(type==8)snprintf(image->path,sizeof(image->path),"/embed/avatars/%u.png",m->default_avatar);
+ }
+ if(!used||!job_begin(20)){free(requests);return 0;}memcpy(chat_job.images,requests,(size_t)used*sizeof(*requests));free(requests);chat_job.image_count=used;return job_launch();
 }
 const unsigned char *dnx2DMImage(int index){if(!account.private_mode||index<0||index>=account.channel_count)return NULL;const Dnx2Channel *c=&account.channels[index];if(c->type==3&&dnx_asset_hash(c->icon)){int slot=image_slot(12,c->id,c->icon);return slot>=0&&image_cache[slot].valid>0?image_cache[slot].rgba:NULL;}return dnx2AuthorAvatar(c->recipient,c->avatar,"",c->default_avatar);}
 int dnx2RequestDMImages(int first,int count){

@@ -8,6 +8,7 @@ int dnx2GraphicalMenu(void);
 const char *dnx2GraphicalDraft(void);
 void dnx2GraphicalClearDraft(void);
 int dnx2GraphicalPin(const char *title,char pin[9]);
+int dnx2GraphicalPinForLength(const char *title,char pin[9],int length);
 void dnx2GraphicalAuthBegin(void);
 void dnx2GraphicalAuthStatus(const char *stage,const char *qr_url);
 int dnx2GraphicalAuthCancel(void);

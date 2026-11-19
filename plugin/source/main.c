@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: MIT
-// A resident kaiHEN service with read-only capability probes and runtime counters.
-// This service does NOT capture audio, manipulate game processes, or log raw input.
+// Legacy capability probes; VOICE=1 optionally owns an explicitly requested call.
+// Never manipulates game processes or logs raw input.
 #include <string.h>
 #include <switch.h>
 #include <kaihen/plugin.h>
 
 u32 __nx_applet_type = AppletType_None;
+#ifdef DNX2_RESIDENT_VOICE
+size_t __nx_heap_size = 64*1024*1024;
+#include "resident_service.inc"
+#else
 size_t __nx_heap_size = 0x200000;
+#endif
 void __appInit(void) {}
 void __appExit(void) {}
 
@@ -49,6 +54,9 @@ static Result handler(u32 command_id, const void *input, size_t input_size,
     if (!ctx || !output || !output_size)
         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
     ctx->status.command_count++;
+#ifdef DNX2_RESIDENT_VOICE
+    int resident_rc=resident_command(command_id,input,input_size,output,output_size);if(resident_rc)return resident_rc>0?0:MAKERESULT(Module_Libnx,LibnxError_BadInput);
+#endif
     // 0: legacy handshake remains available to older NRO test builds.
     if (command_id == 0 && input && input_size >= sizeof(u32)) {
         u32 challenge = 0;
@@ -93,6 +101,9 @@ int main(void) {
     Handle ready = INVALID_HANDLE, control = INVALID_HANDLE;
     Result rc = pluginRuntimeInitializeWithService(&ready, &control);
     if (R_FAILED(rc)) return rc;
+    #ifdef DNX2_RESIDENT_VOICE
+    int fs_ready=R_SUCCEEDED(fsInitialize());if(fs_ready)fsdevMountSdmc();
+    #endif
     Dnx2Context context = {};
     context.status.magic = DNX2_MAGIC;
     context.status.abi = DNX2_ABI;
@@ -102,7 +113,13 @@ int main(void) {
     if (R_SUCCEEDED(rc)) rc = svcSignalEvent(ready);
     if (R_SUCCEEDED(rc)) {
         // No background system probing until the NRO explicitly requests it.
-        for (;;) svcSleepThread(10000000000LL);
+        for (;;) {
+#ifdef DNX2_RESIDENT_VOICE
+            resident_tick();svcSleepThread(10000000LL);
+#else
+            svcSleepThread(10000000000LL);
+#endif
+        }
     }
     if (service.started) pluginServiceStop(&service);
     pluginRuntimeExit();

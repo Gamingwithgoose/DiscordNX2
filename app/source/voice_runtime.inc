@@ -12,7 +12,13 @@ static unsigned voice_state,voice_muted,voice_mic_level; /* UI reads atomically;
 unsigned dnx2VoiceMicLevel(void){return __atomic_load_n(&voice_mic_level,__ATOMIC_ACQUIRE);}
 unsigned dnx2VoiceState(void){return __atomic_load_n(&voice_state,__ATOMIC_ACQUIRE);}
 int dnx2VoiceMuted(void){return (int)__atomic_load_n(&voice_muted,__ATOMIC_ACQUIRE);}
-void dnx2VoiceToggleMute(void){__atomic_xor_fetch(&voice_muted,1,__ATOMIC_ACQ_REL);}
+void dnx2VoiceToggleMute(void){unsigned muted=__atomic_xor_fetch(&voice_muted,1,__ATOMIC_ACQ_REL);
+#ifndef DNX2_RESIDENT_RUNTIME
+ if(dnx2VoiceBackground())(void)dnx2ResidentClientMute((int)muted);
+#else
+ (void)muted;
+#endif
+}
 static void voice_set(unsigned state){__atomic_store_n(&voice_state,state,__ATOMIC_RELEASE);}
 static int voice_rand(unsigned char *out,int n){return n>=0&&R_SUCCEEDED(csrngGetRandomBytes(out,(size_t)n));}
 static int voice_rand_status(void){return 1;}
@@ -34,7 +40,7 @@ static int voice_discovered(const unsigned char *p,size_t n,uint32_t ssrc,char a
 }
 static void voice_report(int stage,unsigned code,const DnxVoiceStats *stats,const VoiceAudio *audio){
  FILE *f=fopen("sdmc:/kaihen/discordnx2-voice.txt","w");if(!f)return;
- fprintf(f,"DiscordNX2 v0.48 voice pipeline - no credentials, IDs, names or audio\nstage=%d close=%u transport=%d secure=%d tx=%u rx=%u dropped=%u mls=%u\n",stage,code,stats->transport_ready,stats->secure_ready,stats->tx,stats->rx,stats->dropped,stats->mls_updates);
+ fprintf(f,"DiscordNX2 v0.49 voice pipeline - no credentials, IDs, names or audio\nstage=%d close=%u transport=%d secure=%d tx=%u rx=%u dropped=%u mls=%u\n",stage,code,stats->transport_ready,stats->secure_ready,stats->tx,stats->rx,stats->dropped,stats->mls_updates);
  fprintf(f,"udp_received=%u unknown_ssrc=%u no_key=%u transport_rejected=%u e2ee_rejected=%u opus_rejected=%u encode_errors=%u peers=%u mapped=%u\n",stats->udp_received,stats->unknown_ssrc,stats->no_key,stats->transport_rejected,stats->e2ee_rejected,stats->opus_rejected,stats->encode_errors,stats->peer_count,stats->ssrc_count);
  fprintf(f,"key_packages=%u external_senders=%u proposals=%u commits=%u welcomes=%u executes=%u\n",stats->key_packages,stats->external_senders,stats->proposals,stats->commits,stats->welcomes,stats->executes);
  if(audio)fprintf(f,"capture_buffers=%u capture_samples=%u mic_peak=%u encoded=%u udp_sent=%u send_blocked=%u playback_buffers=%u output_peak=%u muted=%d capturing=%d mute_changes=%u audio_error=%08x audio_stage=%u\n",audio->captures,audio->samples,audio->input_peak,audio->encoded,audio->sent,audio->send_blocked,audio->playbacks,audio->output_peak,dnx2VoiceMuted(),audio->capturing,audio->mute_changes,audio->error,audio->error_stage);

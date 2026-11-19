@@ -9,6 +9,7 @@
 #include "chat_assets.h"
 #include "chat_media_data.h"
 #include "voice_engine.h"
+#include "resident_voice.h"
 #include "voice_control.h"
 #include <openssl/rand.h>
 #include "channel_memory.h"
@@ -398,6 +399,7 @@ static int parse_identity(const char *json){
     if(!json_string(json,"username",username,sizeof(username)))return 0;
     (void)json_string(json,"global_name",display,sizeof(display));
     dj_get(dj_root(json),"id",account.user_id,sizeof(account.user_id));
+    dj_get(dj_root(json),"avatar",account.avatar,sizeof(account.avatar));char disc[8]={0};dj_get(dj_root(json),"discriminator",disc,sizeof(disc));account.default_avatar=dnx_default_avatar(account.user_id,disc);
     snprintf(account.username,sizeof(account.username),"%s",username);
     snprintf(account.display_name,sizeof(account.display_name),"%s",display[0]?display:username);
     return 1;
@@ -488,6 +490,9 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
 #include "live_gateway.inc"
 #include "voice_connect.inc"
 #include "voice_controller.inc"
+#ifdef DNX2_RESIDENT_RUNTIME
+#include "resident_engine.inc"
+#endif
 #include "chat_jobs.inc"
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
@@ -685,6 +690,11 @@ fail:
 unsigned dnx2VoiceWaitSeconds(void){return 0;}
 unsigned dnx2VoiceState(void){return 0;}
 unsigned dnx2VoiceMicLevel(void){return 0;}
+int dnx2VoiceBackgroundAvailable(void){return 0;}
+int dnx2VoiceBackground(void){return 0;}
+unsigned dnx2VoiceBackgroundWaitSeconds(void){return 0;}
+int dnx2VoiceBackgroundStart(void){return 0;}
+void dnx2VoiceAppExit(void){}
 int dnx2VoiceMuted(void){return 0;}
 void dnx2VoiceToggleMute(void){}
 int dnx2VoiceStart(void){return 0;}
@@ -706,6 +716,7 @@ int dnx2JobBusy(void){return 0;}int dnx2JobKind(void){return 0;}
 int dnx2JobStart(int op,const char *a,const char *b){(void)op;(void)a;(void)b;return 0;}
 int dnx2JobApply(void){return 0;}void dnx2JobStop(void){}void dnx2ChatReset(void){}
 const char *dnx2JobDraft(void){return "";}const char *dnx2JobSticker(void){return "";}
+int dnx2RequestVoiceImages(void){return 0;}
 int dnx2RequestDMImages(int first,int count){(void)first;(void)count;return 0;}
 const unsigned char *dnx2DMImage(int index){(void)index;return NULL;}
 int dnx2RequestImages(int t,int f,int n){(void)t;(void)f;(void)n;return 0;}

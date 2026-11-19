@@ -65,6 +65,8 @@ static int voice_media_session(TlsSession *v,TlsSession *g,const DnxVoiceCredent
  (void)reader;
  (void)g;(void)c;(void)interval;(void)beat;int n;do{n=ws_receive(v,event,DNX2_WS_MAX+1,now+100);}while(n>0);if(n<0)*code=ws_reader.close_code;snprintf(notice,160,"DAVE test media stub");(void)stage;return 0;
 }
+int dnx2VoiceBackground(void){return 0;}
+unsigned dnx2VoiceBackgroundWaitSeconds(void){return 0;}
 #include "voice_connect.inc"
 int main(void){
     char host[256];assert(dnx_voice_host("voice-test.discord.media:443",host));assert(!dnx_voice_host("voice-test.discord.media.evil:443",host));assert(!dnx_voice_host("127.0.0.1:443",host));assert(dnx_voice_host("voice-test.discord.media:1234",host));unsigned port;assert(dnx_voice_endpoint("voice-test.discord.media:80",host,&port)&&port==443);assert(!dnx_voice_endpoint("voice-test.discord.media:0",host,&port));assert(!dnx_voice_endpoint("voice-test.discord.media:65536",host,&port));assert(!dnx_voice_endpoint("voice-test.discord.media:443@evil",host,&port));

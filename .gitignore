@@ -8,3 +8,5 @@ plugin/*.nso
 
 __pycache__/
 *.pyc
+
+plugin/build-voice/

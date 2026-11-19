@@ -19,6 +19,7 @@ void dnx2JobStop(void);
 int dnx2JobApply(void);
 const char *dnx2JobDraft(void);
 const char *dnx2JobSticker(void);
+int dnx2RequestVoiceImages(void);
 int dnx2RequestDMImages(int first,int count);
 const unsigned char *dnx2DMImage(int index);
 int dnx2RequestImages(int type,int first,int count);

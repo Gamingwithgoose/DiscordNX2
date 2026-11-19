@@ -28,3 +28,6 @@ cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined "$tmp/network.c" 
 python3 tests/test_voice_navigation.py > "$tmp/navigation.c"
 cc -std=c11 -Wall -Wextra -Werror -Iapp/source -fsanitize=address,undefined "$tmp/navigation.c" -o "$tmp/navigation"
 "$tmp/navigation"
+
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iapp/source tests/test_resident_service.c -o "$tmp/resident"
+"$tmp/resident"

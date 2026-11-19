@@ -10,3 +10,5 @@ cc -std=c11 -Wall -Wextra -Werror -DDNX2_USE_MBEDTLS=1 -DDNX2_SESSION_PATH="\"$t
  tests/test_session_store.c app/source/session_store.c -lmbedcrypto -o "$tmp/session"
 "$tmp/session" save
 "$tmp/session" restore
+
+"$tmp/session" legacy

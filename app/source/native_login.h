@@ -18,7 +18,7 @@ typedef struct {
     Dnx2Channel channels[DNX2_MAX_CHANNELS];
     Dnx2Message messages[DNX2_MAX_MESSAGES];
     int signed_in,server_count,selected;
-    char username[129],display_name[321],user_id[24];
+    char username[129],display_name[321],user_id[24],avatar[80];unsigned default_avatar;
     Dnx2Server servers[DNX2_MAX_SERVERS];
 } Dnx2Account;
 typedef void (*Dnx2AuthStatus)(const char *stage,const char *qr_url);
@@ -44,10 +44,15 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
 /* Returns 1 when account and actual server data fetched; 0 otherwise.
  * No account token, RSA key, ticket, nonce, or QR fingerprint ever logged. */
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
-typedef struct {char id[24],name[321];int muted,deaf,speaking,self,named;} Dnx2VoiceMember;
+typedef struct {char id[24],name[321],avatar[80],guild_avatar[80],guild[24];unsigned default_avatar;int muted,deaf,speaking,self,named;} Dnx2VoiceMember;
 int dnx2VoiceMembers(Dnx2VoiceMember *out,int cap);
 unsigned dnx2VoiceMembersRevision(void);
 int dnx2VoiceStart(void);
+int dnx2VoiceBackgroundAvailable(void);
+int dnx2VoiceBackgroundStart(void);
+int dnx2VoiceBackground(void);
+unsigned dnx2VoiceBackgroundWaitSeconds(void);
+void dnx2VoiceAppExit(void);
 void dnx2VoiceStop(void);
 void dnx2VoiceReset(void);
 int dnx2VoiceRunning(void);

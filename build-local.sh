@@ -11,5 +11,6 @@ bash "$(dirname "$0")/tools/voice/build.sh"
 case "${1:-all}" in
  app) make app-only ;;
  all) make all ;;
- *) echo "Usage: build-local.sh [app|all]"; exit 1 ;;
+ resident) make -C plugin VOICE=1; mkdir -p dist/resident-voice; cp plugin/discordnx2-voice.nso dist/resident-voice/discordnx2.nso ;;
+ *) echo "Usage: build-local.sh [app|all|resident]"; exit 1 ;;
 esac

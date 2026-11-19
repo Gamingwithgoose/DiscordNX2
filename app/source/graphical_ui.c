@@ -321,10 +321,15 @@ static void voice_controls(int current){
  item(392,124,650,64,running?"Disconnect":"Join voice","",focus>=2&&voice_action==0);
  if(running){
   const char *status=state==4||state==5?(muted?"Microphone muted":"Connected"):state==3?"Establishing encrypted voice":state==2?"Connecting audio":"Connecting...";
+  unsigned wait=dnx2VoiceWaitSeconds();char waiting[80];if(wait){snprintf(waiting,sizeof(waiting),"Reconnecting in %u seconds",wait);status=waiting;}
   text_line(392,204,status,state>=4?C_GREEN:C_MUTED,2,72);
   item(392,244,650,64,muted?"Unmute microphone":"Mute microphone","",focus>=2&&voice_action==1);
+  if(dnx2VoiceBackground())text_line(1064,265,"Background",C_GREEN,2,16);else if(dnx2VoiceBackgroundAvailable()){rounded(1054,244,190,64,10,C_CARD);text_line(1068,265,"Y: Background",C_WHITE,2,18);}
   Dnx2VoiceMember members[33];int count=dnx2VoiceMembers(members,33);int limit=count>6?count-6:0;if(voice_member_first>limit)voice_member_first=limit;
-  for(int row=0;row<6&&row+voice_member_first<count;row++){const Dnx2VoiceMember *m=&members[row+voice_member_first];int y=346+row*48;unsigned color=(m->self?!muted&&dnx2VoiceMicLevel()>600:m->speaking)?C_GREEN:C_CARD;rounded(394,y,32,32,16,color);text_line(406,y+5,m->self?"@":"o",C_WHITE,2,1);text_right=1110;text_line(440,y+7,m->name,C_WHITE,2,70);text_right=1256;if(m->self?muted:m->muted)text_line(1130,y+7,"Muted",C_MUTED,2,8);}
+  for(int row=0;row<6&&row+voice_member_first<count;row++){const Dnx2VoiceMember *m=&members[row+voice_member_first];int y=340+row*52;int speaking=m->self?!muted&&dnx2VoiceMicLevel()>600:m->speaking&&!m->muted;const unsigned char *picture=dnx2AuthorAvatar(m->id,m->avatar,m->guild_avatar,m->default_avatar);
+   if(speaking)rounded(390,y,44,44,22,C_GREEN);
+   rounded(393,y+3,38,38,19,C_CARD);if(picture)image_draw(393,y+3,38,38,picture,19);
+   text_right=1110;text_line(450,y+11,m->name,C_WHITE,3,60);text_right=1256;if(m->self?muted:m->muted)text_line(1130,y+13,"Muted",C_MUTED,2,8);}
  }else text_wrap(392,230,dnx2VoiceNotice()[0]?dnx2VoiceNotice():"Join this voice channel to talk.",4,72);
 }
 static void voice_toolbar(void){
@@ -534,6 +539,7 @@ int dnx2GraphicalMenu(void){
     Framebuffer fb={0};rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc)){hidExit();return -1;}rc=framebufferMakeLinear(&fb);if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
     PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;unsigned voice_wait=0,voice_status=0,voice_revision=0,mic_indicator=0;
+    (void)dnx2VoiceBackgroundAvailable();
     if(!dnx2Account()->signed_in)tab=0;
     if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=message_bottom();}
     while(1){
@@ -541,7 +547,7 @@ int dnx2GraphicalMenu(void){
         unsigned wait=dnx2VoiceWaitSeconds();if(wait!=voice_wait){voice_wait=wait;dirty=1;}
         unsigned state=dnx2VoiceState();if(state!=voice_status){voice_status=state;dirty=1;}
         unsigned mic=dnx2VoiceMicLevel()>600;if(mic!=mic_indicator){mic_indicator=mic;dirty=1;}
-        if(dnx2VoiceApply()){voice_panel=0;dirty=1;}unsigned rev=dnx2VoiceMembersRevision();if(rev!=voice_revision){voice_revision=rev;dirty=1;}
+        if(dnx2VoiceApply()){if(!dnx2VoiceRunning())voice_panel=0;dirty=1;}unsigned rev=dnx2VoiceMembersRevision();if(rev!=voice_revision){voice_revision=rev;dirty=1;}
         int completed=dnx2JobApply();
         if(completed){
             if(completed==9||completed==23){const char *last=dnx2LastChannel();for(int i=0;i<a->channel_count;i++)if(last[0]&&!strcmp(last,a->channels[i].id)){channel_first=i>5?i-5:0;open_channel(i,0);break;}}
@@ -551,7 +557,8 @@ int dnx2GraphicalMenu(void){
         }
         if(!dnx2JobBusy()&&a->signed_in&&(a->server_count||a->private_mode)){
             if(tab==2&&selected_text())dnx2LiveStart();
-            int requested=dnx2RequestImages(1,server_page*8,8);
+            int requested=dnx2VoiceRunning()?dnx2RequestVoiceImages():0;
+            if(!requested)requested=dnx2RequestImages(1,server_page*8,8);
             if(!requested&&a->private_mode)requested=dnx2RequestDMImages(channel_first,12);
             if(!requested&&media_open&&media_tab)requested=dnx2RequestImages(media_tab==1?2:3,media_page*24,24);
             if(!requested&&tab==2&&selected_text())requested=dnx2RequestMessageImages(message_expanded?sel:message_first,message_expanded?1:4);
@@ -625,9 +632,11 @@ int dnx2GraphicalMenu(void){
             else if(hit.kind==DNX_LOGIN)account_action=0;
             else if(hit.kind==DNX_REMEMBER)account_action=1;
             else if(hit.kind==DNX_EXIT)break;
+            if((voice_panel||(!selected_text()&&tab==3))&&dnx2VoiceRunning()&&(voice_panel||dnx2VoiceSelected())&&x>=1054&&x<1244&&y>=244&&y<308&&dnx2VoiceBackgroundAvailable()&&!dnx2VoiceBackground()){dnx2VoiceBackgroundStart();dirty=1;}
             if((voice_panel||(!selected_text()&&tab==3))&&x>=392&&x<1042){if(y>=124&&y<188){if(voice_panel||dnx2VoiceSelected())dnx2VoiceStop();else dnx2VoiceStart();dirty=1;}else if(y>=244&&y<308&&(voice_panel||dnx2VoiceSelected())&&dnx2VoiceRunning()){dnx2VoiceToggleMute();dirty=1;}}
 
         }
+        if((down&HidNpadButton_Y)&&(voice_panel||tab==3)&&dnx2VoiceRunning()&&(voice_panel||dnx2VoiceSelected())&&dnx2VoiceBackgroundAvailable()&&!dnx2VoiceBackground()){dnx2VoiceBackgroundStart();down&=~HidNpadButton_Y;dirty=1;}
         if((down&HidNpadButton_X)&&dnx2VoiceRunning()&&(voice_panel||!selected_text())){dnx2VoiceToggleMute();dirty=1;}
         if((down&HidNpadButton_B)&&voice_panel){voice_panel=0;dirty=1;down&=~HidNpadButton_B;}
         if(down&HidNpadButton_B){if(message_expanded){message_expanded=0;message_offset=0;}else if(focus>0)focus--;else{dnx2LiveStop();tab=0;}dirty=1;}
@@ -665,7 +674,7 @@ int dnx2GraphicalMenu(void){
         if(send&&!voice_panel&&selected_text()&&(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11){media_open=0;dnx2JobStart(11,draft,pending_sticker);dirty=1;}
         svcSleepThread(16000000LL);
     }
-    if(action<=0)dnx2VoiceStop();
+    if(action<=0)dnx2VoiceAppExit();
     dnx2JobStop();dnx2LiveStop();framebufferClose(&fb);hidExit();return action;
 }
 
@@ -768,18 +777,21 @@ int dnx2GraphicalWifiBrowserStatus(const char *message,int question) {
 }
 
 /* Controller PIN input uses native rendering, not the unavailable web applet. */
-int dnx2GraphicalPin(const char *title,char pin[9]) {
-    memset(pin,'0',8);pin[8]=0;int digit=0,armed=0,ok=0;
+int dnx2GraphicalPinForLength(const char *title,char pin[9],int length) {
+    int choose=length==0;if(choose)length=dnx2SessionPinDigits();if(length!=8)length=4;
+    memset(pin,0,9);memset(pin,'0',(size_t)length);int digit=0,armed=0,ok=0;
     dnx2GraphicalAuthBegin();
     if(!auth_hid_ready||!auth_fb_ready)goto done;
     for(;;){
         u32 pitch=0;pixels=(uint32_t*)framebufferBegin(&auth_fb,&pitch);if(!pixels)break;
         stride_pixels=(int)(pitch/4);text_right=1216;rect(0,0,W,H,C_BG);
         text_line(64,60,title,C_WHITE,4,72);
-        text_line(64,144,"Your 8-digit PIN protects the saved login on this SD card.",C_MUTED,2,90);
+        char hint[128];snprintf(hint,sizeof(hint),"Your %d-digit PIN protects the saved login on this SD card.",length);text_line(64,144,hint,C_MUTED,2,90);
         text_line(64,190,"Choose a PIN you can remember; a forgotten PIN requires QR login.",C_MUTED,2,90);
-        for(int i=0;i<8;i++){
-            int x=120+i*130;rounded(x,290,102,100,16,i==digit?C_PRIMARY:C_CARD);
+        if(choose){rounded(64,218,160,48,10,length==4?C_PRIMARY:C_CARD);text_line(84,234,"4 digits",C_WHITE,2,20);rounded(240,218,160,48,10,length==8?C_PRIMARY:C_CARD);text_line(260,234,"8 digits",C_WHITE,2,20);text_line(432,234,"Y: Switch length",C_MUTED,2,40);}
+        int first=(1280-(length*130-28))/2;
+        for(int i=0;i<length;i++){
+            int x=first+i*130;rounded(x,290,102,100,16,i==digit?C_PRIMARY:C_CARD);
             char shown[2]={i==digit?pin[i]:'*',0};text_line(x+40,326,shown,C_WHITE,4,1);
         }
         const char *buttons[]={"Up","Down","Next / Finish","Cancel"};
@@ -790,18 +802,22 @@ int dnx2GraphicalPin(const char *title,char pin[9]) {
         u64 down=padGetButtonsDown(&auth_pad);
         int tx=0,ty=0,scroll=0;int tap=touch_event(&tx,&ty,&scroll);
         if(tap==1){
-            if(ty>=290&&ty<390&&tx>=120&&tx<1160){digit=(tx-120)/130;if(digit>7)digit=7;}
+            if(choose&&ty>=218&&ty<266&&tx>=64&&tx<400){int wanted=tx<240?4:8;if(wanted!=length)down|=HidNpadButton_Y;}
+            if(ty>=290&&ty<390&&tx>=first&&tx<first+length*130){digit=(tx-first)/130;if(digit>=length)digit=length-1;}
             if(ty>=430&&ty<478&&tx>=64){int button=(tx-64)/290;down|=button==0?HidNpadButton_Up:button==1?HidNpadButton_Down:button==2?HidNpadButton_A:HidNpadButton_B;}
         }
         if(!armed){if(!padGetButtons(&auth_pad))armed=1;svcSleepThread(16000000LL);continue;}
         if(down&(HidNpadButton_B|HidNpadButton_Plus))break;
+        if(choose&&(down&HidNpadButton_Y)){length=length==4?8:4;memset(pin,0,9);memset(pin,'0',(size_t)length);digit=0;}
         if(down&HidNpadButton_AnyUp)pin[digit]=(char)('0'+(pin[digit]-'0'+1)%10);
         if(down&HidNpadButton_AnyDown)pin[digit]=(char)('0'+(pin[digit]-'0'+9)%10);
-        if(down&HidNpadButton_AnyLeft)digit=(digit+7)%8;
-        if(down&HidNpadButton_AnyRight)digit=(digit+1)%8;
-        if(down&HidNpadButton_A){if(digit==7){ok=1;break;}digit++;}
+        if(down&HidNpadButton_AnyLeft)digit=(digit+length-1)%length;
+        if(down&HidNpadButton_AnyRight)digit=(digit+1)%length;
+        if(down&HidNpadButton_A){if(digit==length-1){ok=1;break;}digit++;}
         svcSleepThread(16000000LL);
     }
 done:
     dnx2GraphicalAuthEnd();if(!ok)memset(pin,0,9);return ok;
 }
+
+int dnx2GraphicalPin(const char *title,char pin[9]){return dnx2GraphicalPinForLength(title,pin,0);}

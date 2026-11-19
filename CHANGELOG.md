@@ -397,3 +397,11 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Add a recent local microphone activity indicator and fixed MLS exchange counters to distinguish empty-channel state from stalled multi-party negotiation.
 - Replace footer m/M and channel Voice prefixes with native mic/slashed-mic icons; replace Forum/media prefixes with a native folder icon.
 - Test solo policy, one-hour no-peer lifetime, native capture/mute, independent call cleanup and real DAVE speech gating/two-cipher roundtrips. NRO builds; existing voice dependencies, public loader and resident NSO unchanged.
+
+
+## v0.49 - Voice member avatars, PIN choice, optional resident calls (2026-11-18)
+
+- Larger voice names, account/server/default avatars, thin green activity outline. Scoped avatar metadata and unauthenticated CDN jobs work independently of the browsed server.
+- Four-digit default for new login saves or selectable eight digits; confirmation matches the selected length. Existing eight-digit v1 saves remain readable. New v2 storage authenticates the PIN length alongside the existing PBKDF2/AES-GCM data.
+- Optional public-loader resident voice NSO reuses DAVE/Opus/native audio, with bounded RAM-only IPC transfer, snapshot polling, mute/disconnect, NRO exit detach and reopen/adopt. Foreground voice and the ordinary probe NSO remain supported. Build-Resident-Voice.bat outputs a separate optional plugin. No auto-install or custom jailbreak.
+- Host checks cover actual legacy encrypted saves, both new PIN lengths, malformed/tampered storage, voice avatars, IPC bounds/staging expiry, handoff/exit/reopen/disconnect and existing voice/chat/font behavior. NRO and both NSO variants compile/link locally. Game-time audio and resource sharing require hardware testing; no claim of background hardware success.

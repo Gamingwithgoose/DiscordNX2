@@ -18,7 +18,11 @@ static int voice_gateway_identify(TlsSession *socket){
 }
 #endif
 static u64 voice_cleanup_deadline,voice_wait_until;
-unsigned dnx2VoiceWaitSeconds(void){u64 end=__atomic_load_n(&voice_wait_until,__ATOMIC_ACQUIRE),now=dnx2MonotonicMs();return end>now?(unsigned)((end-now+999)/1000):0;}
+unsigned dnx2VoiceWaitSeconds(void){
+#ifndef DNX2_RESIDENT_RUNTIME
+ if(dnx2VoiceBackground())return dnx2VoiceBackgroundWaitSeconds();
+#endif
+ u64 end=__atomic_load_n(&voice_wait_until,__ATOMIC_ACQUIRE),now=dnx2MonotonicMs();return end>now?(unsigned)((end-now+999)/1000):0;}
 static int voice_cleanup_cancel(void){return dnx2MonotonicMs()>=voice_cleanup_deadline;}
 static int voice_control_session(const char *token,const char *guild,const char *channel,const char *user,char notice[160],int *stage,unsigned *close_code){
     DnxVoiceCredentials credentials={0};TlsSession gateway={0},voice={0};gateway.socket_fd=gateway.returned_fd=voice.socket_fd=voice.returned_fd=-1;
