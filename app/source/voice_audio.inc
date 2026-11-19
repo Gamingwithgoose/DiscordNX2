@@ -8,7 +8,7 @@ typedef struct {
  AudioInBuffer in[VOICE_INPUT_SLOTS];AudioOutBuffer out[VOICE_OUTPUT_SLOTS];
  void *input[VOICE_INPUT_SLOTS],*output[VOICE_OUTPUT_SLOTS];unsigned char out_owned[VOICE_OUTPUT_SLOTS];
  unsigned out_next,mono_used;int16_t mono[960];int input_open,output_open,started,capturing;
- u64 output_at;unsigned captures,samples,input_peak,encoded,sent,send_blocked,playbacks,output_peak,mute_changes;Result error;unsigned error_stage;
+ u64 output_at,last_capture_at;unsigned recent_peak;unsigned captures,samples,input_peak,encoded,sent,send_blocked,playbacks,output_peak,mute_changes;Result error;unsigned error_stage;
 } VoiceAudio;
 static int voice_audio_result(VoiceAudio *a,Result rc,unsigned stage){if(R_FAILED(rc)){a->error=rc;a->error_stage=stage;return 0;}return 1;}
 static void voice_audio_close(VoiceAudio *a){
@@ -44,7 +44,7 @@ static int voice_audio_mute(VoiceAudio *a,int muted){
  if(a->capturing==!muted)return 1;
  if(!voice_audio_result(a,muted?audinStopAudioIn():audinStartAudioIn(),8))return 0;
  a->capturing=!muted;a->mute_changes++;wipe(a->mono,sizeof(a->mono));a->mono_used=0;
- if(muted){for(int i=0;i<VOICE_INPUT_SLOTS;i++)wipe(a->input[i],VOICE_INPUT_BYTES);a->input_peak=0;}
+ if(muted){for(int i=0;i<VOICE_INPUT_SLOTS;i++)wipe(a->input[i],VOICE_INPUT_BYTES);a->input_peak=a->recent_peak=0;}
  return 1;
 }
 static int voice_audio_tick(VoiceAudio *a,DnxVoiceEngine *e,int udp,int muted){
@@ -57,10 +57,10 @@ static int voice_audio_tick(VoiceAudio *a,DnxVoiceEngine *e,int udp,int muted){
   if(!count)break;
   int slot=-1;for(int i=0;i<VOICE_INPUT_SLOTS;i++)if(released==&a->in[i]){slot=i;break;}
   if(slot<0||count!=1||released->data_size>VOICE_INPUT_BYTES||(released->data_size&3)){a->error_stage=10;return 0;}
-  size_t frames=(size_t)released->data_size/4;a->captures++;a->samples+=(unsigned)frames;
+  size_t frames=(size_t)released->data_size/4;unsigned recent_peak=0;a->captures++;a->samples+=(unsigned)frames;
   const int16_t *pcm=a->input[slot];
   if(!muted)for(size_t j=0;j<frames;j++){
-   int sample=((int)pcm[j*2]+pcm[j*2+1])/2;unsigned peak=(unsigned)(sample<0?-sample:sample);if(peak>a->input_peak)a->input_peak=peak;
+   int sample=((int)pcm[j*2]+pcm[j*2+1])/2;unsigned peak=(unsigned)(sample<0?-sample:sample);if(peak>a->input_peak)a->input_peak=peak;if(peak>recent_peak)recent_peak=peak;
    a->mono[a->mono_used++]=(int16_t)sample;
    if(a->mono_used==960){unsigned char packet[2048];int n=0;
     /* Recheck the atomic UI request at every frame, including a capture backlog. */
@@ -69,6 +69,7 @@ static int voice_audio_tick(VoiceAudio *a,DnxVoiceEngine *e,int udp,int muted){
     wipe(packet,sizeof(packet));wipe(a->mono,sizeof(a->mono));a->mono_used=0;
    }
   }
+  a->recent_peak=muted?0:recent_peak;a->last_capture_at=dnx2MonotonicMs();
   wipe(a->input[slot],VOICE_INPUT_BYTES);memset(&a->in[slot],0,sizeof(a->in[slot]));a->in[slot].buffer=a->input[slot];a->in[slot].buffer_size=a->in[slot].data_size=VOICE_INPUT_BYTES;
   if(!voice_audio_result(a,audinAppendAudioInBuffer(&a->in[slot]),12))return 0;
  }
@@ -80,6 +81,7 @@ static int voice_audio_tick(VoiceAudio *a,DnxVoiceEngine *e,int udp,int muted){
   if(slot<0||count!=1||!a->out_owned[slot]){a->error_stage=14;return 0;}a->out_owned[slot]=0;
  }
  u64 now=dnx2MonotonicMs();
+ if(now-a->last_capture_at>160)a->recent_peak=0;
  if(now>=a->output_at){
   unsigned i=a->out_next%VOICE_OUTPUT_SLOTS;
   if(!a->out_owned[i]){

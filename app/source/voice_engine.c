@@ -37,7 +37,7 @@ static int recognize(DnxVoiceEngine *e,const char *id){
 static int emit(DnxVoiceEngine *e,int binary,const unsigned char *data,size_t n){if(n>262144||!e->signal||!e->signal(e->user,binary,data,n)){e->stats.failed=1;return 0;}return 1;}
 static int send_binary(DnxVoiceEngine *e,unsigned op,const unsigned char *p,size_t n){if(n>262143)return 0;unsigned char *message=malloc(n+1);if(!message)return 0;message[0]=(unsigned char)op;memcpy(message+1,p,n);int ok=emit(e,1,message,n+1);crypto_wipe(message,n+1);free(message);return ok;}
 static int transition_json(DnxVoiceEngine *e,int op,unsigned transition){char json[96];int n=snprintf(json,sizeof(json),"{\"op\":%d,\"d\":{\"transition_id\":%u}}",op,transition);return emit(e,0,(unsigned char*)json,(size_t)n);}
-static int package(DnxVoiceEngine *e){uint8_t *bytes=NULL;size_t n=0;daveSessionGetMarshalledKeyPackage(e->session,&bytes,&n);int ok=bytes&&n&&send_binary(e,26,bytes,n);if(bytes){crypto_wipe(bytes,n);daveFree(bytes);}return ok;}
+static int package(DnxVoiceEngine *e){uint8_t *bytes=NULL;size_t n=0;daveSessionGetMarshalledKeyPackage(e->session,&bytes,&n);int ok=bytes&&n&&send_binary(e,26,bytes,n);if(bytes){crypto_wipe(bytes,n);daveFree(bytes);}if(ok)e->stats.key_packages++;return ok;}
 static void receiver_keys(DnxVoiceEngine *e){e->epoch++;for(int i=0;i<PEERS;i++)if(e->peers[i].id[0])receiver_key(e,&e->peers[i]);}
 static int execute(DnxVoiceEngine *e,unsigned transition){if(!e->pending||e->transition!=transition)return 0;DAVEKeyRatchetHandle ratchet=daveSessionGetKeyRatchet(e->session,e->self);e->pending=0;if(!ratchet){e->active=0;return 1;}daveEncryptorSetKeyRatchet(e->encryptor,ratchet);daveKeyRatchetDestroy(ratchet);daveEncryptorSetPassthroughMode(e->encryptor,false);e->active=1;e->stats.mls_updates++;return 1;}
 unsigned dnx_voice_max_version(void){return daveMaxSupportedProtocolVersion();}
@@ -51,12 +51,12 @@ int dnx_voice_signal_json(DnxVoiceEngine *e,const char *json){DnxJson root=dj_ro
  if(op==4){if(e->stats.transport_ready)return -1;char mode[80];dj_get(d,"mode",mode,sizeof(mode));e->mode=!strcmp(mode,"aead_aes256_gcm_rtpsize")?1:!strcmp(mode,"aead_xchacha20_poly1305_rtpsize")?2:0;if(!e->mode)return -1;DnxJson byte;const char *p=NULL;int n=0;while(dj_next(dj_field(d,"secret_key"),&p,&byte)){if(n>=32)return -1;char *end;long b=strtol(byte.p,&end,10);if(end!=byte.end||b<0||b>255)return -1;e->key[n++]=(unsigned char)b;}if(n!=32)return -1;e->version=(unsigned)dj_int(d,"dave_protocol_version",0);if(!e->version||e->version>dnx_voice_max_version())return -1;e->stats.transport_ready=1;e->initialized=1;daveSessionInit(e->session,(uint16_t)e->version,strtoull(e->channel,NULL,10),e->self);return package(e)?1:-1;}
  if(op==24){int version=dj_int(d,"protocol_version",0);if(version<1||(unsigned)version>dnx_voice_max_version())return -1;e->active=0;e->version=(unsigned)version;if(dj_int(d,"epoch",0)==1){daveSessionInit(e->session,(uint16_t)version,strtoull(e->channel,NULL,10),e->self);e->initialized=1;return package(e)?1:-1;}daveSessionSetProtocolVersion(e->session,(uint16_t)version);return 1;}
  if(op==21){int version=dj_int(d,"protocol_version",0),t=dj_int(d,"transition_id",-1);if(!version||(unsigned)version>dnx_voice_max_version()||t<0||t>65535)return -1;e->pending=1;e->transition=(uint16_t)t;if(!t)return execute(e,0);return transition_json(e,23,(unsigned)t)?1:-1;}
- if(op==22){int t=dj_int(d,"transition_id",-1);return t>=0&&t<=65535&&execute(e,(unsigned)t)?1:-1;}return 0;
+ if(op==22){e->stats.executes++;int t=dj_int(d,"transition_id",-1);return t>=0&&t<=65535&&execute(e,(unsigned)t)?1:-1;}return 0;
 }
 int dnx_voice_signal_binary(DnxVoiceEngine *e,const unsigned char *data,size_t n){if(n<3||n>262144)return -1;unsigned op=data[2];const unsigned char *p=data+3;n-=3;
- if(op==25){daveSessionSetExternalSender(e->session,p,n);return 1;}
- if(op==27){uint8_t *out=NULL;size_t size=0;daveSessionProcessProposals(e->session,p,n,&out,&size);int ok=1;if(size)ok=send_binary(e,28,out,size);if(out){crypto_wipe(out,size);daveFree(out);}return ok?1:-1;}
- if(op==29||op==30){if(n<3||!e->initialized)return -1;unsigned t=(unsigned)p[0]<<8|p[1];int ok=0,ignored=0;
+ if(op==25){e->stats.external_senders++;daveSessionSetExternalSender(e->session,p,n);return e->stats.failed?-1:1;}
+ if(op==27){e->stats.proposals++;uint8_t *out=NULL;size_t size=0;daveSessionProcessProposals(e->session,p,n,&out,&size);int ok=1;if(size)ok=send_binary(e,28,out,size);if(out){crypto_wipe(out,size);daveFree(out);}return ok?1:-1;}
+ if(op==29||op==30){if(op==29)e->stats.commits++;else e->stats.welcomes++;if(n<3||!e->initialized)return -1;unsigned t=(unsigned)p[0]<<8|p[1];int ok=0,ignored=0;
   if(op==29){DAVECommitResultHandle result=daveSessionProcessCommit(e->session,p+2,n-2);if(result){ok=!daveCommitResultIsFailed(result);ignored=daveCommitResultIsIgnored(result);daveCommitResultDestroy(result);}}
   else {DAVEWelcomeResultHandle result=daveSessionProcessWelcome(e->session,p+2,n-2);ok=result!=NULL;if(result)daveWelcomeResultDestroy(result);}
   if(ignored)return 1;

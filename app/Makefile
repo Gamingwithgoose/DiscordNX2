@@ -53,7 +53,7 @@ $(BUILD)/qrcodegen.o: source/vendor/qrcodegen.c source/vendor/qrcodegen.h | $(BU
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/auth_crypto.o: source/auth_crypto.c source/auth_crypto.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
-$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h source/native_ws.h source/captcha.h source/client_json.h source/client_data.h source/session_store.h source/live_gateway.inc source/chat_jobs.inc source/voice_connect.inc source/voice_controller.inc source/voice_runtime.inc source/voice_members.inc source/voice_audio.inc source/voice_engine.h source/voice_control.h source/chat_media_data.h source/chat_assets.h source/message_presentation.h source/profile_data.h source/channel_memory.h source/gateway_session.h | $(BUILD)
+$(BUILD)/native_login.o: source/native_login.c source/native_login.h source/auth_crypto.h source/native_ws.h source/captcha.h source/client_json.h source/client_data.h source/session_store.h source/live_gateway.inc source/chat_jobs.inc source/voice_connect.inc source/voice_controller.inc source/voice_runtime.inc source/voice_policy.h source/voice_members.inc source/voice_audio.inc source/voice_engine.h source/voice_control.h source/chat_media_data.h source/chat_assets.h source/message_presentation.h source/profile_data.h source/channel_memory.h source/gateway_session.h | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 $(BUILD)/utf8proc.o: source/vendor/utf8proc/utf8proc.c source/vendor/utf8proc/utf8proc.h source/vendor/utf8proc/utf8proc_data.c | $(BUILD)
 	$(PREFIX)gcc $(CFLAGS) -DUTF8PROC_STATIC -c $< -o $@
@@ -86,7 +86,7 @@ $(BUILD)/captcha_phone_crypto.o: source/captcha_phone_crypto.c source/captcha_ph
 $(BUILD)/$(TARGET).elf: $(BUILD)/voice_licenses.o $(BUILD)/voice_platform.o $(BUILD)/voice_engine.o $(BUILD)/monocypher.o $(BUILD)/utf8proc.o $(BUILD)/chat_assets.o $(BUILD)/unicode_fonts.o $(BUILD)/session_store.o $(BUILD)/wifi_browser_probe.o $(BUILD)/browser_memory.o $(BUILD)/captcha.o $(BUILD)/captcha_phone.o $(BUILD)/captcha_phone_wire.o $(BUILD)/captcha_phone_crypto.o $(BUILD)/main.o $(BUILD)/voice_packet.o $(BUILD)/discord_gateway_probe.o $(BUILD)/graphical_ui.o $(BUILD)/discord_remote_probe.o $(BUILD)/qrcodegen.o $(BUILD)/auth_crypto.o $(BUILD)/native_login.o $(BUILD)/native_font.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 $(BUILD)/$(TARGET).nacp: Makefile | $(BUILD)
-	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.47" $@
+	$(DEVKITPRO)/tools/bin/nacptool --create "DiscordNX2" "Gamingwithgoose" "0.48" $@
 $(TARGET).nro: $(BUILD)/$(TARGET).elf $(BUILD)/$(TARGET).nacp assets/icon.jpg
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --icon=assets/icon.jpg --nacp=$(BUILD)/$(TARGET).nacp
 clean:

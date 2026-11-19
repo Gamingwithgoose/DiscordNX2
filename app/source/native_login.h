@@ -56,6 +56,8 @@ int dnx2VoiceSelected(void);
 const char *dnx2VoiceNotice(void);
 const char *dnx2VoiceChannelName(void);
 /* Voice states: 0 idle,1 signaling,2 discovery,3 MLS,4 live,5 muted. */
+/* Joined/local audio readiness is distinct from a shared MLS media key. */
+unsigned dnx2VoiceMicLevel(void);
 unsigned dnx2VoiceState(void);
 int dnx2VoiceMuted(void);
 void dnx2VoiceToggleMute(void);

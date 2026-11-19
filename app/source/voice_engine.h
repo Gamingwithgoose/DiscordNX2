@@ -5,7 +5,7 @@
 #include <stddef.h>
 typedef struct DnxVoiceEngine DnxVoiceEngine;
 typedef int (*DnxVoiceSignal)(void *user,int binary,const unsigned char *data,size_t size);
-typedef struct {unsigned tx,rx,dropped,mls_updates,udp_received,unknown_ssrc,no_key,transport_rejected,e2ee_rejected,opus_rejected,encode_errors,peer_count,ssrc_count;int secure_ready,transport_ready,failed;} DnxVoiceStats;
+typedef struct {unsigned tx,rx,dropped,mls_updates,udp_received,unknown_ssrc,no_key,transport_rejected,e2ee_rejected,opus_rejected,encode_errors,peer_count,ssrc_count,key_packages,external_senders,proposals,commits,welcomes,executes;int secure_ready,transport_ready,failed;} DnxVoiceStats;
 unsigned dnx_voice_max_version(void);
 DnxVoiceEngine *dnx_voice_create(const char *self,const char *channel,DnxVoiceSignal signal,void *user);
 void dnx_voice_destroy(DnxVoiceEngine *engine);

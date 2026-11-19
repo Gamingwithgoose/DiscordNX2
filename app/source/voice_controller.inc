@@ -24,7 +24,7 @@ int dnx2VoiceApply(void){
 }
 void dnx2VoiceStop(void){
  if(voice_call.running){__atomic_store_n(&voice_stop_request,1,__ATOMIC_RELEASE);threadWaitForExit(&voice_call.thread);threadClose(&voice_call.thread);voice_call.running=0;}
- wipe(voice_call.token,sizeof(voice_call.token));snprintf(voice_notice,sizeof(voice_notice),"Voice disconnected.");voice_set(0);
+ wipe(voice_call.token,sizeof(voice_call.token));snprintf(voice_notice,sizeof(voice_notice),"Voice disconnected.");__atomic_store_n(&voice_mic_level,0,__ATOMIC_RELEASE);voice_set(0);
 }
 void dnx2VoiceReset(void){dnx2VoiceStop();wipe(voice_gateway_session,sizeof(voice_gateway_session));wipe(voice_gateway_resume_host,sizeof(voice_gateway_resume_host));voice_gateway_sequence=-1;voice_gateway_identify_after=0;}
 int dnx2VoiceStart(void){

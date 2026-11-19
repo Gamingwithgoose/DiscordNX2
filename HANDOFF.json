@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.47-voice-audio-navigation-mute-members",
+  "version": "0.48-empty-voice-local-mic-icons",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -80,6 +80,9 @@
     ],
     "v046_voice": [
       "User can join voice and sees Connected plus Mute microphone. Neither direction is audible. Mute appears ineffective and member list absent. No current v046 voice report supplied; desktop copy is older v045/4017 and cannot diagnose this silence."
+    ],
+    "v047_voice_report": [
+      "User report: stage6 close0 transport1 secure0 mls0 peers0 mapped0,59 UDP packets counted but no RTP accepted, no capture/playback/encode/send. User confirmed alone in channel. This is a real transport/membership connection, not a working shared-media session; absence of native capture was caused by our group-key startup gate, not established microphone detection failure."
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
@@ -134,7 +137,7 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": "Pull main, Build-NRO.bat, FTP ONLY updated NRO. In ordinary voice with another official-client user, test speech both directions; toggle Mute and confirm both Switch label and official-client mic state; open text in another server and send a message while staying in voice; inspect member names/speaking; explicitly select another voice channel then Disconnect. If silent, send fresh discordnx2-voice.txt after speaking10s, muting5s, unmuting5s.",
+  "next_user_workflow": "Pull main, Build-NRO.bat, FTP ONLY NRO. Join an empty ordinary voice channel: remain joined longer than60s, speak and observe local member activity, toggle native mute/mic slash. Browse/send text without leaving. Then have another official-client participant join and test two-way speech. If silent, send fresh voice report; secure0/tx0 alone is expected with no recipient.",
   "next_developer_work": [
     "Use fresh v047 pipeline report to distinguish capture0, silent capture peak0, encode failure, UDP send/receive, missing SSRC/key, transport/DAVE/Opus rejection and playback delivery. Never infer no microphone from Connected alone.",
     "Hardware-verify two-way audio, native mute, live members and simultaneous text/voice; provider/session behavior remains unverified.",
@@ -339,5 +342,13 @@
     "ui": "Persistent compact voice sidebar panel (name returns to call controls, mic toggles, x disconnects), Join/Disconnect/Mute controls, Up/Down+A and X on voice screen, roster names/mute/speaking states from scoped authenticated Gateway events and one metadata request per unresolved user. Tooltip measured to name width, capped320px, UTF8-fit ellipsis. Channel list reserves rows for active call panel.",
     "validation": "Real DAVE/Opus+both-cipher tests include late Speaking after key establishment, duplicate roster and replay rejection. Sanitized native audio mock tests exact out-of-order released descriptor/returned length, no early playback, physical mute/zero/send gating and unmute. Member tests cover scoped names/mute/speaking/removal/metadata request. Independent lifecycle snapshot survives text navigation; shared network acquire/release tests preserve voice on chat completion. Chat/job/keyboard/live/font/client/PIN/HTTP/WS/CAPTCHA regressions and NRO link passed. No Switch audio/provider concurrency verification available.",
     "build": "Pinned voice dependencies unchanged and cached; application source only, existing NSO/public jailbreak/DNS unchanged. Version0.47."
+  },
+  "v048_implementation": {
+    "evidence": "Read full supplied v047 report. Server/UDP is ready but peer_count0/group_key0/native_audio0. User confirms alone and correctly rejects requiring another participant for normal voice joining/talking. Do not diagnose no microphone or claim prior shared audio success.",
+    "changes": "Start local native audio after confirmed voice transport instead of requiring shared MLS keys. Connected reflects membership/transport/local audio, not verified two-way delivery. Alone stays joined indefinitely, without waiting-for-others text or timeout. Native mute and actual microphone activity work solo. Speaking media still passes through dnx_voice_encode only with executed MLS sending key; no plaintext fallback. Shared audio starts automatically when a real peer arrives. Only actual pending peer key negotiation gets a60sec deadline. Preserve independent voice/chat worker and explicit movement/disconnect behavior.",
+    "icons": "Framebuffer-native mic and slashed-mic replace footer m/M and Voice channel prefixes; native folder replaces Forum/media prefixes. No new fonts, emoji dependency or generated image assets. Local self-row speaking ring uses recent captured microphone peak, not cumulative peak or fake speaking status.",
+    "diagnostics": "Add fixed outgoing key-package and incoming external-sender/proposal/commit/welcome/execute counts without provider payloads, IDs or keys. Existing capture/sample/level/packet/mute counters preserved.",
+    "validation": "Host empty-channel policy tests one-hour no-peer lifetime, local audio readiness, mute and actual peer timeout; native audio/mute and independent lifetime regressions; real DAVE/Opus tests assert no speech packet without ratchet and both-cipher encrypted roundtrip once shared keys exist. NRO compile/link verified. Two-way hardware audio remains unconfirmed; report alone cannot establish earlier v046 behavior.",
+    "preserved": "Normal public loader, installed NSO, login, chat navigation, cached pinned libraries; no dependency rebuild."
   }
 }

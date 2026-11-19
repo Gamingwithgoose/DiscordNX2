@@ -17,7 +17,7 @@ cc -std=c11 -O1 -g -fsanitize=address,undefined -Iapp/source/vendor/monocypher -
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -DDAVE_STATIC -Iapp/source -I"$src/dave/cpp/test" -I"$src/dave/cpp/includes" -I"$build" -I"$src/mls/include" -I"$src/mls/lib/bytes/include" -I"$src/mls/lib/hpke/include" -I"$src/mls/lib/tls_syntax/include" -I"$src/mls/third_party" -I"$src/dave/cpp/src" tests/test_voice_engine.cpp "$src/dave/cpp/test/external_sender.cpp" "$tmp/engine.o" "$tmp/monocypher.o" "$build/libdnx_dave.a" "$build/opus/libopus.a" -lcrypto -lpthread -o "$tmp/voice"
 "$tmp/voice"
 
-for name in audio members controller;do
+for name in audio members controller policy;do
  cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iapp/source "tests/test_voice_$name.c" -o "$tmp/$name"
  "$tmp/$name"
 done

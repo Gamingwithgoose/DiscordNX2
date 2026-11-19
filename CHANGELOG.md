@@ -388,3 +388,12 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Keep voice connected while browsing servers, text channels, DMs, typing and sending. Give the call an independent worker, immutable context, private Gateway/readers/cancellation, and shared socket/TLS lifetime protection. Only manual disconnect, explicit new voice selection, logout/app exit or a real connection failure ends it; preference restoration cannot silently move a call.
 - Add voice member names, join/leave, speaking/mute state, asynchronous Gateway metadata resolution and persistent sidebar call controls. Size server tooltips to their name with a320px cap and UTF8-safe ellipsis.
 - Extend audio/mute, roster, lifetime, shared-network and encrypted-audio regression tests; existing chat/auth tests and NRO build pass. Hardware join was confirmed forv0.46; two-way audio and concurrent chat/voice still require console testing. Existing voice library cache, NSO, public loader and DNS preserved.
+
+
+## v0.48 — 2026-11-18
+
+- Follow up the actual v0.47 report and confirmed solo test: voice transport joined, but shared keys/remote peers and native audio were absent. Fix the participant-dependent startup policy rather than treating this as microphone detection failure.
+- Keep empty channels joined indefinitely with local microphone/playback and native mute. Connected denotes confirmed membership/transport and local audio readiness; actual shared speech still requires DAVE sending keys and remains hardware-unverified. A joining peer triggers secure group audio automatically; no plaintext speech fallback.
+- Add a recent local microphone activity indicator and fixed MLS exchange counters to distinguish empty-channel state from stalled multi-party negotiation.
+- Replace footer m/M and channel Voice prefixes with native mic/slashed-mic icons; replace Forum/media prefixes with a native folder icon.
+- Test solo policy, one-hour no-peer lifetime, native capture/mute, independent call cleanup and real DAVE speech gating/two-cipher roundtrips. NRO builds; existing voice dependencies, public loader and resident NSO unchanged.

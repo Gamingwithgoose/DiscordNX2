@@ -9,7 +9,7 @@ typedef int Thread;typedef int Result;typedef uint64_t u64;
 #define R_FAILED(x) ((x)!=0)
 #define R_SUCCEEDED(x) ((x)==0)
 static Dnx2Account account;static char session_token[1024]="token";
-static char voice_gateway_session[160],voice_gateway_resume_host[256];static long long voice_gateway_sequence=-1;static u64 voice_gateway_identify_after;static int voice_stop_request,services,joined,closed,state;
+static char voice_gateway_session[160],voice_gateway_resume_host[256];static long long voice_gateway_sequence=-1;static u64 voice_gateway_identify_after;static int voice_stop_request,services,joined,closed,state;static unsigned voice_mic_level;
 static void wipe(void *p,size_t n){memset(p,0,n);}static void voice_set(unsigned s){state=(int)s;}
 static void voice_members_reset(const char *id,const char *name){assert(!strcmp(id,"300000000000000001")&&!strcmp(name,"Self"));}
 static int socketInitialize(void *p){(void)p;services++;return 0;}static int sslInitialize(int v){(void)v;services++;return 0;}static void socketExit(void){services--;}static void sslExit(void){services--;}

@@ -684,6 +684,7 @@ fail:
 #else
 unsigned dnx2VoiceWaitSeconds(void){return 0;}
 unsigned dnx2VoiceState(void){return 0;}
+unsigned dnx2VoiceMicLevel(void){return 0;}
 int dnx2VoiceMuted(void){return 0;}
 void dnx2VoiceToggleMute(void){}
 int dnx2VoiceStart(void){return 0;}
