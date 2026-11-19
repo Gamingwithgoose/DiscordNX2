@@ -104,3 +104,10 @@ python -m unittest test_inspect_nso.py test_inspect_romfs.py
 ```
 
 Synthetic NSO tests cover valid unpacking, no overwrite, corrupted hashes, truncation, memory limits, overlapping segments, and optional LZ4 decompression. Browser research remains separate from the Discord client and voice work.
+
+
+## Focused browser startup check
+
+The exported openweb code has three authenticated callback references to its unavailable-dialog factory. One path derives a state flag from the first bit of a 48-byte read-only `set:sys` command 265 response. Its meaning and relevance to the live failure are still unconfirmed.
+
+`build-startup-check.bat` builds the separate `dist/Browser-Startup-Check.nro` (or run `make DEVKITPRO=/c/devkitPro startup-check`). **X** reads that response on verified physical 23.0.1, saves a small fresh SD report, and runs the unchanged normal example.com browser launch for correlation. **A** only reads settings. This does not change settings or unlock the browser. See [STARTUP-CHECK.md](STARTUP-CHECK.md) for the exact trace, test steps, and limitations. No repeat content export is required.

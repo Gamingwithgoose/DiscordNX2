@@ -21,3 +21,15 @@ build/$(TARGET).nacp: Makefile | build
 dist/$(TARGET).nro: build/$(TARGET).elf build/$(TARGET).nacp | dist
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/$(TARGET).nacp
 .PHONY: all
+
+# Focused startup diagnostic. Kept separate from the content exporter.
+startup-check: dist/Browser-Startup-Check.nro
+build/startup_check.o: startup_check.c | build
+	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
+build/Browser-Startup-Check.elf: build/startup_check.o
+	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
+build/Browser-Startup-Check.nacp: Makefile | build
+	$(DEVKITPRO)/tools/bin/nacptool --create "Browser Startup Check" "Gamingwithgoose" "0.1" $@
+dist/Browser-Startup-Check.nro: build/Browser-Startup-Check.elf build/Browser-Startup-Check.nacp | dist
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/Browser-Startup-Check.nacp
+.PHONY: startup-check

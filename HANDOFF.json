@@ -358,7 +358,7 @@
     "verification": "Local application + optional and legacy NSO compile/link; host PIN4/8 + actual prior implementation fixture, avatar/CDN, native audio/members, production local/resident lifecycle handoff/exit/adopt/stop, malformed chunk/snapshot bounds/staging expiry tests. Hardware background audio/game resource sharing unverified.",
     "next_hardware": "Test member names/pictures/green ring; old saved PIN then new4-digit relaunch. Optional NSO: join, Y Background, exit NRO, launch game, real receive/send, reopen and mute/unmute/disconnect. Capture stage-only voice report on failure. Background plugin heap64MiB; starts no call at boot."
   },
-  "current_focus": "Strictly browser investigation. User wants to assess reusing the built-in browser for a future browser-based DiscordNX2; no Discord feature, voice or Linux-client work unless requested.",
+  "current_focus": "Strictly browser research; read-only startup-setting diagnostic ready for physical23.0.1 test. No firmware/NSO deployment or Discord app changes.",
   "browser_research_v01": {
     "source_baseline": "User-updated main at206686d reviewed; Hardware Tester v0.4 and its untracked build directory left untouched.",
     "firmware_findings": "449 local files;150 readable CNMT. BrowserDll0803, BrowserCoreDll085D, offlineweb0100F, offlineweb3104B, SystemWeb1042 and openweb1043 present under040000000000 prefix. All inventory content sizes match; relevant archives have encrypted headers and SHA256 prefixes matching content IDs. No executable contents decrypted/disassembled on host. Missing old100A/1010/1011 IDs does not establish missing browser.",
@@ -384,5 +384,13 @@
     "analysis": "Corewkc3exportsWKCWebKitInitialize/Finalize,WKCWebView::create/loadURI. WKC/WebCore and platform peer interfaces present. Exact unavailable UI text found in USen/JetCruiser; BootNotAvailable_DlgBody referenced in openweb main and SystemWeb main. Inopenwebstaticxrefat7bac64,get-dialogwrapper7bac60,relative relocatespointertoC7BC18. This isdialogconstruction, notidentifiedrejectbranch. Engine requiresnativeSDK/peer/runtime integration; NSOexports do not establishNROloadability ormodernDiscordcompatibility.",
     "private_work": "Task workspace work/browser-code-private has persegmentunpack,symbols/strings andvalidation summary; capstoneinstalled onlywork/browser-analysis-deps. No proprietary files copiedintopublicsource oroutputs. Newinspect_nso utility+synthetic tests areoriginalsource.",
     "next": "No more console dumpneeded. Trace actual startup rejectcondition fromexisting code/policy. Preserveownbrowserfiles, avoidspeculativefirmwarepatches orclaimsworkingclone. Onlybrowserresearchauthorized; noapp/voice/Linuxclientchanges."
+  },
+  "browser_startup_check": {
+    "version": "0.1",
+    "hardware_status": "pending",
+    "artifact": "Browser Research/dist/Browser-Startup-Check.nro",
+    "instructions": "Browser Research/STARTUP-CHECK.md",
+    "finding": "Three ADR+PAC callback references to factory7bac60. Third path tests object+50, initialized as1 & ~set:sys command265 response[0]; inline output48bytes.",
+    "limits": "Setting name and live dialog path unconfirmed. Read only, physical23.0.1 gate. X pairs with unchanged normal example.com launch; A reads only. No unlock claimed."
   }
 }

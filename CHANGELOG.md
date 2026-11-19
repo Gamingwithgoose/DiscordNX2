@@ -426,3 +426,8 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - v0.2 console export now provides all five targeted code filesystems. Verified14NSO modules,42enabled segment hashes and5NPDM identity headers locally. Installed content attr01 succeeds; SDK dispatch synchronization did not run.
 - BrowserDll resource enumeration filled the report before the final target, but later exported executable files exist and validate. No new dump requested. No browser unlock or host compatibility claimed.
 - Add original host NSO bounds/hash verifier with optional private unpacking and synthetic tests. Firmware code and resources remain local, outside committed source. Discord/voice source untouched.
+
+
+## November 18, 2026 — focused browser startup diagnostic
+
+Traced three authenticated callback references to openweb's startup-unavailable dialog. One path derives its internal state from a 48-byte response to read-only set:sys command 265; the setting name and live failing path remain unresolved. Added separate Browser-Startup-Check NRO: verified 23.0.1-only query, fresh SD report, optional unchanged example.com launch, no settings writes/patches or Discord/voice changes. Built with warnings as errors and reviewed the exact 48-byte response ABI. Hardware result pending. See Browser Research/STARTUP-CHECK.md.
