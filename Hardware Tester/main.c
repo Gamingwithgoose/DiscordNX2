@@ -9,13 +9,49 @@
 #include <inttypes.h>
 #include <sys/stat.h>
 
-static FILE *logfile;
+// Direct FS service instead of fsdevMountSdmc + stdio, which can fail on kaiHEN.
+static char diagnostics[131072];
+static size_t diagnostics_used=0;
+static Result last_save=0xffffffffu,sd_access=0xffffffffu;
+static const char *save_path="/switch/Hardware-Tester-report.txt";
+static unsigned saved_events=0;
 static char last_result[160]="No browser probe run.";
 static unsigned event_count=0;
+
+static Result save_report(void){
+    FsFileSystem sd;
+    Result rc=fsOpenSdCardFileSystem(&sd);
+    sd_access=rc;
+    if(R_FAILED(rc)){last_save=rc;return rc;}
+    // /switch exists on standard SD installs. Fall back to SD root otherwise.
+    const char *attempts[]={"/switch/Hardware-Tester-report.txt","/Hardware-Tester-report.txt"};
+    for(unsigned i=0;i<2;i++){
+        const char *path=attempts[i];
+        (void)fsFsDeleteFile(&sd,path);
+        rc=fsFsCreateFile(&sd,path,(s64)diagnostics_used,0);
+        if(R_FAILED(rc))continue;
+        FsFile f;
+        rc=fsFsOpenFile(&sd,path,FsOpenMode_Write,&f);
+        if(R_SUCCEEDED(rc)){
+            rc=fsFileWrite(&f,0,diagnostics,(u64)diagnostics_used,FsWriteOption_Flush);
+            fsFileClose(&f);
+        }
+        if(R_SUCCEEDED(rc)){save_path=path;break;}
+    }
+    fsFsClose(&sd);
+    last_save=rc;
+    if(R_SUCCEEDED(rc))saved_events=event_count;
+    return rc;
+}
 static void report(const char *fmt, ...){
-    va_list ap; va_start(ap,fmt);
-    if(logfile){vfprintf(logfile,fmt,ap);fflush(logfile);}
+    if(diagnostics_used>=sizeof(diagnostics)-512)return;
+    va_list ap;va_start(ap,fmt);
+    int n=vsnprintf(diagnostics+diagnostics_used,sizeof(diagnostics)-diagnostics_used,fmt,ap);
     va_end(ap);
+    if(n>0){
+        size_t left=sizeof(diagnostics)-diagnostics_used;
+        diagnostics_used+=(size_t)n<left?(size_t)n:left-1;
+    }
 }
 static const char *button_name(unsigned bit){
     static const char *names[]={
@@ -47,7 +83,7 @@ static void browser_test(int which){
     report("BROWSER BEGIN %s\n",name);
     Result rc=appletInitialize();
     report("  appletInitialize=%08x\n",rc);
-    if(R_FAILED(rc)){snprintf(last_result,sizeof(last_result),"%s: init=%08x",name,rc);return;}
+    if(R_FAILED(rc)){snprintf(last_result,sizeof(last_result),"%s: init=%08x",name,rc);(void)save_report();return;}
     if(which==3){
         WebWifiConfig cfg; WebWifiReturnValue reply={0};Uuid uuid={0};
         reply.res=~0u;
@@ -73,18 +109,13 @@ static void browser_test(int which){
 int main(void){
     consoleInit(NULL);
     Result h=hidInitialize();
-    Result sd=fsdevMountSdmc();
-    if(R_SUCCEEDED(sd)){
-        mkdir("sdmc:/switch",0700);
-        mkdir("sdmc:/switch/HardwareTester",0700);
-        logfile=fopen("sdmc:/switch/HardwareTester/report.txt","w");
-    }
-    report("NS2 Hardware Tester v0.1\nHID init=%08x SD mount=%08x\n",h,sd);
-    report("Capture scope: libounce standard Npad buttons, not physical HID bus.\n");
+    report("NS2 Hardware Tester v0.2 (direct FS service)\\nHID init=%08x\\n",h);
+    report("Capture scope: standard Npad state (not physical HID bus).\\n");
+    (void)save_report();
     if(R_FAILED(h)){
         printf("HID failed: %08x\nPress HOME to exit.\n",h);
         consoleUpdate(NULL);
-        if(logfile)fclose(logfile);
+        (void)save_report();
         return 1;
     }
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);
@@ -105,19 +136,19 @@ int main(void){
         }else if(down&HidNpadButton_B){
             mode=0;report("INPUT MONITOR END\n");
         }
-        if((down&HidNpadButton_Plus) && (held&HidNpadButton_Minus)){
+        if(down&HidNpadButton_Y)(void)save_report();\n        if((down&HidNpadButton_Plus) && (held&HidNpadButton_Minus)){
             report("USER EXIT\n");break;
         }
         if((frame++%4)==0 || down || up){
             printf("\x1b[2J\x1b[H");
-            puts("NS2 HARDWARE TESTER  v0.1");
+            puts("NS2 HARDWARE TESTER  v0.2");
             puts("--------------------------");
             printf("HID=%08x  SD=%08x  events=%u\n",h,sd,event_count);
             if(mode==0){
                 puts("\nBrowser tests (UP/DOWN, A launch):");
                 for(int i=0;i<4;i++)printf("%c %s\n",selection==i?'>':' ',opts[i]);
                 puts("\nX: automatic button monitor");
-                puts("MINUS + PLUS: save and exit");
+                puts("Y: save now  |  MINUS + PLUS: exit");
                 puts("\nLast result:");
                 puts(last_result);
             }else{
@@ -125,7 +156,7 @@ int main(void){
                 puts("Press every controller button, especially C.");
                 puts("Changes are recorded automatically.");
                 puts("B: back to browser list");
-                puts("MINUS + PLUS: exit");
+                puts("Y: save now  |  MINUS + PLUS: exit");
                 printf("\nHELD  %016" PRIx64 "\n",(uint64_t)held);
                 printf("DOWN  %016" PRIx64 "\n",(uint64_t)down);
                 printf("UP    %016" PRIx64 "\n",(uint64_t)up);
