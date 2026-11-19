@@ -9,12 +9,12 @@ loader or firmware. No Discord login, capture of audio or networking.
 
 ## Controls
 - X opens **automatic input monitor**. No separate raw capture button.
-  Press C/GameChat and normal buttons; note whether a bit changes.
+  Press C/GameChat and normal buttons; changes auto-save to SD after input events.
   B returns to browser menu.
 - UP/DOWN selects Web Page, News Page, Offline HTML or Wi-Fi portal.
   A attempts the selected system applet. Close any launched applet normally.
-- Hold MINUS then press PLUS to finish and flush the report.
-- Output: SD `/switch/HardwareTester/report.txt`.
+- Press PLUS alone to save and exit; Y also saves without exiting.
+- Output: SD `/switch/Hardware-Tester-report.txt` (fallback: `/Hardware-Tester-report.txt`). The tester displays SD and save result codes onscreen.
 
 ## Interpreting results
 The monitor observes libounce's **standard 64-bit Npad button mask** for
