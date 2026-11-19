@@ -110,8 +110,8 @@ static void browser_test(int which){
 int main(void){
     consoleInit(NULL);
     Result h=hidInitialize();
-    report("NS2 Hardware Tester v0.2 (direct FS service)\\nHID init=%08x\\n",h);
-    report("Capture scope: standard Npad state (not physical HID bus).\\n");
+    report("NS2 Hardware Tester v0.3 (direct FS service)\nHID init=%08x\n",h);
+    report("Capture scope: standard Npad state (not physical HID bus).\n");
     (void)save_report();
     if(R_FAILED(h)){
         printf("HID failed: %08x\nPress HOME to exit.\n",h);
@@ -138,12 +138,12 @@ int main(void){
             mode=0;report("INPUT MONITOR END\n");(void)save_report();
         }
         if(down&HidNpadButton_Y)(void)save_report();
-        if((down&HidNpadButton_Plus) && (held&HidNpadButton_Minus)){
+        if(down&HidNpadButton_Plus){
             report("USER EXIT\n");(void)save_report();break;
         }
         if((frame++%4)==0 || down || up){
             printf("\x1b[2J\x1b[H");
-            puts("NS2 HARDWARE TESTER  v0.2");
+            puts("NS2 HARDWARE TESTER  v0.3");
             puts("--------------------------");
             printf("HID=%08x  SD=%08x  save=%08x\n",h,sd_access,last_save);
             printf("Events=%u  saved=%u\n",event_count,saved_events);
@@ -151,7 +151,7 @@ int main(void){
                 puts("\nBrowser tests (UP/DOWN, A launch):");
                 for(int i=0;i<4;i++)printf("%c %s\n",selection==i?'>':' ',opts[i]);
                 puts("\nX: automatic button monitor");
-                puts("Y: save now  |  MINUS + PLUS: exit");
+                puts("Y: save now  |  PLUS: save and exit");
                 puts("\nLast result:");
                 puts(last_result);
             }else{
@@ -159,7 +159,7 @@ int main(void){
                 puts("Press every controller button, especially C.");
                 puts("Changes are recorded automatically.");
                 puts("B: back to browser list");
-                puts("Y: save now  |  MINUS + PLUS: exit");
+                puts("Y: save now  |  PLUS: save and exit");
                 printf("\nHELD  %016" PRIx64 "\n",(uint64_t)held);
                 printf("DOWN  %016" PRIx64 "\n",(uint64_t)down);
                 printf("UP    %016" PRIx64 "\n",(uint64_t)up);
@@ -173,8 +173,7 @@ int main(void){
         svcSleepThread(16000000LL);
     }
     report("FINAL event_count=%u\n",event_count);
-    if(logfile)fclose(logfile);
-    if(R_SUCCEEDED(sd))fsdevUnmountDevice("sdmc");
+    (void)save_report();
     hidExit();
     consoleExit(NULL);
     return 0;
