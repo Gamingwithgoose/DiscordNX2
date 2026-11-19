@@ -83,3 +83,24 @@ python -m unittest test_inspect_romfs.py
 ```
 
 The parser's tests cover synthetic valid extraction, no overwrite, truncation, parent/name validation, data bounds and metadata cycles. The production C request-policy tests cover context-bit normalization, bounded default retry and SDK-version synchronization conditions. v0.2 compiles with warnings as errors and passes the sanitized copy/request tests; its console result is pending.
+
+
+## v0.2 console success: executable exports obtained
+
+The supplied `run-000003a226035c8b` includes code filesystems for openweb, SystemWeb, offlineweb0, offlineweb3, and BrowserCoreDll. The matching installed content attribute `01` succeeds directly. The SDK reports20.0.0 while the console reports23.0.1; the pre-20 dispatch fallback did not run. The report's code-verification data size is420bytes. Code access works through the existing public loader; no new NSO or custom payload was required.
+
+There are14NSO modules and5NPDM process-policy files. Local analysis unpacked all14 modules and verified all42 enabled SHA-256 segment hashes. No `.part` file is present. This establishes complete, internally consistent segment data, not independent verification of Nintendo's signature chain. The NPDM names and ACI0 IDs match the five requested code targets.
+
+BrowserDll also exports its1,776resource files. The run contains1,796exported files plus its report. The report reaches its128KiB cap while listing those resources, before logging BrowserCoreDll; the later code files nevertheless exist and validate. Do not treat report truncation as a failed code export or infer the final error count from the incomplete log. Program-content resource mounting still returns filesystem description6000 in the visible sections; those failures are separate from successful ExeFS/code access.
+
+The engine's dynamic symbols include initialization/finalization, view creation, and URL loading. The applet code also contains a reference to the localized startup-unavailable dialog. These are useful analysis targets, **not a verified bypass or a standalone reusable browser**. The exact blocking condition and the host integration needed for the engine remain unresolved. No further extraction run is needed for the current analysis.
+
+`inspect_nso.py` validates NSO header/segment bounds and enabled segment hashes. Optional private unpacking writes into a new directory and refuses an existing destination. Compressed NSOs need the Python `lz4` package; no proprietary binaries or third-party package copies are committed.
+
+```sh
+python inspect_nso.py /path/to/exefs/main
+python inspect_nso.py /path/to/exefs/main --unpack /path/to/new-private-folder
+python -m unittest test_inspect_nso.py test_inspect_romfs.py
+```
+
+Synthetic NSO tests cover valid unpacking, no overwrite, corrupted hashes, truncation, memory limits, overlapping segments, and optional LZ4 decompression. Browser research remains separate from the Discord client and voice work.

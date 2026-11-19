@@ -419,3 +419,10 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Verified two identical 16,652,528-byte BrowserDll exports and extracted 1,776 resource files locally; no NSO/NRO executables found. Proprietary files remain outside committed source.
 - Normalize all supplied open failures to filesystem InvalidArgument 6001, not a demonstrated permission denial. Use installed NCM content flags, one bounded default-flag retry on that exact error, and detailed path/result/SDK-version diagnostics. Align only this process SDK dispatch if trusted firmware reports a current version but SDK dispatch is pre-20.
 - Add bounded host RomFS parser/extractor and synthetic tests. Strict NRO build and sanitized host tests passed; executable export and browser reuse still need hardware validation.
+
+
+## Browser analysis - executable exports validated (2026-11-18)
+
+- v0.2 console export now provides all five targeted code filesystems. Verified14NSO modules,42enabled segment hashes and5NPDM identity headers locally. Installed content attr01 succeeds; SDK dispatch synchronization did not run.
+- BrowserDll resource enumeration filled the report before the final target, but later exported executable files exist and validate. No new dump requested. No browser unlock or host compatibility claimed.
+- Add original host NSO bounds/hash verifier with optional private unpacking and synthetic tests. Firmware code and resources remain local, outside committed source. Discord/voice source untouched.
