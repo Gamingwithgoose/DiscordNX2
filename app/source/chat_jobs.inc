@@ -113,10 +113,6 @@ static void job_worker(void *unused){
             snprintf(path,sizeof(path),"/api/v10/channels/%s/messages?limit=30",chat_job.channel);
             if(job_get(path)){dnx_messages(chat_job.data,(char*)http_body);chat_job.messages_loaded=1;}
         }else snprintf(chat_job.notice,sizeof(chat_job.notice),"Send not confirmed. Check the channel before retrying.");
-    }else if(chat_job.op==16){
-        int stage=0;unsigned close_code=0;
-        chat_job.ok=voice_control_session(chat_job.token,chat_job.guild,chat_job.channel,chat_job.user,chat_job.notice,&stage,&close_code);
-
     }else if(chat_job.op==15){
         snprintf(chat_job.media->guild,sizeof(chat_job.media->guild),"%s",chat_job.guild);
         snprintf(path,sizeof(path),"/api/v10/guilds/%s/emojis",chat_job.guild);
@@ -133,7 +129,7 @@ static void job_worker(void *unused){
 done:
     if(chat_job.op!=20){
         FILE *report=fopen("sdmc:/kaihen/discordnx2-hardware.txt","w");
-        if(report){fprintf(report,"DiscordNX2 v0.46 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
+        if(report){fprintf(report,"DiscordNX2 v0.47 in-place chat request - no credentials, names, IDs or message content\noperation=%d complete=%d post_confirmed=%d http=%u cancelled=%d\n",chat_job.op,chat_job.ok,chat_job.post_confirmed,last_http_status,job_cancel());fclose(report);}
     }
     if(!chat_job.ok&&!chat_job.notice[0])snprintf(chat_job.notice,sizeof(chat_job.notice),"Network request could not finish.");
     wipe(http_body,sizeof(http_body));if(ssl)sslExit();if(sockets)socketExit();active_cancel=NULL;
@@ -162,7 +158,8 @@ static int job_begin(int op){
     snprintf(chat_job.token,sizeof(chat_job.token),"%s",session_token);snprintf(chat_job.user,sizeof(chat_job.user),"%s",account.user_id);return 1;
 }
 int dnx2JobStart(int op,const char *text,const char *sticker){
-    if(op!=9&&op!=10&&op!=11&&op!=15&&op!=16&&op!=23)return 0;
+    if(op==16)return dnx2VoiceStart();
+    if(op!=9&&op!=10&&op!=11&&op!=15&&op!=23)return 0;
     if((op==10||op==11||op==16)&&account.selected_channel<0)return 0;
     if(op==11&&(!text||strlen(text)>512||((!sticker||!*sticker)&&!*text)))return 0;
     if(!job_begin(op))return 0;

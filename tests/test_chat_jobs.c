@@ -50,7 +50,7 @@ static int http_request(TlsSession *s,const char *host,const char *method,const 
     const char *response=strstr(path,"/emojis")?"[{\"id\":\"400000000000000001\",\"name\":\"goose\",\"animated\":true}]":strstr(path,"/stickers")?"[{\"id\":\"300000000000000001\",\"name\":\"Wave\",\"format_type\":1}]":strstr(path,"/guilds/")?"[{\"id\":\"200000000000000001\",\"name\":\"general\",\"type\":0,\"position\":1}]":empty_history?"[]":"[{\"id\":\"900000000000000001\",\"author\":{\"username\":\"fixture\"},\"content\":\"fresh\"}]";
     snprintf(out,cap,"%s",response);last_http_body_size=strlen(out);return !http_fail;
 }
-static int voice_control_session(const char *t,const char *g,const char *c,const char *u,char notice[160],int *stage,unsigned *code){(void)t;(void)g;(void)c;(void)u;snprintf(notice,160,"Synthetic voice job");*stage=0;*code=0;return 0;}
+int dnx2VoiceStart(void){return 1;}
 #include "chat_jobs.inc"
 static void delegated_check(void){live_accept_images=1;int before=live_stops;assert(dnx2RequestImages(1,0,1));assert(chat_job.delegated&&delegated_images&&live_stops==before);live_image_step();assert(chat_job.done&&!delegated_images);assert(dnx2JobApply()==20);dnx2ChatReset();assert(dnx2RequestImages(1,0,1));__atomic_store_n(&chat_job.stop,1,__ATOMIC_RELEASE);live_image_step();assert(chat_job.done&&!delegated_images);dnx2JobStop();live_accept_images=0;}
 static int run(void){job_worker(NULL);assert(!services);return dnx2JobApply();}

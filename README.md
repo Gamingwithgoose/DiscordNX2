@@ -1,8 +1,8 @@
 # DiscordNX2
 
-> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Encrypted voice calling is implemented for foreground testing, but has not yet been confirmed on Switch hardware. Live voice member lists and background calls remain unfinished. Full official-client parity is not available.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
+> **INCOMPLETE FUNCTIONALITY AT THIS TIME.** DiscordNX2 is experimental Switch 2 homebrew under active development. Account connection has been confirmed on hardware. Touch has been confirmed on hardware. The latest in-place requests, server icons, redesigned keyboard and media picker still need hardware testing. **Encrypted voice calling is implemented for foreground testing, but has not yet been confirmed on Switch hardware. Voice member lists and concurrent text browsing are implemented for testing; background calls outside the app remain unfinished. Full official-client parity is not available.** Phone approval or a completed CAPTCHA does not by itself mean the Switch has logged in.
 
-DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.46 source adds foreground DAVE/Opus encrypted voice, alongside reply context, author profile cards, server nickname/role-color lookups, guild tags and resolved mentions, basic inline text styles, and existing direct/group-DM conversations. Image-preview requests now preserve source proportions instead of forcing portrait media into landscape dimensions. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
+DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.47 source fixes native audio buffer delivery and playback pacing, adds physical microphone mute and voice members, and keeps DAVE/Opus voice connected while browsing/text chatting, alongside reply context, author profile cards, server nickname/role-color lookups, guild tags and resolved mentions, basic inline text styles, and existing direct/group-DM conversations. Image-preview requests now preserve source proportions instead of forcing portrait media into landscape dimensions. Tapping the message box opens the phone-style keyboard directly. QR/CAPTCHA account connection, touch and PIN-protected saved login remain in place. This is an unofficial project, not affiliated with Discord or Nintendo.
 
 ## Current functionality
 
@@ -13,7 +13,7 @@ DiscordNX2 aims to bring Discord voice chat to Switch 2. The current v0.46 sourc
 | Phone CAPTCHA | User completes hCaptcha on the project website; an encrypted result returns directly to the Switch over the same Wi-Fi. User confirmed account connection; individual future attempts may still be rejected or expire. |
 | Servers | Loads up to 200 real servers. Reads Discord folder/order settings and flattens folders in order; falls back to API order if unavailable. |
 | Channels / text | Text/announcement channels and existing DMs show the latest 30 messages. A foreground Gateway worker applies complete incoming messages and deletions directly, and refreshes history for partial edits or resync; five-second automatic polling is the fallback. Tap input to open the compact full-width phone-style QWERTY layout with separate symbol pages. |
-| Voice chat | Foreground Join / Leave / Mute with upstream DAVE MLS encryption, Opus audio, authenticated UDP and native microphone/playback. Local encrypted round-trip and NRO build tested; real console call pending. Stage speaking, live member lists and background calls remain unfinished. |
+| Voice chat | Join / Disconnect / Mute with DAVE/Opus, a live member list and persistent call panel while browsing/chatting. Hardware channel join is confirmed; two-way audio remains unconfirmed. Stage speaking and background calls outside the NRO remain unfinished. |
 | Emoji / stickers | Common Unicode emoji and current-server emoji/sticker picker. Emoji PNG and PNG/APNG sticker first-frame previews; explicit Send for drafts/stickers. Posted PNG/JPEG/GIF images and embed image/thumbnail previews are supported within limits below. GIF search and full rich media remain unfinished. |
 | Saved login | Optional eight-digit PIN encrypts credentials on SD. Enter PIN on future launches instead of scanning QR; expiry/revocation may require login again. New in v0.38. |
 | Special characters | Embedded OFL Noto Sans, Math, Symbols 2 and monochrome Emoji supplement console fonts, including styled mathematical letters. NFC accent normalization and grapheme-aware editing/wrapping keep combined characters together. Missing glyphs, complex shaping, right-to-left layout and joined/color emoji rendering remain incomplete. |
@@ -104,17 +104,17 @@ Previews accept downloads below 1 MiB and sources up to 2048x2048 (4 megapixels)
 
 Unicode text is preserved in storage and messages. Display normalizes decomposed accents to NFC; wrapping, fitting and deletion respect grapheme boundaries. Font fallbacks cover many Unicode characters, but this renderer does not implement Arabic/Indic shaping, bidirectional layout or joined/color emoji ligatures. A grapheme staying intact does not guarantee its font can render it correctly.
 
-### Test encrypted voice (v0.46)
+### Test encrypted voice (v0.47)
 
 1. Use a normal **voice** channel you can join and speak in. Have a second person join using official Discord; the first test needs a real MLS group with another participant.
 2. Select **Join voice**. The app connects muted/deafened, discovers Discord UDP, negotiates DAVE keys, then starts native microphone/playback and removes the initial mute/deafen. It never sends plaintext media. Allow up to a minute for group setup.
 3. Once **Connected** appears, test speech in both directions. Tap **Mute microphone** or press **X** to mute/unmute. Headphones help avoid speaker feedback; echo cancellation is not implemented.
-4. Tap **Leave voice**, press **A** on the call button, or press **B** to disconnect. Leaving this screen, changing channels/servers, logging out, closing the app or exiting also stops the foreground call. The resident NSO is unchanged and does not continue this call while playing a game.
-5. If joining fails or audio is silent, share `/kaihen/discordnx2-voice.txt`. It records stage, close code and packet/key-transition counts, without account/channel IDs or credentials. Stage5 means UDP discovery; stage6 means protocol/MLS setup; stage7 means local audio started. Stage7 alone does not prove the other person heard audio.
+4. Browsing another server, a text channel or DMs, typing, and sending messages keep the existing call connected. The compact panel at the bottom of the channel sidebar shows the active voice channel. Tap its name to return to call controls, its microphone button to mute/unmute, or **x** to disconnect. On the voice screen, tap **Disconnect**, or use Up/Down and A to select Disconnect/Mute. **B navigates back without disconnecting.** Explicitly selecting another voice channel moves the call; restoring a remembered channel while browsing never moves it automatically. Logout or exiting the NRO stops the call. The unchanged resident NSO does not continue calls while playing a game.
+5. If joining fails or audio is silent, share `/kaihen/discordnx2-voice.txt`. It records stage, close code and packet/key-transition counts, without account/channel IDs or credentials. It now includes actual capture buffers/sample counts and peak level, native mute/capture state, encoded/sent/received packet counts, speaker mappings, decrypt/Opus rejection counts, playback buffers/peak and audio service errors. Levels are numeric only; audio is never saved. Stage5 means UDP discovery; stage6 means protocol/MLS setup; stage7 means local audio started. Stage7 alone does not prove the other person heard audio.
 
 The engine uses pinned [Discord libdave](https://github.com/discord/libdave), MLS++, OpenSSL 3 and Opus, with Monocypher for XChaCha20-Poly1305. Both advertised transport modes are authenticated; there is no legacy/unencrypted fallback. Group membership comes from authenticated Discord voice signaling. Keys, audio buffers and voice credentials are cleared on disconnect. There is no new browser, relay, DNS setting, NSO or jailbreak loader requirement.
 
-This is an initial foreground implementation: up to32 remote participants, bounded PCM queues and simple mixing; adaptive jitter recovery, echo cancellation, call resumption, Stage speaker approval, live member lists and background calls remain unfinished. Network/provider acceptance and audio timing must still be tested on hardware. A 4017 response means Discord did not accept the advertised DAVE negotiation; send the updated report rather than assuming success.
+This is an initial in-app implementation: up to32 remote participants, bounded PCM queues and simple mixing; adaptive jitter recovery, echo cancellation, automatic call resumption, Stage speaker approval and background calls outside the NRO remain unfinished. Network/provider acceptance and audio timing must still be tested on hardware. A 4017 response means Discord did not accept the advertised DAVE negotiation; send the updated report rather than assuming success.
 
 ### Emoji, server emoji and stickers
 
@@ -126,7 +126,7 @@ Image downloads are restricted to fixed Discord CDN paths, use TLS without the a
 
 **GIF search, animated-media playback, general attachment previews and full Discord rich-text rendering are not implemented in this build.** There is no fake GIF-search control. These features require additional provider/media work.
 
-Voice selection opens the foreground call controls described above. Stage speaker approval and live voice members remain unfinished. Categories are headings; forum thread browsing and message editing from this UI remain unfinished. Discord permissions and rate limits apply.
+Voice selection opens the foreground call controls described above. The member list uses authenticated voice join/leave/speaking and guild voice-state updates, with nickname/name resolution through Gateway member metadata. A temporary Member/ID fallback appears until a name is available. Stage speaker approval remains unfinished. Categories are headings; forum thread browsing and message editing from this UI remain unfinished. Discord permissions and rate limits apply.
 
 ## Touch and controller controls
 
@@ -266,3 +266,12 @@ The screen now states the limitation briefly: voice calls are not supported in t
 ### v0.46 validation
 
 DAVE MLS group creation/commit/welcome, explicit transition gating, stereo Opus encode/decode, both AEAD transport modes, authenticated encrypted audio round-trips, tamper/replay rejection and member removal have host tests in `tests/run-voice-tests.sh` (host OpenSSL3 development files required). The NRO links with the Switch compiler. These checks establish implementation/build correctness, not a successful live Discord call. Voice dependency notices are in `licenses/voice/` and embedded in the NRO.
+
+
+### v0.47 follow-up
+
+The user confirmed channel join and a Connected status in v0.46, but reported silence in both directions and unresponsive mute. This update drains the actual released native audio buffers instead of guessing completion with ContainsBuffer, honors the returned capture byte count, fixes unsigned playback-deadline underflow, stops native capture while muted and gates every encoded frame against the current mute request. It also installs receive keys for late authenticated speaker mappings without resetting existing replay state.
+
+The call now owns a separate worker, Gateway session, WebSocket readers and cancellation state. Chat jobs and live updates retain their own owner. Reference-counted socket/TLS service lifetimes and a three-session TLS pool keep a text request from shutting down or monopolizing the active call's services. The update reuses the existing pinned voice libraries; there is no dependency, NSO or loader rebuild requirement.
+
+Audio queue/mute, member events, independent call snapshots, shared service lifetimes, late speaker mappings, replay rejection, existing chat/auth regressions and the NRO build were checked locally. These tests do not confirm two-way audio or concurrent-call behavior on the console; test those together and send the updated voice report if silent.

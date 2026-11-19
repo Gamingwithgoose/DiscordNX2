@@ -49,6 +49,7 @@ static int stride_pixels;
 static int text_right=1240;
 static char auth_notice[128];
 static int tab=0,sel=0,focus=0;
+static int voice_panel=0,voice_action=0,voice_member_first=0;
 static int message_expanded=0,message_offset=0,profile_open=0;
 static Dnx2Message profile_message;
 static const Dnx2Message *render_message;
@@ -302,10 +303,26 @@ static void media_draw(void){
     if(!media_count()&&!dnx2JobBusy())text_line(402,410,"No items available in this server.",C_MUTED,2,70);
 }
 static void server_tooltip(void){
-    const Dnx2Account *a=dnx2Account();
-    if(focus==0&&server_cursor>=0&&server_cursor<a->server_count){
-        int y=98+(server_cursor%8)*62;text_right=700;rounded(92,y,600,52,10,C_CARD_HI);text_line(108,y+16,a->servers[server_cursor].name,C_WHITE,2,64);text_right=1256;
-    }
+ const Dnx2Account *a=dnx2Account();if(focus!=0||server_cursor<0||server_cursor>=a->server_count)return;
+ const char *name=a->servers[server_cursor].name;char label[405];int width=dnx2FontWidth(name,2);if(width>296){int n=dnx2FontFit(name,276,2,256);if(n<0)n=0;if(n>400)n=400;memcpy(label,name,(size_t)n);memcpy(label+n,"...",4);name=label;width=dnx2FontWidth(name,2);}width+=24;if(width<80)width=80;if(width>320)width=320;
+ int y=98+(server_cursor%8)*62;text_right=92+width-12;rounded(92,y,width,44,8,C_CARD_HI);text_line(104,y+12,name,C_WHITE,2,128);text_right=1256;
+}
+static void voice_controls(int current){
+ int running=dnx2VoiceRunning()&&current;unsigned state=dnx2VoiceState();int muted=dnx2VoiceMuted();
+ item(392,124,650,64,running?"Disconnect":"Join voice","",focus>=2&&voice_action==0);
+ if(running){
+  const char *status=state==4||state==5?(muted?"Microphone muted":"Connected"):state==3?"Establishing encrypted voice":state==2?"Connecting audio":"Connecting...";
+  text_line(392,204,status,state>=4?C_GREEN:C_MUTED,2,72);
+  item(392,244,650,64,muted?"Unmute microphone":"Mute microphone","",focus>=2&&voice_action==1);
+  Dnx2VoiceMember members[33];int count=dnx2VoiceMembers(members,33);int limit=count>6?count-6:0;if(voice_member_first>limit)voice_member_first=limit;
+  for(int row=0;row<6&&row+voice_member_first<count;row++){const Dnx2VoiceMember *m=&members[row+voice_member_first];int y=346+row*48;unsigned color=m->speaking?C_GREEN:C_CARD;rounded(394,y,32,32,16,color);text_line(406,y+5,m->self?"@":"o",C_WHITE,2,1);text_right=1110;text_line(440,y+7,m->name,C_WHITE,2,70);text_right=1256;if(m->self?muted:m->muted)text_line(1130,y+7,"Muted",C_MUTED,2,8);}
+ }else text_wrap(392,230,dnx2VoiceNotice()[0]?dnx2VoiceNotice():"Join this voice channel to talk.",4,72);
+}
+static void voice_toolbar(void){
+ if(!dnx2VoiceRunning())return;
+ rect(88,574,268,72,C_DARK);text_right=258;text_line(100,584,dnx2VoiceChannelName(),C_WHITE,2,40);text_line(100,618,dnx2VoiceState()>=4?"Voice connected":"Connecting",C_GREEN,1,32);text_right=1256;
+ rounded(268,600,36,36,8,dnx2VoiceMuted()?C_WARN:C_CARD);text_line(280,610,dnx2VoiceMuted()?"M":"m",C_WHITE,2,1);
+ rounded(312,600,36,36,8,C_CARD);text_line(324,610,"x",C_WHITE,2,1);
 }
 static void draw(const char *feedback,int view,int selection,int content_focus,int qr_preview){
     (void)feedback;(void)selection;(void)content_focus;(void)qr_preview;
@@ -329,7 +346,7 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     text_line(104,26,home?"DiscordNX2":a->private_mode?"Direct messages":a->server_count?a->servers[a->selected].name:"Select a server",C_WHITE,3,28);
     line(88,76,268,C_LINE);
     if(home){text_line(106,112,"Your Discord on Switch 2",C_MUTED,2,26);text_line(106,158,"Tap a server to browse.",C_MUTED,2,26);}
-    else for(int row=0;row<12;row++){
+    else for(int row=0;row<(dnx2VoiceRunning()?10:12);row++){
         int index=channel_first+row;if(index>=a->channel_count)break;const Dnx2Channel *c=&a->channels[index];int y=100+44*row;
         int active=index==a->selected_channel;
         if(active||(focus==1&&channel_cursor==index))rounded(96,y,252,40,8,active?C_CARD_HI:C_CARD);
@@ -340,6 +357,7 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
     rect(88,650,268,70,C_DARK);text_line(104,666,a->signed_in?a->display_name:"Signed out",C_WHITE,2,30);
 
     text_right=1256;
+    if(voice_panel&&dnx2VoiceRunning()){text_line(380,26,dnx2VoiceChannelName(),C_WHITE,3,72);line(356,76,924,C_LINE);voice_controls(1);server_tooltip();return;}
     if(home){
         text_line(392,46,"Welcome to DiscordNX2",C_WHITE,4,64);
         text_line(392,158,a->signed_in?a->display_name:"Sign in using Discord on your phone.",C_WHITE,3,70);
@@ -392,10 +410,7 @@ static void draw(const char *feedback,int view,int selection,int content_focus,i
         if(media_open)media_draw();
         if(profile_open)profile_draw();
     }else{
-        text_line(392,150,"Voice channel",C_WHITE,3,60);
-        unsigned wait=dnx2VoiceWaitSeconds();char status[80];snprintf(status,sizeof(status),wait?"Waiting to reconnect (%u s)":"Connecting...",wait);item(392,220,650,90,dnx2JobKind()==16?"Leave voice":"Join voice","",focus==2);
-        if(dnx2JobKind()==16){unsigned state=dnx2VoiceState();const char *call=state==4?"Connected":state==5?"Microphone muted":state==3?"Establishing encrypted voice":state==2?"Connecting audio transport":status;text_line(392,328,call,C_WHITE,3,72);if(state>=4)item(392,402,650,72,dnx2VoiceMuted()?"Unmute microphone":"Mute microphone","",0);}
-        if(dnx2JobKind()!=16)text_wrap(392,352,a->notice[0]?a->notice:"Join this voice channel to talk.",4,72);
+        voice_controls(dnx2VoiceSelected());
     }
     server_tooltip();
 }
@@ -491,30 +506,31 @@ static void scroll_messages(int delta){
         const char *p=a->messages[sel].content;int count=0;while(*p){p=dnx_grapheme_end(p);count++;}if(message_offset>=count)message_offset=count>296?count-296:0;return;}
     message_first+=delta;if(message_first<0)message_first=0;if(message_first>max)message_first=max;follow_latest=message_first==max;sel=message_first;
 }
-static int open_channel(int index){
+static int open_channel(int index,int user_select){
     const Dnx2Account *a=dnx2Account();if(index<0||index>=a->channel_count)return 0;
     int type=a->channels[index].type;if(type==4)return 0;
     if(type!=0&&type!=5&&type!=1&&type!=3&&type!=2&&type!=13){snprintf(keyboard_notice,sizeof(keyboard_notice),"Forum threads are not available yet.");return 0;}
-    profile_open=0;
+    profile_open=voice_panel=voice_action=voice_member_first=0;
     if(index!=a->selected_channel)dnx2GraphicalClearDraft();
     dnx2JobStop();dnx2LiveStop();dnx2ChannelSelect(index);channel_cursor=index;tab=(type==0||type==5||type==1||type==3)?2:3;focus=2;message_expanded=0;message_offset=0;follow_latest=1;sel=0;keyboard_notice[0]=0;
-    if(tab==2)dnx2JobStart(10,NULL,NULL);
+    if(tab==2)dnx2JobStart(10,NULL,NULL);else if(user_select&&dnx2VoiceRunning()&&!dnx2VoiceSelected())dnx2VoiceStart();
     return 0;
 }
 int dnx2GraphicalMenu(void){
     Result rc=hidInitialize();if(R_FAILED(rc))return -1;padConfigureInput(1,HidNpadStyleSet_NpadStandard);touch_init();
     Framebuffer fb={0};rc=framebufferCreate(&fb,nwindowGetDefault(),W,H,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc)){hidExit();return -1;}rc=framebufferMakeLinear(&fb);if(R_FAILED(rc)){framebufferClose(&fb);hidExit();return -1;}
-    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;unsigned voice_wait=0,voice_status=0;
+    PadState pad={0};padInitializeDefault(&pad);int action=0,dirty=1,analog_prior=0,input_armed=0;const char *last_live="";uint64_t animation_tick=0;unsigned voice_wait=0,voice_status=0,voice_revision=0;
     if(!dnx2Account()->signed_in)tab=0;
     if(tab==2&&selected_text()){dnx2LiveStart();if(follow_latest)message_first=message_bottom();}
     while(1){
         const Dnx2Account *a=dnx2Account();
         unsigned wait=dnx2VoiceWaitSeconds();if(wait!=voice_wait){voice_wait=wait;dirty=1;}
         unsigned state=dnx2VoiceState();if(state!=voice_status){voice_status=state;dirty=1;}
+        if(dnx2VoiceApply()){voice_panel=0;dirty=1;}unsigned rev=dnx2VoiceMembersRevision();if(rev!=voice_revision){voice_revision=rev;dirty=1;}
         int completed=dnx2JobApply();
         if(completed){
-            if(completed==9||completed==23){const char *last=dnx2LastChannel();for(int i=0;i<a->channel_count;i++)if(last[0]&&!strcmp(last,a->channels[i].id)){channel_first=i>5?i-5:0;open_channel(i);break;}}
+            if(completed==9||completed==23){const char *last=dnx2LastChannel();for(int i=0;i<a->channel_count;i++)if(last[0]&&!strcmp(last,a->channels[i].id)){channel_first=i>5?i-5:0;open_channel(i,0);break;}}
             if(completed==11&&!strcmp(draft,dnx2JobDraft())&&!strcmp(pending_sticker,dnx2JobSticker()))dnx2GraphicalClearDraft();
             if((completed==10||completed==11)&&follow_latest)message_first=message_bottom();
             dirty=1;
@@ -542,7 +558,7 @@ int dnx2GraphicalMenu(void){
         if(tab==2&&selected_text()&&ui_ms()-animation_tick>=80){
             animation_tick=ui_ms();for(int i=message_expanded?sel:message_first;i<a->message_count&&i<(message_expanded?sel+1:message_first+4);i++){const Dnx2DecodedMedia *media=dnx2MessageMedia(a->messages[i].media_id);if(media&&media->frames>1)dirty=1;}
         }
-        if(dirty){u32 stride=0;pixels=(uint32_t*)framebufferBegin(&fb,&stride);if(!pixels){action=-1;break;}stride_pixels=(int)(stride/4);draw(NULL,tab,sel,focus,0);framebufferEnd(&fb);pixels=NULL;dirty=0;}
+        if(dirty){u32 stride=0;pixels=(uint32_t*)framebufferBegin(&fb,&stride);if(!pixels){action=-1;break;}stride_pixels=(int)(stride/4);draw(NULL,tab,sel,focus,0);voice_toolbar();framebufferEnd(&fb);pixels=NULL;dirty=0;}
         padUpdate(&pad);u64 down=padGetButtonsDown(&pad);HidAnalogStickState stick=padGetStickPos(&pad,0);
         int analog=stick.x<-16000?1:stick.x>16000?2:stick.y>16000?3:stick.y<-16000?4:0;
         if(analog&&analog!=analog_prior)down|=analog==1?HidNpadButton_Left:analog==2?HidNpadButton_Right:analog==3?HidNpadButton_Up:HidNpadButton_Down;
@@ -571,14 +587,16 @@ int dnx2GraphicalMenu(void){
         }
         if(touch==2){
             if(x<88){server_page+=scroll;if(server_page<0)server_page=0;int max=(a->server_count-1)/8;if(server_page>max)server_page=max;}
-            else if(x<356){channel_first+=scroll;if(channel_first<0)channel_first=0;int max=a->channel_count>12?a->channel_count-12:0;if(channel_first>max)channel_first=max;}
+            else if(x<356){channel_first+=scroll;if(channel_first<0)channel_first=0;int rows=dnx2VoiceRunning()?10:12;int max=a->channel_count>rows?a->channel_count-rows:0;if(channel_first>max)channel_first=max;}
             else if(selected_text())scroll_messages(scroll);
             dirty=1;
         }
-        if(touch==1){DnxHit hit=dnx_chat_hit(x,y,server_page,channel_first,message_first,tab==0,selected_text());
+        if(touch==1&&dnx2VoiceRunning()&&x>=88&&x<356&&y>=574&&y<646){if(x>=312&&y>=600)dnx2VoiceStop();else if(x>=268&&y>=600)dnx2VoiceToggleMute();else {voice_panel=1;focus=2;voice_action=0;}touch=0;dirty=1;}
+        if(touch==2&&(voice_panel||tab==3)&&x>=356){voice_member_first+=scroll;if(voice_member_first<0)voice_member_first=0;touch=0;dirty=1;}
+        if(touch==1){DnxHit hit=(voice_panel&&x>=356)||(dnx2VoiceRunning()&&x>=88&&x<356&&y>=540&&y<574)?(DnxHit){0}:dnx_chat_hit(x,y,server_page,channel_first,message_first,tab==0,selected_text());
             if(hit.kind==DNX_MESSAGE){message_geometry();hit.index=message_expanded?sel:dnx_message_hit(message_images,a->message_count,message_first,y);if(hit.index<0)hit.kind=0;}
             if(hit.kind==DNX_HOME){profile_open=0;media_open=0;dnx2GraphicalClearDraft();if(a->signed_in){dnx2OpenDMList();tab=4;focus=1;channel_first=channel_cursor=0;message_expanded=0;}else{tab=0;focus=2;}sel=0;dirty=1;}
-            else if(hit.kind==DNX_ACCOUNT){dnx2JobStop();dnx2LiveStop();profile_open=media_open=0;tab=0;focus=2;sel=0;dirty=1;}
+            else if(hit.kind==DNX_ACCOUNT){voice_panel=0;dnx2JobStop();dnx2LiveStop();profile_open=media_open=0;tab=0;focus=2;sel=0;dirty=1;}
             else if(hit.kind==DNX_SERVER)choose_server=hit.index;
             else if(hit.kind==DNX_CHANNEL){choose_channel=hit.index;focus=1;}
             else if(hit.kind==DNX_INPUT)keyboard=1;
@@ -593,10 +611,11 @@ int dnx2GraphicalMenu(void){
             else if(hit.kind==DNX_LOGIN)account_action=0;
             else if(hit.kind==DNX_REMEMBER)account_action=1;
             else if(hit.kind==DNX_EXIT)break;
-            if(!selected_text()&&tab==3&&x>=392&&x<1042){if(y>=220&&y<310){if(dnx2JobKind()==16)dnx2JobStop();else if(!dnx2JobBusy())dnx2JobStart(16,NULL,NULL);dirty=1;}else if(y>=402&&y<474&&dnx2VoiceState()>=4){dnx2VoiceToggleMute();dirty=1;}}
+            if((voice_panel||(!selected_text()&&tab==3))&&x>=392&&x<1042){if(y>=124&&y<188){if(voice_panel||dnx2VoiceSelected())dnx2VoiceStop();else dnx2VoiceStart();dirty=1;}else if(y>=244&&y<308&&(voice_panel||dnx2VoiceSelected())&&dnx2VoiceRunning()){dnx2VoiceToggleMute();dirty=1;}}
+
         }
-        if((down&HidNpadButton_X)&&dnx2JobKind()==16){dnx2VoiceToggleMute();dirty=1;}
-        if((down&HidNpadButton_B)&&dnx2JobKind()==16){dnx2JobStop();dirty=1;}
+        if((down&HidNpadButton_X)&&dnx2VoiceRunning()&&(voice_panel||!selected_text())){dnx2VoiceToggleMute();dirty=1;}
+        if((down&HidNpadButton_B)&&voice_panel){voice_panel=0;dirty=1;down&=~HidNpadButton_B;}
         if(down&HidNpadButton_B){if(message_expanded){message_expanded=0;message_offset=0;}else if(focus>0)focus--;else{dnx2LiveStop();tab=0;}dirty=1;}
         if(down&HidNpadButton_AnyLeft){if(focus>0)focus--;dirty=1;}
         if(down&HidNpadButton_AnyRight){if(focus<3)focus++;dirty=1;}
@@ -604,32 +623,35 @@ int dnx2GraphicalMenu(void){
         if(delta){
             if(focus==0){server_cursor+=delta;if(server_cursor<-1)server_cursor=a->server_count-1;if(server_cursor>=a->server_count)server_cursor=-1;if(server_cursor>=0)server_page=server_cursor/8;}
             else if(tab==0){sel=(sel+1)%2;}
-            else if(focus==1){channel_cursor+=delta;if(channel_cursor<0)channel_cursor=0;if(channel_cursor>=a->channel_count)channel_cursor=a->channel_count?a->channel_count-1:0;if(channel_cursor<channel_first)channel_first=channel_cursor;if(channel_cursor>=channel_first+12)channel_first=channel_cursor-11;}
+            else if(focus==1){channel_cursor+=delta;if(channel_cursor<0)channel_cursor=0;if(channel_cursor>=a->channel_count)channel_cursor=a->channel_count?a->channel_count-1:0;if(channel_cursor<channel_first)channel_first=channel_cursor;int rows=dnx2VoiceRunning()?10:12;if(channel_cursor>=channel_first+rows)channel_first=channel_cursor-rows+1;}
+            else if(voice_panel||tab==3)voice_action^=1;
             else if(selected_text())scroll_messages(delta);
             dirty=1;
         }
         if(down&HidNpadButton_A){
-            if(focus==0){if(server_cursor<0){if(a->signed_in){dnx2OpenDMList();tab=4;focus=1;channel_first=channel_cursor=0;}else{dnx2LiveStop();tab=0;focus=2;}sel=0;dirty=1;}else choose_server=server_cursor;}
+            if(voice_panel&&focus>=2){if(voice_action==1)dnx2VoiceToggleMute();else {dnx2VoiceStop();voice_panel=0;}dirty=1;}
+            else if(focus==0){if(server_cursor<0){if(a->signed_in){dnx2OpenDMList();tab=4;focus=1;channel_first=channel_cursor=0;}else{dnx2LiveStop();tab=0;focus=2;}sel=0;dirty=1;}else choose_server=server_cursor;}
             else if(tab==0)account_action=sel;
             else if(focus==1)choose_channel=channel_cursor;
             else if(focus==3)keyboard=1;
-            else if(tab==3){if(dnx2JobKind()==16)dnx2JobStop();else if(!dnx2JobBusy())dnx2JobStart(16,NULL,NULL);dirty=1;}
+            else if(tab==3||voice_panel){if(voice_action==1&&dnx2VoiceRunning()&&(voice_panel||dnx2VoiceSelected()))dnx2VoiceToggleMute();else if(voice_panel||dnx2VoiceSelected())dnx2VoiceStop();else dnx2VoiceStart();dirty=1;}
             else if(selected_text()&&a->message_count){sel=message_first;message_expanded=!message_expanded;message_offset=0;dirty=1;}
         }
         if(account_action>=0){dnx2JobStop();dnx2LiveStop();if(account_action==1){action=a->signed_in?12:13;break;}
             if(a->signed_in){dnx2AccountLogout();dnx2GraphicalClearDraft();tab=0;focus=2;dirty=1;}else{action=6;break;}}
-        if(choose_server>=0&&choose_server<a->server_count&&dnx2JobKind()!=11){dnx2JobStop();dnx2LiveStop();media_open=0;dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;profile_open=0;message_expanded=0;dnx2JobStart(9,NULL,NULL);dirty=1;}
-        if(choose_channel>=0&&dnx2JobKind()!=11){int next=open_channel(choose_channel);dirty=1;if(next){action=next;break;}}
+        if(choose_server>=0&&choose_server<a->server_count&&dnx2JobKind()!=11){voice_panel=0;dnx2JobStop();dnx2LiveStop();media_open=0;dnx2GraphicalClearDraft();dnx2AccountSelect(choose_server);server_cursor=choose_server;server_page=choose_server/8;channel_first=channel_cursor=0;tab=1;focus=1;profile_open=0;message_expanded=0;dnx2JobStart(9,NULL,NULL);dirty=1;}
+        if(choose_channel>=0&&dnx2JobKind()!=11){int next=open_channel(choose_channel,1);dirty=1;if(next){action=next;break;}}
         if((down&HidNpadButton_X)&&tab!=0&&selected_text())keyboard=1;
         if((down&HidNpadButton_R)&&tab!=0&&selected_text())send=1;
         if((down&HidNpadButton_Y)&&tab!=0&&dnx2JobKind()!=11){dnx2JobStart(selected_text()?10:a->private_mode?23:9,NULL,NULL);dirty=1;}
-        if(keyboard&&selected_text()&&dnx2JobKind()!=11){
+        if(keyboard&&!voice_panel&&selected_text()&&dnx2JobKind()!=11){
             dnx2JobStop();focus=3;
             int result=fallback_keyboard(&fb,&pad);if(result==2)media_begin();if(result==1)send=1;dirty=1;
         }
-        if(send&&selected_text()&&(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11){media_open=0;dnx2JobStart(11,draft,pending_sticker);dirty=1;}
+        if(send&&!voice_panel&&selected_text()&&(draft[0]||pending_sticker[0])&&dnx2JobKind()!=11){media_open=0;dnx2JobStart(11,draft,pending_sticker);dirty=1;}
         svcSleepThread(16000000LL);
     }
+    if(action<=0)dnx2VoiceStop();
     dnx2JobStop();dnx2LiveStop();framebufferClose(&fb);hidExit();return action;
 }
 

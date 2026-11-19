@@ -44,7 +44,18 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
 /* Returns 1 when account and actual server data fetched; 0 otherwise.
  * No account token, RSA key, ticket, nonce, or QR fingerprint ever logged. */
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel);
-/* Foreground voice states: 0 idle,1 signaling,2 discovery,3 MLS,4 live,5 muted. */
+typedef struct {char id[24],name[321];int muted,deaf,speaking,self,named;} Dnx2VoiceMember;
+int dnx2VoiceMembers(Dnx2VoiceMember *out,int cap);
+unsigned dnx2VoiceMembersRevision(void);
+int dnx2VoiceStart(void);
+void dnx2VoiceStop(void);
+void dnx2VoiceReset(void);
+int dnx2VoiceRunning(void);
+int dnx2VoiceApply(void);
+int dnx2VoiceSelected(void);
+const char *dnx2VoiceNotice(void);
+const char *dnx2VoiceChannelName(void);
+/* Voice states: 0 idle,1 signaling,2 discovery,3 MLS,4 live,5 muted. */
 unsigned dnx2VoiceState(void);
 int dnx2VoiceMuted(void);
 void dnx2VoiceToggleMute(void);

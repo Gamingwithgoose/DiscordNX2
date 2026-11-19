@@ -5,13 +5,13 @@
 #include <stdint.h>
 typedef uint64_t u64;
 typedef int (*Dnx2AuthCancel)(void);
-typedef struct {int kind,socket_fd,returned_fd;} TlsSession;
+typedef struct {int kind,socket_fd,returned_fd;Dnx2AuthCancel cancel;} TlsSession;
 #define R_FAILED(x) ((x)!=0)
 #define DNX2_WS_MAX 8192
-static struct {unsigned close_code;} ws_reader;
+typedef struct {unsigned close_code;} Dnx2WsReader;static Dnx2WsReader ws_reader;
 static char live_token[1024],live_session[160]="main-session",live_resume_host[256]="gateway-region.discord.gg";
 static long long live_sequence=1;
-static Dnx2AuthCancel active_cancel;
+
 static u64 live_identify_after;
 static void svcSleepThread(long long n){(void)n;}
 static u64 now;static int rng,main_frame,voice_frame,joins,leaves,voice_identifies,cancelled,invalid_endpoint,scenario,subscriptions,used_port;
@@ -48,8 +48,21 @@ static int ws_receive(TlsSession *s,unsigned char *out,size_t cap,u64 deadline){
     assert(strlen(event)<cap);strcpy((char*)out,event);return (int)strlen(event);
 }
 #define DNX2_VOICE_RUNTIME_EXTERNAL
+#define DNX2_VOICE_GATEWAY_EXTERNAL
+#define voice_gateway_token live_token
+#define voice_gateway_session live_session
+#define voice_gateway_resume_host live_resume_host
+#define voice_gateway_sequence live_sequence
+#define voice_gateway_identify_after live_identify_after
+#define voice_gateway_identify live_identify
+#define voice_gateway_heartbeat live_heartbeat
+#define voice_cancel cancel
+static int tls_open_port_cancel(TlsSession *s,const char *h,unsigned p,Dnx2AuthCancel c){s->cancel=c;return tls_open_port(s,h,p);}
+static int ws_receive_reader(TlsSession *s,Dnx2WsReader *r,unsigned char *out,size_t cap,u64 end){int n=ws_receive(s,out,cap,end);r->close_code=ws_reader.close_code;return n;}
+static void voice_members_gateway(const DnxVoiceCredentials *c,const char *kind,DnxJson d){(void)c;(void)kind;(void)d;}
 unsigned dnx_voice_max_version(void){return 1;}
-static int voice_media_session(TlsSession *v,TlsSession *g,const DnxVoiceCredentials *c,unsigned char *event,char notice[160],int *stage,unsigned *code,u64 interval,u64 beat){
+static int voice_media_session(TlsSession *v,TlsSession *g,const DnxVoiceCredentials *c,unsigned char *event,char notice[160],int *stage,unsigned *code,u64 interval,u64 beat,Dnx2WsReader *reader){
+ (void)reader;
  (void)g;(void)c;(void)interval;(void)beat;int n;do{n=ws_receive(v,event,DNX2_WS_MAX+1,now+100);}while(n>0);if(n<0)*code=ws_reader.close_code;snprintf(notice,160,"DAVE test media stub");(void)stage;return 0;
 }
 #include "voice_connect.inc"
@@ -62,7 +75,7 @@ int main(void){
     assert(!dnx_voice_event(&scope,"VOICE_SERVER_UPDATE",dj_root("{\"guild_id\":\"100000000000000001\",\"endpoint\":null,\"token\":\"x\"}"))&&scope.null_endpoint==1&&strstr(dnx_voice_confirmation_status(&scope),"allocating"));
     assert(!dnx_voice_event(&scope,"VOICE_STATE_UPDATE",dj_root("{\"guild_id\":\"100000000000000001\",\"channel_id\":null,\"user_id\":\"300000000000000001\",\"session_id\":\"x\"}"))&&scope.self_disconnected==1);
     assert(strstr(dnx_voice_confirmation_status(&scope),"disconnected"));scope=(DnxVoiceCredentials){.have_server=1};assert(strstr(dnx_voice_confirmation_status(&scope),"voice state"));
-    char notice[160];int stage;unsigned close_code;active_cancel=cancel;
+    char notice[160];int stage;unsigned close_code;
     voice_control_session("synthetic-account-token","100000000000000001","200000000000000001","300000000000000001",notice,&stage,&close_code);
     assert(stage==4&&close_code==4017&&joins==1&&leaves==1&&voice_identifies==1&&!rng);assert(strstr(notice,"DAVE")&&!live_token[0]);
     main_frame=voice_frame=joins=leaves=voice_identifies=0;invalid_endpoint=1;

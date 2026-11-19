@@ -3,7 +3,7 @@
   "date": "2026-11-18",
   "repo": "Gamingwithgoose/DiscordNX2",
   "branch": "main",
-  "version": "0.46-foreground-dave-opus-voice",
+  "version": "0.47-voice-audio-navigation-mute-members",
   "user_goal": "Discord voice chat with open mic from Switch 2 while playing games; C-button push to talk deferred until accessible.",
   "critical_constraints": [
     "Local-only builds via ounce-devkit/devkitPro MSYS2 on Windows",
@@ -77,6 +77,9 @@
     "v039_ui": "User confirmed touch works. Photos show channel navigation and account name; selecting channels/sending switches to full loading/auth overlay and flashes. User rejects unreadable two-character server initials and oversized labeled/symbol-heavy fallback keyboard. Supplied Discord server-icon rail as appearance reference.",
     "v044_voice_report": [
       "User-provided desktop report: Stage2 close0 hello1 identified1 ready1, join request sent, leave attempted, audio_active0. This is Gateway Ready plus locally sent join; NOT voice-channel confirmation or a working call."
+    ],
+    "v046_voice": [
+      "User can join voice and sees Connected plus Mute microphone. Neither direction is audible. Mute appears ineffective and member list absent. No current v046 voice report supplied; desktop copy is older v045/4017 and cannot diagnose this silence."
     ]
   },
   "plugin_status": "Existing NSO has diagnostic IPC commands 0,1,2,3 (handshake/status/service-probe/last-probe); no voice capture, PTT, module reload, or Discord connection; plugin cannot be updated without new bootstrap at present.",
@@ -131,11 +134,11 @@
     ],
     "native_auth_implementation": "Experimental v0.22: direct unofficial remote-auth, RSA-2048, validated fingerprint-bound dynamic QR, memory-only ticket/token processing and real guild metadata. Not hardware validated."
   },
-  "next_user_workflow": "Pull main, run Build-NRO.bat (first voice dependency build cached in .local/voice), FTP ONLY dist/DiscordNX2.nro. Keep NSO/public jailbreak/DNS unchanged. Join ordinary voice with a second official-client member, verify two-way audio, mute/unmute and Leave/B. Share sanitized discordnx2-voice.txt if needed.",
+  "next_user_workflow": "Pull main, Build-NRO.bat, FTP ONLY updated NRO. In ordinary voice with another official-client user, test speech both directions; toggle Mute and confirm both Switch label and official-client mic state; open text in another server and send a message while staying in voice; inspect member names/speaking; explicitly select another voice channel then Disconnect. If silent, send fresh discordnx2-voice.txt after speaking10s, muting5s, unmuting5s.",
   "next_developer_work": [
-    "Use hardware two-way-call report to verify DAVE/UDP/audio service timing; no hardware call is confirmed yet.",
-    "Implement live voice member list, adaptive jitter/PLC, echo cancellation, reliable reconnect and Stage approval; background voice remains separate unfinished NSO work.",
-    "Preserve login/chat/font/audio controls; continue remaining media/official-client parity work based on hardware feedback."
+    "Use fresh v047 pipeline report to distinguish capture0, silent capture peak0, encode failure, UDP send/receive, missing SSRC/key, transport/DAVE/Opus rejection and playback delivery. Never infer no microphone from Connected alone.",
+    "Hardware-verify two-way audio, native mute, live members and simultaneous text/voice; provider/session behavior remains unverified.",
+    "Adaptive jitter/PLC, echo cancellation, auto-resume, Stage approval and game/background NSO voice remain unfinished. Preserve public loader/login/chat."
   ],
   "implementation_base_head": "5c39f8c8d46ce262f3b277eb3536e400d3b61313",
   "v023_implementation": {
@@ -327,5 +330,14 @@
     "build": "NRO-only Build-NRO integration builds cached, SHA256-pinned dependencies; no vcpkg, Docker, Actions or browser build. Small documented libounce memalign/privilege adapters. License notices embedded in retained NRO section. Existing NSO/loader/auth untouched.",
     "limits": "Hardware/provider two-way call pending. 32 remote peers, simple PCM queue/mixer; no adaptive jitter/PLC, echo cancellation, background calls, auto-resume or Stage speaker workflow. Empty group can wait for second member; abort after60sec without key.",
     "validation": "Real two-client MLS proposals/commit/welcome and explicit execute, Opus+both transport ciphers roundtrip, tamper/replay and member removal tests under host ASan/UBSan; existing chat/font/session/Gateway/HTTP/WS/CAPTCHA regressions. Reproducible dependency setup and final NRO build checked. Hardware call unverified."
+  },
+  "v047_implementation": {
+    "evidence": "User confirms Connected but no two-way audio, mute ineffective, no members. New steering: compact server tooltip; voice must persist through server/text/DM navigation and sending, moving only on explicit selection of new voice channel.",
+    "audio": "Read audinGetReleasedAudioInBuffer exact returned descriptor and data_size before processing/requeue; never treat ContainsBuffer as completion. Validate pointer/count/alignment and zero buffers. Drain playback release queue with owned-slot tracking. Fix unsigned now-future output deadline underflow; schedule20ms. Native audinStop/Start on mute/unmute; clear queued PCM and recheck atomic request at every packet. Capture/playback/service-error counters retained after cleanup.",
+    "receive": "Authenticated Voice Gateway Speaking can establish user/SSRC before ClientsConnect; late recognized peers get current MLS receive key. Per-peer key epoch prevents duplicate joins resetting replay state. RTP alone never creates an identity. UDP/mapping/key/AEAD/DAVE/Opus counters reveal silent receive stage.",
+    "lifetime": "Dedicated call worker with immutable token/guild/channel/user snapshot, private Gateway session/Identify cooldown/Resume host/sequence, private Gateway and Voice WS readers and session-bound TLS cancellation. Independent text/live worker retains own state. Reference-counted socket/SSL lifetimes and ssl session pool3 allow concurrent call/chat without service teardown; no TLS thread-local runtime dependency. Logout/exit/manual Disconnect stops voice, ordinary navigation/B/PIN screen does not. New manually selected voice channel replaces call; auto-restored preference does not.",
+    "ui": "Persistent compact voice sidebar panel (name returns to call controls, mic toggles, x disconnects), Join/Disconnect/Mute controls, Up/Down+A and X on voice screen, roster names/mute/speaking states from scoped authenticated Gateway events and one metadata request per unresolved user. Tooltip measured to name width, capped320px, UTF8-fit ellipsis. Channel list reserves rows for active call panel.",
+    "validation": "Real DAVE/Opus+both-cipher tests include late Speaking after key establishment, duplicate roster and replay rejection. Sanitized native audio mock tests exact out-of-order released descriptor/returned length, no early playback, physical mute/zero/send gating and unmute. Member tests cover scoped names/mute/speaking/removal/metadata request. Independent lifecycle snapshot survives text navigation; shared network acquire/release tests preserve voice on chat completion. Chat/job/keyboard/live/font/client/PIN/HTTP/WS/CAPTCHA regressions and NRO link passed. No Switch audio/provider concurrency verification available.",
+    "build": "Pinned voice dependencies unchanged and cached; application source only, existing NSO/public jailbreak/DNS unchanged. Version0.47."
   }
 }

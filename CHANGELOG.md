@@ -378,3 +378,13 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Keep voice keys ephemeral, suppress upstream sensitive logs, use Switch CSRNG, validate recognized membership, reject tampered/replayed frames, wipe keys/audio on cleanup and retain best-effort leave.
 - Cache hash-pinned voice dependency builds under .local/voice; embed license notices. Public jailbreak, DNS, resident NSO, login and existing audio probes unchanged.
 - Verify actual two-client encrypted audio roundtrips under both ciphers, MLS transitions and Opus, plus existing regressions and an NRO link/build. This does NOT establish hardware call success; two-way Switch/official-client testing is required.
+
+
+## v0.47 — 2026-11-18
+
+- Fix native capture ownership: dequeue the actual released descriptor, use its returned byte count, validate/requeue safely, and record real capture/sample/level counts. Fix playback release tracking and unsigned deadline underflow that could enqueue audio early.
+- Make mute stop/start native microphone capture, wipe queued PCM, check the current request at every encoded frame and update Discord mute/speaking signaling. Add precise packet/decryption/playback/service error counters without recording audio or identifying data.
+- Attach current MLS receive keys for late authenticated speaker identities/SSRCs while preserving existing replay state across duplicate roster events.
+- Keep voice connected while browsing servers, text channels, DMs, typing and sending. Give the call an independent worker, immutable context, private Gateway/readers/cancellation, and shared socket/TLS lifetime protection. Only manual disconnect, explicit new voice selection, logout/app exit or a real connection failure ends it; preference restoration cannot silently move a call.
+- Add voice member names, join/leave, speaking/mute state, asynchronous Gateway metadata resolution and persistent sidebar call controls. Size server tooltips to their name with a320px cap and UTF8-safe ellipsis.
+- Extend audio/mute, roster, lifetime, shared-network and encrypted-audio regression tests; existing chat/auth tests and NRO build pass. Hardware join was confirmed forv0.46; two-way audio and concurrent chat/voice still require console testing. Existing voice library cache, NSO, public loader and DNS preserved.

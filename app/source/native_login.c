@@ -71,7 +71,7 @@ const Dnx2Account *dnx2Account(void){return &account;}
 void dnx2AccountSelect(int i){if(i>=0&&i<account.server_count){account.private_mode=0;account.selected=i;account.channels_loaded=0;account.channel_count=0;account.selected_channel=-1;account.message_count=0;account.notice[0]=0;}}
 void dnx2ChannelSelect(int i){if(i>=0&&i<account.channel_count&&account.channels[i].type!=4){account.selected_channel=i;account.message_count=0;account.notice[0]=0;choices_sync();if(dnx_id(account.user_id)){dnx_choice_set(&channel_choices,account.private_mode?"dm":account.servers[account.selected].id,account.channels[i].id);mkdir("sdmc:/switch",0777);mkdir("sdmc:/switch/DiscordNX2",0777);(void)dnx_choice_save(&channel_choices,choices_path);}}}
 static void wipe(void *p,size_t n){volatile unsigned char *c=(volatile unsigned char*)p;while(n--)*c++=0;}
-void dnx2AccountClearMemory(void){dnx2ChatReset();dnx2LiveReset();wipe(&account,sizeof(account));wipe(&channel_choices,sizeof(channel_choices));wipe(choices_user,sizeof(choices_user));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
+void dnx2AccountClearMemory(void){dnx2VoiceStop();dnx2VoiceReset();dnx2ChatReset();dnx2LiveReset();wipe(&account,sizeof(account));wipe(&channel_choices,sizeof(channel_choices));wipe(choices_user,sizeof(choices_user));account.selected_channel=-1;wipe(session_token,sizeof(session_token));}
 void dnx2AccountLogout(void){dnx2AccountClearMemory();dnx2SessionForget();}
 
 #ifdef DNX2_USE_MBEDTLS
@@ -80,9 +80,20 @@ typedef struct {
     SslConnection conn;
     int socket_fd,returned_fd;
     int context_live,conn_live;
+    Dnx2AuthCancel cancel;
     unsigned char pending[WS_BUF];
     size_t pending_off,pending_size;
 } TlsSession;
+/* Share service lifetimes across the independent call and chat owners. */
+static Mutex native_network_mutex;static unsigned native_socket_refs,native_ssl_refs;
+static Result native_socket_acquire(void){mutexLock(&native_network_mutex);Result rc=native_socket_refs?0:socketInitialize(NULL);if(R_SUCCEEDED(rc))native_socket_refs++;mutexUnlock(&native_network_mutex);return rc;}
+static void native_socket_release(void){mutexLock(&native_network_mutex);if(native_socket_refs&&!--native_socket_refs)socketExit();mutexUnlock(&native_network_mutex);}
+static Result native_ssl_acquire(void){mutexLock(&native_network_mutex);Result rc=native_ssl_refs?0:sslInitialize(3);if(R_SUCCEEDED(rc))native_ssl_refs++;mutexUnlock(&native_network_mutex);return rc;}
+static void native_ssl_release(void){mutexLock(&native_network_mutex);if(native_ssl_refs&&!--native_ssl_refs)sslExit();mutexUnlock(&native_network_mutex);}
+#define socketInitialize(config) native_socket_acquire()
+#define socketExit() native_socket_release()
+#define sslInitialize(version) native_ssl_acquire()
+#define sslExit() native_ssl_release()
 static int starts_ci(const char *p,const char *prefix) {
     while(*prefix) {
         if(tolower((unsigned char)*p++)!=tolower((unsigned char)*prefix++))return 0;
@@ -97,8 +108,8 @@ static void tls_close(TlsSession *s){
     memset(s,0,sizeof(*s));
     s->socket_fd=-1;s->returned_fd=-1; /* make repeat cleanup safe */
 }
-static int tls_open_port(TlsSession *s,const char *host,unsigned port) {
-    memset(s,0,sizeof(*s));s->socket_fd=-1;s->returned_fd=-1;
+static int tls_open_port_cancel(TlsSession *s,const char *host,unsigned port,Dnx2AuthCancel cancel) {
+    memset(s,0,sizeof(*s));s->socket_fd=-1;s->returned_fd=-1;s->cancel=cancel;
     struct addrinfo hints={0},*list=NULL;
     hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
     char service[6];if(!port||port>65535)return 0;snprintf(service,sizeof(service),"%u",port);
@@ -133,13 +144,14 @@ static int tls_open_port(TlsSession *s,const char *host,unsigned port) {
 fail:
     tls_close(s);return 0;
 }
+static int tls_open_port(TlsSession *s,const char *host,unsigned port){return tls_open_port_cancel(s,host,port,active_cancel);}
 static int tls_open(TlsSession *s,const char *host){return tls_open_port(s,host,443);}
 static int tls_send(TlsSession *s,const void *data,size_t n){
     const unsigned char *p=(const unsigned char*)data;
     size_t at=0;u64 deadline=dnx2MonotonicMs()+5000;
     while(at<n && dnx2MonotonicMs()<deadline){
         u32 written=0;
-        if(active_cancel&&active_cancel())return 0;
+        if(s->cancel&&s->cancel())return 0;
         if(R_FAILED(sslConnectionWrite(&s->conn,p+at,(u32)(n-at),&written))){svcSleepThread(8000000LL);continue;}
         if(written==0)return 0;
         at+=written;
@@ -187,6 +199,7 @@ static int ws_connect_to_port(TlsSession *s,const char *host,unsigned port,const
     size_t length=0,where=0;
     u64 upgrade_deadline=dnx2MonotonicMs()+10000;
     while(dnx2MonotonicMs()<upgrade_deadline && length<sizeof(hdr)-1){
+        if(s->cancel&&s->cancel())return 0;
         u32 n=0;
         Result rc=sslConnectionRead(&s->conn,hdr+length,sizeof(hdr)-1-length,&n);
         if(R_FAILED(rc)){svcSleepThread(8000000LL);continue;}
@@ -247,7 +260,7 @@ static int ws_text(TlsSession *s,const char *msg){
 }
 static int ws_receive_reader(TlsSession *s,Dnx2WsReader *reader,unsigned char *out,size_t cap,u64 deadline){
     while(dnx2MonotonicMs()<deadline){
-        if(active_cancel&&active_cancel())return -2;
+        if(s->cancel&&s->cancel())return -2;
         size_t before=(*reader).used;
         int result=dnx2WsNext(&(*reader),out,cap);
         if(result<0)return result;
@@ -474,6 +487,7 @@ int dnx2RestoreSession(const char *pin,Dnx2AuthStatus status,Dnx2AuthCancel canc
 }
 #include "live_gateway.inc"
 #include "voice_connect.inc"
+#include "voice_controller.inc"
 #include "chat_jobs.inc"
 int dnx2NativeQrLogin(Dnx2AuthStatus status,Dnx2AuthCancel cancel) {
     memset(&ws_reader,0,sizeof(ws_reader));active_cancel=cancel;
@@ -669,6 +683,19 @@ fail:
 }
 #else
 unsigned dnx2VoiceWaitSeconds(void){return 0;}
+unsigned dnx2VoiceState(void){return 0;}
+int dnx2VoiceMuted(void){return 0;}
+void dnx2VoiceToggleMute(void){}
+int dnx2VoiceStart(void){return 0;}
+void dnx2VoiceStop(void){}
+void dnx2VoiceReset(void){}
+int dnx2VoiceRunning(void){return 0;}
+int dnx2VoiceApply(void){return 0;}
+int dnx2VoiceSelected(void){return 0;}
+const char *dnx2VoiceNotice(void){return "Voice dependencies are unavailable.";}
+const char *dnx2VoiceChannelName(void){return "";}
+unsigned dnx2VoiceMembersRevision(void){return 0;}
+int dnx2VoiceMembers(Dnx2VoiceMember *out,int cap){(void)out;(void)cap;return 0;}
 int dnx2OpenDMList(void){return 0;}
 int dnx2MemberState(const char *id){(void)id;return 0;}
 const Dnx2Member *dnx2Member(const char *id){(void)id;return NULL;}
