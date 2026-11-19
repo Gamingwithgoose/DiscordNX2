@@ -10,3 +10,8 @@ __pycache__/
 *.pyc
 
 plugin/build-voice/
+
+# Separate browser investigation output and private local firmware exports.
+Browser Research/build/
+Browser Research/dist/
+Browser Research/dumps/

@@ -301,3 +301,8 @@ Background voice needs a separate resident process: an NRO cannot run its own ca
 5. If it fails, reopen DiscordNX2 and copy `/kaihen/discordnx2-voice.txt` before retrying. Note whether the failure happened before exit, on game launch, or during gameplay. To revert, restore the backed-up probe plugin and use the next normal startup; the updated NRO still supports local voice.
 
 Only an explicit background handoff transfers the credentials to the resident process, through bounded kernel IPC. Credentials stay in RAM and are wiped on completion/disconnect; voice audio is never saved. The resident build reserves a 64 MiB heap and initializes call networking/audio only when requested. Its legacy probe commands remain compatible. Closing the NRO deliberately leaves the background microphone at the selected mute state until you disconnect or the session ends.
+
+
+### Current browser-only investigation
+
+Browser work now has a separate [Browser Research extraction tool](<Browser Research/README.md>). It attempts read-only access to the installed SystemWeb/openweb/offline browser code and browser libraries, saving results to a fresh SD folder. This does not unlock the browser or change the Discord client, Hardware Tester, firmware or plugins. Build with `Browser Research/build-browser.bat`; extraction needs a console test.

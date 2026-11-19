@@ -405,3 +405,10 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Four-digit default for new login saves or selectable eight digits; confirmation matches the selected length. Existing eight-digit v1 saves remain readable. New v2 storage authenticates the PIN length alongside the existing PBKDF2/AES-GCM data.
 - Optional public-loader resident voice NSO reuses DAVE/Opus/native audio, with bounded RAM-only IPC transfer, snapshot polling, mute/disconnect, NRO exit detach and reopen/adopt. Foreground voice and the ordinary probe NSO remain supported. Build-Resident-Voice.bat outputs a separate optional plugin. No auto-install or custom jailbreak.
 - Host checks cover actual legacy encrypted saves, both new PIN lengths, malformed/tampered storage, voice avatars, IPC bounds/staging expiry, handoff/exit/reopen/disconnect and existing voice/chat/font behavior. NRO and both NSO variants compile/link locally. Game-time audio and resource sharing require hardware testing; no claim of background hardware success.
+
+
+## Browser Research v0.1 - standalone read-only extraction test (2026-11-18)
+
+- Browser-only focus: separate NRO attempts installed metadata lookup, loader code filesystem access, content resource filesystem access, and raw BrowserDll data reads for six fixed browser titles.
+- Fresh SD output folders, exact-size bounded copy, incomplete .part files, SHA-256 hashes, stage/result checkpoints and cancellation. No source writes, browser launch, firmware/plugin changes, keys, account access or network requests.
+- Strict Switch 2 compile/link and sanitized host copy/error/path tests passed. Console service access/extraction, browser reuse and any unlock remain unverified.
