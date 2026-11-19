@@ -74,43 +74,105 @@ static void record_buttons(u64 down,u64 up,u64 held){
             down&mask?"DOWN":"UP");
     }
 }
+static const char *exit_reason_name(WebExitReason reason){
+    switch(reason){
+        case WebExitReason_ExitButton:return "ExitButton";
+        case WebExitReason_BackButton:return "BackButton";
+        case WebExitReason_Requested:return "Requested";
+        case WebExitReason_LastUrl:return "LastUrl";
+        case WebExitReason_ErrorDialog:return "ErrorDialog";
+        case WebExitReason_UnknownE:return "UnknownE";
+        default:return "Unrecognized";
+    }
+}
+enum {PROBE_BASE,PROBE_POINTER,PROBE_MEDIA,PROBE_CACHE,PROBE_NEWS,PROBE_WIFI,PROBE_OFFLINE,PROBE_COUNT};
+static const char *probe_names[PROBE_COUNT]={
+    "Web baseline - example.com",
+    "Web cursor + footer",
+    "Web media features",
+    "Web cache disabled",
+    "News - example.com",
+    "Wi-Fi portal - example.com",
+    "Offline HTML (missing content)"
+};
+static void config_result(const char *field,Result rc){
+    report("  config.%s=%08x\n",field,rc);
+}
 static void browser_test(int which){
-    const char *name=which==0?"Web page":which==1?"News page":which==2?"Offline HTML":"Wi-Fi portal";
+    if(which<0||which>=PROBE_COUNT)return;
+    const char *name=probe_names[which];
     printf("\x1b[2J\x1b[H%s\n\n",name);
-    puts("Launching a system applet may replace this screen.");
-    puts("If it opens, close it normally to return.\n");
+    puts("A system applet may replace this screen.");
+    puts("If opened, close it normally to return.");
+    puts("No firmware changes, DNS changes or login.\n");
     consoleUpdate(NULL);
-    report("BROWSER BEGIN %s\n",name);
+    report("BROWSER BEGIN probe=%d label=%s\n",which,name);
+    report("  NOTE: applet API success does not imply that a web page rendered.\n");
+    (void)save_report(); // Preserve launch record even if applet terminates us.
     Result rc=appletInitialize();
     report("  appletInitialize=%08x\n",rc);
-    if(R_FAILED(rc)){snprintf(last_result,sizeof(last_result),"%s: init=%08x",name,rc);(void)save_report();return;}
-    if(which==3){
-        WebWifiConfig cfg; WebWifiReturnValue reply={0};Uuid uuid={0};
+    if(R_FAILED(rc)){
+        snprintf(last_result,sizeof(last_result),"Applet init=%08x",rc);
+        (void)save_report();
+        return;
+    }
+    if(which==PROBE_WIFI){
+        WebWifiConfig cfg;
+        WebWifiReturnValue reply={0};
+        Uuid uuid={0};
         reply.res=~0u;
         webWifiCreate(&cfg,NULL,"https://example.com/",uuid,0);
+        report("  wifi url=https://example.com/ config=default\n");
+        (void)save_report();
         rc=webWifiShow(&cfg,&reply);
-        report("  webWifiShow=%08x reply=%08x\n",rc,reply.res);
-        snprintf(last_result,sizeof(last_result),"%s show=%08x reply=%08x",name,rc,reply.res);
+        report("  webWifiShow=%08x wifiReply=%08x\n",rc,reply.res);
+        snprintf(last_result,sizeof(last_result),"WiFi api=%08x reply=%08x",rc,reply.res);
     }else{
-        WebCommonConfig cfg;WebCommonReply reply={0};Result created;
-        if(which==0)created=webPageCreate(&cfg,"https://example.com/");
-        else if(which==1)created=webNewsCreate(&cfg,"https://example.com/");
-        else created=webOfflineCreate(&cfg,WebDocumentKind_OfflineHtmlPage,0,"test.htdocs/index.html");
+        WebCommonConfig cfg;
+        WebCommonReply reply={0};
+        Result created;
+        if(which==PROBE_NEWS)created=webNewsCreate(&cfg,"https://example.com/");
+        else if(which==PROBE_OFFLINE)
+            created=webOfflineCreate(&cfg,WebDocumentKind_OfflineHtmlPage,0,"test.htdocs/index.html");
+        else created=webPageCreate(&cfg,"https://example.com/");
         report("  configCreate=%08x\n",created);
+        if(which==PROBE_OFFLINE)
+            report("  OFFLINE CONTROL: no HtmlDocument content mounted; failure is expected/inconclusive.\n");
         if(R_SUCCEEDED(created)){
+            if(which==PROBE_POINTER){
+                config_result("Pointer_true",webConfigSetPointer(&cfg,true));
+                config_result("LeftStick_cursor",webConfigSetLeftStickMode(&cfg,WebLeftStickMode_Cursor));
+                config_result("Footer_true",webConfigSetFooter(&cfg,true));
+            }else if(which==PROBE_MEDIA){
+                config_result("JsExtension_true",webConfigSetJsExtension(&cfg,true));
+                config_result("WebAudio_true",webConfigSetWebAudio(&cfg,true));
+                config_result("MediaAutoPlay_false",webConfigSetMediaAutoPlay(&cfg,false));
+            }else if(which==PROBE_CACHE){
+                config_result("PageCache_false",webConfigSetPageCache(&cfg,false));
+                config_result("BootDisplay_white",webConfigSetBootDisplayKind(&cfg,WebBootDisplayKind_White));
+            }
+            (void)save_report();
             rc=webConfigShow(&cfg,&reply);
             report("  webConfigShow=%08x\n",rc);
-            snprintf(last_result,sizeof(last_result),"%s create=%08x show=%08x",name,created,rc);
+            if(R_SUCCEEDED(rc)){
+                WebExitReason why=(WebExitReason)0xffffffffu;
+                Result er=webReplyGetExitReason(&reply,&why);
+                report("  webReplyGetExitReason=%08x exit=%u (%s)\n",
+                    er,(unsigned)why,R_SUCCEEDED(er)?exit_reason_name(why):"unavailable");
+                snprintf(last_result,sizeof(last_result),"%s show=%08x exit=%u",name,rc,(unsigned)why);
+            }else{
+                snprintf(last_result,sizeof(last_result),"%s show=%08x",name,rc);
+            }
         }else snprintf(last_result,sizeof(last_result),"%s create=%08x",name,created);
     }
     appletExit();
-    report("BROWSER END %s\n",name);
+    report("BROWSER END probe=%d label=%s\n",which,name);
     (void)save_report();
 }
 int main(void){
     consoleInit(NULL);
     Result h=hidInitialize();
-    report("NS2 Hardware Tester v0.3 (direct FS service)\nHID init=%08x\n",h);
+    report("NS2 Hardware Tester v0.4 browser diagnostics\nHID init=%08x\n",h);
     report("Capture scope: standard Npad state (not physical HID bus).\n");
     (void)save_report();
     if(R_FAILED(h)){
@@ -122,16 +184,15 @@ int main(void){
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);
     PadState pad={0};padInitializeDefault(&pad);
     int mode=0,selection=0,frame=0;
-    const char *opts[]={"Web page (example.com)","News page (example.com)",
-        "Offline HTML (no bundled document)","Wi-Fi portal (example.com)"};
+    
     u64 prior=0;
     while(appletMainLoop()){
         padUpdate(&pad);
         u64 held=padGetButtons(&pad),down=held&~prior,up=prior&~held;prior=held;
         record_buttons(down,up,held);
         if(mode==0){
-            if(down&HidNpadButton_Up)selection=(selection+3)%4;
-            if(down&HidNpadButton_Down)selection=(selection+1)%4;
+            if(down&HidNpadButton_Up)selection=(selection+PROBE_COUNT-1)%PROBE_COUNT;
+            if(down&HidNpadButton_Down)selection=(selection+1)%PROBE_COUNT;
             if(down&HidNpadButton_X){mode=1;report("INPUT MONITOR START\n");(void)save_report();}
             if(down&HidNpadButton_A){browser_test(selection);prior=0;}
         }else if(down&HidNpadButton_B){
@@ -143,14 +204,14 @@ int main(void){
         }
         if((frame++%4)==0 || down || up){
             printf("\x1b[2J\x1b[H");
-            puts("NS2 HARDWARE TESTER  v0.3");
+            puts("NS2 HARDWARE TESTER  v0.4");
             puts("--------------------------");
             printf("HID=%08x  SD=%08x  save=%08x\n",h,sd_access,last_save);
             printf("Events=%u  saved=%u\n",event_count,saved_events);
             if(mode==0){
-                puts("\nBrowser tests (UP/DOWN, A launch):");
-                for(int i=0;i<4;i++)printf("%c %s\n",selection==i?'>':' ',opts[i]);
-                puts("\nX: automatic button monitor");
+                puts("\nBrowser probes (UP/DOWN, A launch):");
+                for(int i=0;i<PROBE_COUNT;i++)printf("%c %s\n",selection==i?'>':' ',probe_names[i]);
+                puts("\nX: existing input monitor");
                 puts("Y: save now  |  PLUS: save and exit");
                 puts("\nLast result:");
                 puts(last_result);
