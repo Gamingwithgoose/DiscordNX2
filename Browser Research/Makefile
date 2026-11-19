@@ -12,12 +12,12 @@ LIBS := -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -lkaihen
 all: dist/$(TARGET).nro
 build dist:
 	mkdir -p $@
-build/main.o: main.c copy_core.h | build
+build/main.o: main.c copy_core.h request_policy.h | build
 	$(PREFIX)gcc $(CFLAGS) -c $< -o $@
 build/$(TARGET).elf: build/main.o
 	$(PREFIX)gcc $(LDFLAGS) $^ $(LIBS) -o $@
 build/$(TARGET).nacp: Makefile | build
-	$(DEVKITPRO)/tools/bin/nacptool --create "Browser Research" "Gamingwithgoose" "0.1" $@
+	$(DEVKITPRO)/tools/bin/nacptool --create "Browser Research" "Gamingwithgoose" "0.2" $@
 dist/$(TARGET).nro: build/$(TARGET).elf build/$(TARGET).nacp | dist
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/$(TARGET).nacp
 .PHONY: all

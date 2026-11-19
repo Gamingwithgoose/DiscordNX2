@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-/* Browser Research v0.1: read installed browser content; write only a fresh SD run. */
+/* Browser Research v0.2: read installed browser content; write only a fresh SD run. */
 #include <switch.h>
 #include <switch/services/fsldr.h>
 #include <switch/services/ncm.h>
@@ -8,6 +8,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "copy_core.h"
+#include "request_policy.h"
 
 #define FILE_LIMIT (256ULL*1024*1024)
 #define RUN_LIMIT (512ULL*1024*1024)
@@ -53,7 +54,7 @@ static int poll_cancel(void *unused){
  if(held&HidNpadButton_Plus)exit_requested=1;
  if(held&(HidNpadButton_B|HidNpadButton_Plus))cancelled=1;
  u64 now=armGetSystemTick();if(now-last_draw>armNsToTicks(100000000ULL)){
-  printf("\x1b[2J\x1b[HBROWSER RESEARCH v0.1\n\nReading installed browser content\n%s\n\nCompleted files: %u   Errors: %d\nCompleted bytes: %" PRIu64 "\n\nB: cancel export   PLUS: cancel and exit\n\nSD:%s\n",current_file,files_complete,errors,complete_bytes,run_path);consoleUpdate(NULL);last_draw=now;
+  printf("\x1b[2J\x1b[HBROWSER RESEARCH v0.2\n\nReading installed browser content\n%s\n\nCompleted files: %u   Errors: %d\nCompleted bytes: %" PRIu64 "\n\nB: cancel export   PLUS: cancel and exit\n\nSD:%s\n",current_file,files_complete,errors,complete_bytes,run_path);consoleUpdate(NULL);last_draw=now;
  }
  return cancelled;
 }
@@ -63,7 +64,10 @@ static int new_run(void){
  Result rc=fsFsCreateDirectory(&sd,run_path);if(R_FAILED(rc)){printf("Could not create fresh output folder: %08x\n",rc);return 0;}
  report_used=0;report_full=0;attempted_bytes=complete_bytes=0;files_seen=files_complete=0;errors=cancelled=0;current_file[0]=0;
  SetSysFirmwareVersion firmware={0};Result vrc=setsysInitialize();if(R_SUCCEEDED(vrc)){vrc=setsysGetFirmwareVersion(&firmware);setsysExit();}
- record("DiscordNX2 browser research v0.1\nSources are opened read-only. SD output is private to this fresh run.\nfirmware_result=%08x firmware=%u.%u.%u\n",vrc,firmware.major,firmware.minor,firmware.micro);
+ record("DiscordNX2 browser research v0.2\nSources are opened read-only. SD output is private to this fresh run.\nfirmware_result=%08x firmware=%u.%u.%u\n",vrc,firmware.major,firmware.minor,firmware.micro);
+ u32 sdk=hosversionGet(),physical=MAKEHOSVERSION(firmware.major,firmware.minor,firmware.micro);
+ record("SDK_HOS_VERSION initial=%08x firmware_version=%08x\n",sdk,physical);
+ if(R_SUCCEEDED(vrc)&&browser_sync_sdk_version(sdk,physical)){hosversionSet(physical);record("SDK_DISPATCH_SYNC process_only=1 current=%08x\n",hosversionGet());}
  record("Not a browser unlock or a successful launch test. No account tokens, keys or network use.\n");checkpoint();return 1;
 }
 typedef struct {FsFile source,destination;FsStorage storage;int raw;Result read_rc,write_rc;Sha256Context hash;} Copy;
@@ -125,13 +129,26 @@ static void inspect_target(unsigned index,int export_files){
  if(R_SUCCEEDED(rc)){rc=ncmContentMetaDatabaseGetContentIdByType(&database,&content,&key,targets[index].type);record("CONTENT_ID result=%08x\n",rc);}
  if(R_SUCCEEDED(rc)){rc=ncmContentStorageGetPath(&content_storage,content_path,sizeof(content_path),&content);record("CONTENT_PATH result=%08x\n",rc);}
  content_path[sizeof(content_path)-1]=0;if(R_FAILED(rc)||!content_path[0]){errors++;checkpoint();return;}
+ FsContentAttributes attributes=FsContentAttributes_None;NcmContentInfo infos[16]={0};s32 count=0;
+ Result info_rc=ncmContentMetaDatabaseListContentInfo(&database,&count,infos,16,&key,0);int matched=0;
+ if(R_SUCCEEDED(info_rc)&&count>=0&&count<=16)for(s32 i=0;i<count;i++)if(!memcmp(&infos[i].content_id,&content,sizeof(content))){attributes=(FsContentAttributes)(infos[i].attr&0x0f);matched=1;record("CONTENT_ATTRIBUTES raw=%02x effective=%02x\n",infos[i].attr,(unsigned)attributes);break;}
+ record("CONTENT_INFO result=%08x count=%d matched=%d default_if_missing=0\n",info_rc,count,matched);
+ char safe_path[FS_MAX_PATH];snprintf(safe_path,sizeof(safe_path),"%s",content_path);for(char *p=safe_path;*p;p++)if((unsigned char)*p<32||*p=='"')*p='?';
+ record("RESOLVED_PATH %s\n",safe_path);
  if(targets[index].type==NcmContentType_Program){
-  if(ldr_ready){FsCodeInfo info={0};FsFileSystem code={0};rc=fsldrOpenCodeFileSystem(&info,id,NcmStorageId_BuiltInSystem,content_path,FsContentAttributes_All,&code);record("CODE_FILESYSTEM result=%08x signed=%u\n",rc,R_SUCCEEDED(rc)?info.is_signed:0);checkpoint();
+  if(ldr_ready){FsCodeInfo info={0};FsFileSystem code={0};rc=fsldrOpenCodeFileSystem(&info,id,NcmStorageId_BuiltInSystem,content_path,attributes,&code);
+   record("CODE_ATTEMPT attr=%02x result=%08x value=%08x module=%u description=%u\n",(unsigned)attributes,rc,browser_result_value(rc),browser_result_module(rc),browser_result_description(rc));
+   if(browser_retry_default_attributes(rc,(unsigned)attributes)){memset(&code,0,sizeof(code));rc=fsldrOpenCodeFileSystem(&info,id,NcmStorageId_BuiltInSystem,content_path,FsContentAttributes_None,&code);record("CODE_DEFAULT_ATTEMPT attr=00 result=%08x value=%08x module=%u description=%u\n",rc,browser_result_value(rc),browser_result_module(rc),browser_result_description(rc));}
+   record("CODE_FILESYSTEM result=%08x signed=%u verification_bytes=%u\n",rc,R_SUCCEEDED(rc)?info.is_signed:0,(unsigned)sizeof(info));checkpoint();
    if(R_SUCCEEDED(rc)){snprintf(destination,sizeof(destination),"%s/exefs",base);if(export_files)rc=fsFsCreateDirectory(&sd,destination);if(R_SUCCEEDED(rc))export_tree(&code,"/",destination,0,export_files);else {record("SD_EXEFS_DIRECTORY result=%08x\n",rc);errors++;}fsFsClose(&code);}else errors++;
   }else {record("Loader filesystem unavailable\n");errors++;}
  }
+
  if(cancelled)return;
- FsFileSystem data={0};rc=fsOpenFileSystemWithId(&data,id,FsFileSystemType_ContentData,content_path,FsContentAttributes_All);record("CONTENT_DATA_FILESYSTEM result=%08x\n",rc);checkpoint();
+ FsFileSystem data={0};rc=fsOpenFileSystemWithId(&data,id,FsFileSystemType_ContentData,content_path,attributes);
+ record("DATA_ATTEMPT attr=%02x result=%08x value=%08x module=%u description=%u\n",(unsigned)attributes,rc,browser_result_value(rc),browser_result_module(rc),browser_result_description(rc));
+ if(browser_retry_default_attributes(rc,(unsigned)attributes)){memset(&data,0,sizeof(data));rc=fsOpenFileSystemWithId(&data,id,FsFileSystemType_ContentData,content_path,FsContentAttributes_None);record("DATA_DEFAULT_ATTEMPT attr=00 result=%08x value=%08x module=%u description=%u\n",rc,browser_result_value(rc),browser_result_module(rc),browser_result_description(rc));}
+ record("CONTENT_DATA_FILESYSTEM result=%08x\n",rc);checkpoint();
  if(R_SUCCEEDED(rc)){snprintf(destination,sizeof(destination),"%s/romfs",base);if(export_files)rc=fsFsCreateDirectory(&sd,destination);if(R_SUCCEEDED(rc))export_tree(&data,"/",destination,0,export_files);else {record("SD_ROMFS_DIRECTORY result=%08x\n",rc);errors++;}fsFsClose(&data);}else errors++;
 }
 static void run_probe(int export_files){
@@ -151,7 +168,7 @@ int main(void){
  while(!exit_requested){padUpdate(&pad);u64 down=padGetButtonsDown(&pad);if(!armed){if(!padGetButtons(&pad))armed=1;down=0;}
   if(down&HidNpadButton_Plus)exit_requested=1;
   if(sd_ready&&(down&(HidNpadButton_A|HidNpadButton_X))){run_probe((down&HidNpadButton_X)!=0);dirty=1;armed=0;}
-  if(dirty){printf("\x1b[2J\x1b[HBROWSER RESEARCH v0.1\n\nRead-only access to six installed browser components.\nWrites only fresh output under /switch/DiscordNX2-Browser/.\nDoes not unlock, launch or patch the browser.\n\nA: inventory/access check\nX: export code and resources\nPLUS: exit\n\nSD open: %08x\nCompleted files: %u   Errors: %d\nLast run: SD:%s\n\nA .part file is incomplete; see report.txt.\n",rc,files_complete,errors,run_path[0]?run_path:"(none)");consoleUpdate(NULL);dirty=0;}
+  if(dirty){printf("\x1b[2J\x1b[HBROWSER RESEARCH v0.2\n\nRead-only access to six installed browser components.\nWrites only fresh output under /switch/DiscordNX2-Browser/.\nDoes not unlock, launch or patch the browser.\n\nA: inventory/access check\nX: export code and resources\nPLUS: exit\n\nSD open: %08x\nCompleted files: %u   Errors: %d\nLast run: SD:%s\n\nA .part file is incomplete; see report.txt.\n",rc,files_complete,errors,run_path[0]?run_path:"(none)");consoleUpdate(NULL);dirty=0;}
   svcSleepThread(16000000LL);
  }
  if(sd_ready)fsFsClose(&sd);

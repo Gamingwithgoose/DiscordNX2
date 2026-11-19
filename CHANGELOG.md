@@ -412,3 +412,10 @@ Real Switch2 log from discordnx2-hardware(20261118-002427).txt confirmed: RSA se
 - Browser-only focus: separate NRO attempts installed metadata lookup, loader code filesystem access, content resource filesystem access, and raw BrowserDll data reads for six fixed browser titles.
 - Fresh SD output folders, exact-size bounded copy, incomplete .part files, SHA-256 hashes, stage/result checkpoints and cancellation. No source writes, browser launch, firmware/plugin changes, keys, account access or network requests.
 - Strict Switch 2 compile/link and sanitized host copy/error/path tests passed. Console service access/extraction, browser reuse and any unlock remain unverified.
+
+
+## Browser Research v0.2 - analyze first export and correct request arguments (2026-11-18)
+
+- Verified two identical 16,652,528-byte BrowserDll exports and extracted 1,776 resource files locally; no NSO/NRO executables found. Proprietary files remain outside committed source.
+- Normalize all supplied open failures to filesystem InvalidArgument 6001, not a demonstrated permission denial. Use installed NCM content flags, one bounded default-flag retry on that exact error, and detailed path/result/SDK-version diagnostics. Align only this process SDK dispatch if trusted firmware reports a current version but SDK dispatch is pre-20.
+- Add bounded host RomFS parser/extractor and synthetic tests. Strict NRO build and sanitized host tests passed; executable export and browser reuse still need hardware validation.

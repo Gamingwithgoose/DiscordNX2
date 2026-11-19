@@ -1,4 +1,4 @@
-# Browser Research v0.1
+# Browser Research v0.2
 
 Standalone Switch 2 browser investigation for the normal public kaiHEN loader.
 This is an extraction/access test, **not a browser unlock or working browser**.
@@ -62,3 +62,24 @@ cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined test_copy.c -o /t
 ```
 
 **Console extraction and service compatibility are unverified.** No proprietary browser binaries are included in the source repo or the compiled research NRO. Keep local exported firmware files out of public commits.
+
+
+## v0.1 hardware result and v0.2 follow-up
+
+The supplied 23.0.1 reports confirm a successful BrowserDll raw data export: 16,652,528 bytes, SHA-256 `874d0f7124039eb712b24c5d5ce3fe3950b5f3ad30a0c182c26b08aa68d3a9cb`. Two independent exports are byte-identical. Local RomFS parsing found 1,776 files in 69 directories. These are browser resources (ICU data, styles, scripts, translations, UI assets and certificates); no NSO/NRO executable files were found. No working browser or unlock is established.
+
+The eleven filesystem-opening errors have different high context bits but all normalize to `0x002EE202`: module 2, description 6001, in the filesystem InvalidArgument range. They are not eleven different diagnoses and do not establish an access-denied policy. See the [original result definitions](https://github.com/Atmosphere-NX/Atmosphere/blob/master/libraries/libvapours/include/vapours/results/fs_results.hpp).
+
+v0.2 uses attributes read from the installed matching NCM content entry instead of `FsContentAttributes_All`. If that nonzero flag yields the same generic InvalidArgument result, it makes one read-only retry with default attributes. It records effective/raw flags, resolved content path, normalized module/description, and code-verification buffer size. It also records the SDK's runtime firmware version; if the SDK would dispatch a pre-20 request while the firmware service successfully reports a current version, it aligns the version **inside this process only**. It changes no system setting. These are request-correction/diagnostic changes; the exact cause and outcome still need a console run.
+
+Update the research NRO, press X once, and send the newest report. Keep all existing successful exports. The rest of DiscordNX2 remains untouched.
+
+`inspect_romfs.py` is a standard-library-only host inspection tool. It validates table/name/data bounds and detects metadata cycles before optional extraction into a new directory. It never modifies its input image. Extracted firmware files stay local; only the parser and synthetic tests are committed.
+
+```sh
+python inspect_romfs.py /path/to/romfs.bin --manifest /path/to/manifest.json
+python inspect_romfs.py /path/to/romfs.bin --extract /path/to/new-private-folder
+python -m unittest test_inspect_romfs.py
+```
+
+The parser's tests cover synthetic valid extraction, no overwrite, truncation, parent/name validation, data bounds and metadata cycles. The production C request-policy tests cover context-bit normalization, bounded default retry and SDK-version synchronization conditions. v0.2 compiles with warnings as errors and passes the sanitized copy/request tests; its console result is pending.
